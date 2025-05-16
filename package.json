@@ -1,19 +1,22 @@
 {
-  "name": "ecom-platform",
+  "name": "ecommerce-platform",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "echo 'use service-level dev'",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "clean": "find . -name node_modules -type d -prune -exec rm -rf '{}' +"
   },
-  "workspaces": [
-    "services/*",
-    "shared"
-  ],
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.56.0",
-    "typescript": "^5.0.0"
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
   }
 } 

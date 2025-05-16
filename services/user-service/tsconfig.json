@@ -1,0 +1,56 @@
+{
+  "compilerOptions": {
+    // Language and Environment
+    "target": "ES2018",
+    "module": "commonjs",
+    "lib": ["es2018", "esnext.asynciterable"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "moduleResolution": "node",
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "esModuleInterop": true,
+    "strict": false,
+    "strictPropertyInitialization": false,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "baseUrl": "./src",
+    "paths": {
+      "*": ["*"]
+    },
+    "typeRoots": ["./node_modules/@types", "./src/types"],
+
+    // Strict Type Checking
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "strictBindCallApply": false,
+    "noImplicitThis": false,
+    "useUnknownInCatchVariables": false,
+    "alwaysStrict": false,
+
+    // Additional Checks
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "noFallthroughCasesInSwitch": false,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": false,
+
+    // Path Resolution
+    "declaration": true,
+    "declarationMap": true,
+
+    // Project References
+    "composite": true,
+    "incremental": true,
+
+    // Interop Constraints
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+} 

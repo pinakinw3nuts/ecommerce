@@ -50,11 +50,65 @@ services:
       retries: 3
       start_period: 5s
 
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - DB_NAME=user_service_db
+      - JWT_SECRET=your-super-secret-key-here
+      - CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - user-service-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+      - POSTGRES_DB=user_service_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - user-service-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 volumes:
   redis-data:
     name: ecom-redis-data
+  postgres_data:
+    name: user-service-postgres-data
 
 networks:
   ecom-network:
     name: ecom-network
+    driver: bridge
+  user-service-network:
+    name: user-service-network
     driver: bridge 
