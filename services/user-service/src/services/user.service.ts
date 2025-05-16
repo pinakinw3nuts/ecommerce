@@ -1,7 +1,8 @@
 import { Repository, DataSource } from 'typeorm';
 import { hash } from 'bcrypt';
-import { User, UserStatus, Address, LoyaltyProgramEnrollment, LoyaltyTier } from '../entities';
+import { User, UserStatus, Address, LoyaltyProgramEnrollment, LoyaltyTier, UserRole } from '../entities';
 import logger from '../utils/logger';
+import { CreateUserInput, UpdateUserInput } from '../schemas/user.schema';
 
 export class UserService {
   private userRepo: Repository<User>;
@@ -17,13 +18,7 @@ export class UserService {
   /**
    * Create a new user
    */
-  async createUser(data: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-    phone?: string;
-  }) {
+  async createUser(data: CreateUserInput): Promise<User> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -45,7 +40,8 @@ export class UserService {
       const user = this.userRepo.create({
         ...data,
         password: hashedPassword,
-        status: UserStatus.ACTIVE,
+        status: data.status || UserStatus.ACTIVE,
+        role: data.role || UserRole.USER,
         preferences: {
           newsletter: false,
           marketing: false
@@ -86,12 +82,8 @@ export class UserService {
   /**
    * Update user profile
    */
-  async updateUser(id: string, data: Partial<User>) {
+  async updateUser(id: string, data: UpdateUserInput): Promise<User> {
     const user = await this.getUserById(id);
-
-    // Remove sensitive fields from update
-    delete data.password;
-    delete data.email; // Email changes should be handled separately with verification
 
     const updatedUser = await this.userRepo.save({
       ...user,
@@ -132,12 +124,28 @@ export class UserService {
   /**
    * Update user preferences
    */
-    async updateUserPreferences(id: string, preferences: any) {    const userData = await this.getUserById(id);    userData.preferences = {      ...userData.preferences,      ...preferences    };    return this.updateUser(id, { preferences: userData.preferences });  }
+  async updateUserPreferences(id: string, preferences: any) {
+    const userData = await this.getUserById(id);
+    userData.preferences = {
+      ...userData.preferences,
+      ...preferences
+    };
+    return this.updateUser(id, { preferences: userData.preferences });
+  }
 
   /**
    * Add address to user
    */
-    async addAddress(userId: string, addressData: Partial<Address>) {    // Verify user exists    await this.getUserById(userId);    // If this is the first address or marked as default, unset other defaults    if (addressData.isDefault) {      await this.addressRepo.update(        { userId },        { isDefault: false }      );    }
+  async addAddress(userId: string, addressData: Partial<Address>) {
+    // Verify user exists
+    await this.getUserById(userId);
+    // If this is the first address or marked as default, unset other defaults
+    if (addressData.isDefault) {
+      await this.addressRepo.update(
+        { userId },
+        { isDefault: false }
+      );
+    }
 
     const address = this.addressRepo.create({
       ...addressData,
@@ -249,5 +257,32 @@ export class UserService {
       limit,
       totalPages: Math.ceil(total / limit)
     };
+  }
+
+  /**
+   * Find user by ID
+   */
+  async findUserById(id: string): Promise<User | null> {
+    return this.userRepo.findOneBy({ id });
+  }
+
+  /**
+   * Find user by email
+   */
+  async findUserByEmail(email: string): Promise<User | null> {
+    return this.userRepo.findOneBy({ email });
+  }
+
+  /**
+   * List users with pagination
+   */
+  async listUsers(page: number = 1, limit: number = 10): Promise<[User[], number]> {
+    return this.userRepo.findAndCount({
+      skip: (page - 1) * limit,
+      take: limit,
+      order: {
+        createdAt: 'DESC'
+      }
+    });
   }
 } 

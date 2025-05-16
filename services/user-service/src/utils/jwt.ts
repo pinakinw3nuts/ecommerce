@@ -1,11 +1,13 @@
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config/env';
 import logger from './logger';
+import { UserRole } from '../entities';
 
 // Define the token payload type
 export interface TokenPayload {
   userId: string;
-  role: 'user' | 'admin';
+  email: string;
+  role: UserRole;
   iat?: number;
   exp?: number;
 }
@@ -22,20 +24,26 @@ export const decodeToken = (token: string): TokenPayload => {
     const cleanToken = token.startsWith('Bearer ') ? token.slice(7) : token;
 
     // Verify and decode the token
-    const decoded = jwt.verify(cleanToken, JWT_SECRET) as TokenPayload;
+    const decoded = jwt.verify(cleanToken, JWT_SECRET) as Omit<TokenPayload, 'role'> & { role: string };
 
     // Validate the required fields are present
     if (!decoded.userId || !decoded.role) {
       throw new Error('Invalid token payload: missing required fields');
     }
 
-    // Validate role is one of the allowed values
-    if (!['user', 'admin'].includes(decoded.role)) {
-      throw new Error('Invalid token payload: invalid role');
+    // Validate and normalize role
+    const normalizedRole = decoded.role.toUpperCase();
+    if (!Object.values(UserRole).includes(normalizedRole as UserRole)) {
+      throw new Error(`Invalid role in token: ${decoded.role}`);
     }
 
-    logger.debug({ userId: decoded.userId, role: decoded.role }, 'Token decoded successfully');
-    return decoded;
+    const validatedPayload: TokenPayload = {
+      ...decoded,
+      role: normalizedRole as UserRole
+    };
+
+    logger.debug({ userId: decoded.userId, role: normalizedRole }, 'Token decoded successfully');
+    return validatedPayload;
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
       logger.error({ error: error.message }, 'JWT verification failed');

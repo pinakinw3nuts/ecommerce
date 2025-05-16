@@ -32,10 +32,10 @@
     "@fastify/swagger": "^8.12.1",
     "@fastify/swagger-ui": "^2.1.0",
     "@fastify/type-provider-typebox": "^3.5.0",
-    "@types/bcrypt": "^5.0.2",
     "bcrypt": "^5.1.1",
     "dotenv": "^16.4.1",
     "fastify": "^4.25.2",
+    "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
     "pino": "^8.21.0",
     "pino-pretty": "^10.3.1",
@@ -44,6 +44,9 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^20.11.16",
     "@types/pg": "^8.11.0",
     "@vitest/coverage-v8": "^1.2.2",

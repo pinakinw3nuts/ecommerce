@@ -23,11 +23,8 @@ export class User extends BaseEntity {
   @Column({ select: false })
   password!: string;
 
-  @Column({ name: 'first_name' })
-  firstName!: string;
-
-  @Column({ name: 'last_name' })
-  lastName!: string;
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
 
   @Column({ nullable: true })
   phone?: string;
@@ -46,7 +43,7 @@ export class User extends BaseEntity {
   })
   status!: UserStatus;
 
-  @Column({ name: 'email_verified', default: false })
+  @Column({ name: 'is_email_verified', default: false })
   emailVerified!: boolean;
 
   @Column({ name: 'phone_verified', default: false })

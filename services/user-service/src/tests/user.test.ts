@@ -4,9 +4,9 @@ import { DataSource } from 'typeorm'
 import { createServer } from '../server'
 import { User, UserRole, UserStatus } from '../entities'
 import { createTestDataSource } from './utils/test-database'
+import bcrypt from 'bcrypt'
 // Create a stub function for generateToken that just returns a string
 const generateToken = (_user: any) => 'test-token';
-import bcrypt from 'bcryptjs'
 
 describe('User Profile Endpoints', () => {
   let app: FastifyInstance
@@ -24,8 +24,7 @@ describe('User Profile Endpoints', () => {
     testUser = userRepository.create({
       email: 'test@example.com',
       password: await bcrypt.hash('password123', 10),
-      firstName: 'Test',
-      lastName: 'User',
+      name: 'Test User',
       role: UserRole.USER,
       status: UserStatus.ACTIVE,
       emailVerified: false,
@@ -50,8 +49,7 @@ describe('User Profile Endpoints', () => {
     // Reset user data before each test
     const userRepository = dataSource.getRepository(User)
     await userRepository.update(testUser.id, {
-      firstName: 'Test',
-      lastName: 'User',
+      name: 'Test User',
       email: 'test@example.com'
     })
   })
@@ -92,8 +90,7 @@ describe('User Profile Endpoints', () => {
       expect(body).toMatchObject({
         id: testUser.id,
         email: testUser.email,
-        firstName: testUser.firstName,
-        lastName: testUser.lastName,
+        name: testUser.name,
         role: testUser.role
       })
       expect(body).not.toHaveProperty('password')
@@ -106,14 +103,14 @@ describe('User Profile Endpoints', () => {
         method: 'PATCH',
         url: '/update-profile',
         payload: {
-          firstName: 'Updated'
+          name: 'Updated Name'
         }
       })
 
       expect(response.statusCode).toBe(401)
     })
 
-    it('should update user firstName', async () => {
+    it('should update user name', async () => {
       const response = await app.inject({
         method: 'PATCH',
         url: '/update-profile',
@@ -121,35 +118,18 @@ describe('User Profile Endpoints', () => {
           Authorization: `Bearer ${authToken}`
         },
         payload: {
-          firstName: 'UpdatedFirst'
+          name: 'Updated Name'
         }
       })
 
       expect(response.statusCode).toBe(200)
       const body = JSON.parse(response.body)
-      expect(body.firstName).toBe('UpdatedFirst')
+      expect(body.name).toBe('Updated Name')
 
       // Verify database update
       const userRepository = dataSource.getRepository(User)
       const updatedUser = await userRepository.findOneBy({ id: testUser.id })
-      expect(updatedUser?.firstName).toBe('UpdatedFirst')
-    })
-
-    it('should update user lastName', async () => {
-      const response = await app.inject({
-        method: 'PATCH',
-        url: '/update-profile',
-        headers: {
-          Authorization: `Bearer ${authToken}`
-        },
-        payload: {
-          lastName: 'UpdatedLast'
-        }
-      })
-
-      expect(response.statusCode).toBe(200)
-      const body = JSON.parse(response.body)
-      expect(body.lastName).toBe('UpdatedLast')
+      expect(updatedUser?.name).toBe('Updated Name')
     })
 
     it('should update user email', async () => {

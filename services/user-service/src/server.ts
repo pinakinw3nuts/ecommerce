@@ -5,7 +5,6 @@ import jwt from '@fastify/jwt';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import { DataSource } from 'typeorm';
 import { NODE_ENV } from './config/env';
 import { swaggerOptions, swaggerUiOptions } from './config/swagger';
 import logger from './utils/logger';
@@ -15,10 +14,11 @@ import { AddressService } from './services/address.service';
 import { createUserRouter } from './routes/user.routes';
 import { createAddressRouter } from './routes/address.routes';
 import { healthRoutes } from './routes/health.routes';
-import path from 'path';
+import { CurrentUser } from './middlewares/auth';
+import { AppDataSource } from './data-source';
 
 interface ServerOptions {
-  dataSource: DataSource;
+  dataSource: typeof AppDataSource;
 }
 
 let app: FastifyInstance; // Global reference for graceful shutdown
@@ -148,25 +148,10 @@ async function shutdown(signal: string): Promise<void> {
 if (require.main === module) {
   const start = async () => {
     try {
-      const dataSource = new DataSource({
-        type: 'postgres',
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 5432,
-        username: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
-        entities: [User, Address, LoyaltyProgramEnrollment],
-        migrations: [path.join(__dirname, 'migrations', '*.{ts,js}')],
-        migrationsRun: true, // Run migrations automatically
-        synchronize: false, // Disable auto-synchronization
-        logging: NODE_ENV === 'development',
-        ssl: NODE_ENV === 'production'
-      });
-
-      await dataSource.initialize();
+      await AppDataSource.initialize();
       logger.info('Database connection established');
 
-      app = await createServer({ dataSource });
+      app = await createServer({ dataSource: AppDataSource });
 
       const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
       const address = await app.listen({ port, host: process.env.HOST || '0.0.0.0' });
@@ -191,14 +176,10 @@ if (require.main === module) {
 // Add TypeScript type augmentation for Fastify
 declare module 'fastify' {
   interface FastifyInstance {
-    db: DataSource;
+    db: typeof AppDataSource;
   }
   
   interface FastifyRequest {
-    currentUser?: {
-      id: string;
-      email: string;
-      role?: string;
-    };
+    currentUser?: CurrentUser;
   }
 } 

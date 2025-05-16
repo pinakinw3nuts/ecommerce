@@ -4,6 +4,7 @@ import { UserService } from '../services/user.service';
 import { UserStatus } from '../entities';
 import logger from '../utils/logger';
 import { validateRequest } from '../middlewares/validate-request';
+import { CurrentUser } from '../middlewares/auth';
 
 // Extend the Request interface
 declare global {
@@ -33,10 +34,6 @@ export class UserController {
    */
   async getProfile(request: FastifyRequest, reply: FastifyReply) {
     try {
-      if (!request.currentUser?.id) {
-        return reply.status(401).send({ message: 'Unauthorized' });
-      }
-
       const user = await this.userService.getUserProfile(request.currentUser.id);
       return reply.send(user);
     } catch (error) {
@@ -70,10 +67,6 @@ export class UserController {
    */
   async enrollInLoyalty(request: FastifyRequest, reply: FastifyReply) {
     try {
-      if (!request.currentUser?.id) {
-        return reply.status(401).send({ message: 'Unauthorized' });
-      }
-
       const enrollment = await this.userService.enrollInLoyaltyProgram(request.currentUser.id);
       return reply.send(enrollment);
     } catch (error) {
@@ -87,10 +80,6 @@ export class UserController {
    */
   async changeRole(request: FastifyRequest, reply: FastifyReply) {
     try {
-      if (!request.currentUser?.id) {
-        return reply.status(401).send({ message: 'Unauthorized' });
-      }
-
       const { status } = request.body as { status: UserStatus };
       const updatedUser = await this.userService.changeUserStatus(request.currentUser.id, status);
       return reply.send(updatedUser);

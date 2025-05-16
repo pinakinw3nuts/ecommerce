@@ -56,39 +56,132 @@ npm test
 
 ## API Endpoints
 
-### Authentication
-- `POST /auth/register` - Register a new user
-  - Body: `{ email: string, password: string, firstName: string, lastName: string }`
-- `POST /auth/login` - Login user
-  - Body: `{ email: string, password: string }`
+### Authentication Required
+All endpoints require a valid JWT token in the Authorization header:
+```
+Authorization: Bearer <token>
+```
 
-### Profile Management
-- `GET /me` - Get current user profile
-  - Headers: `Authorization: Bearer <token>`
-- `PATCH /update-profile` - Update user profile
-  - Headers: `Authorization: Bearer <token>`
-  - Body: `{ firstName?: string, lastName?: string, email?: string }`
+### GET /api/v1/me
+Get current user profile
 
-### Address Management
-- `GET /addresses` - List user addresses
-  - Headers: `Authorization: Bearer <token>`
-- `POST /addresses` - Add new address
-  - Headers: `Authorization: Bearer <token>`
-  - Body: `{ street: string, city: string, state: string, country: string, postalCode: string }`
-- `PUT /addresses/:id` - Update address
-  - Headers: `Authorization: Bearer <token>`
-  - Body: `{ street?: string, city?: string, state?: string, country?: string, postalCode?: string }`
-- `DELETE /addresses/:id` - Delete address
-  - Headers: `Authorization: Bearer <token>`
+**Response**
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "role": "USER",
+  "status": "ACTIVE",
+  "preferences": {
+    "newsletter": boolean,
+    "marketing": boolean,
+    "theme": "light" | "dark",
+    "language": "string"
+  }
+}
+```
 
-### Loyalty Program
-- `POST /enroll-loyalty` - Enroll in loyalty program
-  - Headers: `Authorization: Bearer <token>`
+### POST /api/v1/users
+Create a new user
 
-### Role Management
-- `PATCH /change-role` - Change user role (Admin only)
-  - Headers: `Authorization: Bearer <token>`
-  - Body: `{ userId: string, role: "USER" | "ADMIN" }`
+**Request**
+- Body: `{ email: string, password: string, name: string }`
+
+**Response**
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "role": "USER"
+}
+```
+
+### PATCH /api/v1/me
+Update current user profile
+
+**Request**
+- Body: `{ name?: string, email?: string }`
+
+**Response**
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "role": "USER"
+}
+```
+
+### POST /api/v1/me/addresses
+Add a new address
+
+**Request**
+```json
+{
+  "street": "123 Main St",
+  "city": "New York",
+  "state": "NY",
+  "postalCode": "10001",
+  "country": "USA",
+  "isDefault": true
+}
+```
+
+**Response**
+```json
+{
+  "id": "uuid",
+  "street": "123 Main St",
+  "city": "New York",
+  "state": "NY",
+  "postalCode": "10001",
+  "country": "USA",
+  "isDefault": true
+}
+```
+
+### GET /api/v1/me/addresses
+List user addresses
+
+**Response**
+```json
+[
+  {
+    "id": "uuid",
+    "street": "123 Main St",
+    "city": "New York",
+    "state": "NY",
+    "postalCode": "10001",
+    "country": "USA",
+    "isDefault": true
+  }
+]
+```
+
+### PATCH /api/v1/me/preferences
+Update user preferences
+
+**Request**
+```json
+{
+  "newsletter": true,
+  "marketing": false,
+  "theme": "dark",
+  "language": "en"
+}
+```
+
+**Response**
+```json
+{
+  "newsletter": true,
+  "marketing": false,
+  "theme": "dark",
+  "language": "en"
+}
+```
 
 ## Environment Variables
 

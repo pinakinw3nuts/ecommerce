@@ -130,10 +130,25 @@ export class AuthService {
         );
       }
 
+      // Store the password before it gets removed
+      const currentPassword = user.password;
+
       // Reset failed attempts and update last login
       user.resetFailedLoginAttempts();
       user.lastLogin = new Date();
-      await this.userRepository.save(user);
+      
+      // Save with password preserved
+      await this.userRepository
+        .createQueryBuilder()
+        .update(User)
+        .set({
+          failedLoginAttempts: user.failedLoginAttempts,
+          lastLogin: user.lastLogin,
+          accountLockedUntil: user.accountLockedUntil,
+          password: currentPassword
+        })
+        .where('id = :id', { id: user.id })
+        .execute();
 
       // Generate tokens
       const tokens = await this.generateTokens(user);
