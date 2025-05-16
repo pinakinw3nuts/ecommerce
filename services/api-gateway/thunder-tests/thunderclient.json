@@ -1,0 +1,140 @@
+{
+  "client": "Thunder Client",
+  "collectionName": "API Gateway Tests",
+  "dateExported": "2024-01-20T12:00:00.000Z",
+  "version": "1.1",
+  "folders": [
+    {
+      "name": "Health Checks",
+      "_id": "health-checks",
+      "containerId": "",
+      "created": "2024-01-20T12:00:00.000Z",
+      "sortNum": 10000
+    },
+    {
+      "name": "Auth Service",
+      "_id": "auth-service",
+      "containerId": "",
+      "created": "2024-01-20T12:00:00.000Z",
+      "sortNum": 20000
+    }
+  ],
+  "requests": [
+    {
+      "_id": "health-basic",
+      "colId": "health-checks",
+      "containerId": "health-checks",
+      "name": "Basic Health Check",
+      "url": "http://localhost:3000/health",
+      "method": "GET",
+      "sortNum": 10000,
+      "created": "2024-01-20T12:00:00.000Z",
+      "modified": "2024-01-20T12:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "tests": [
+        {
+          "type": "Status",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        },
+        {
+          "type": "JSON",
+          "custom": "json.status",
+          "action": "equal",
+          "value": "ok"
+        }
+      ]
+    },
+    {
+      "_id": "health-detailed",
+      "colId": "health-checks",
+      "containerId": "health-checks",
+      "name": "Detailed Health Check",
+      "url": "http://localhost:3000/health/details",
+      "method": "GET",
+      "sortNum": 20000,
+      "created": "2024-01-20T12:00:00.000Z",
+      "modified": "2024-01-20T12:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "tests": [
+        {
+          "type": "Status",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        },
+        {
+          "type": "JSON",
+          "custom": "json.status",
+          "action": "equal",
+          "value": "ok"
+        }
+      ]
+    },
+    {
+      "_id": "auth-ping",
+      "colId": "auth-service",
+      "containerId": "auth-service",
+      "name": "Auth Service Ping",
+      "url": "http://localhost:3000/api/auth/ping",
+      "method": "GET",
+      "sortNum": 10000,
+      "created": "2024-01-20T12:00:00.000Z",
+      "modified": "2024-01-20T12:00:00.000Z",
+      "headers": [
+        {
+          "name": "x-request-id",
+          "value": "test-{{$timestamp}}"
+        }
+      ],
+      "params": [],
+      "tests": [
+        {
+          "type": "Status",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        },
+        {
+          "type": "Header",
+          "custom": "x-response-time",
+          "action": "exists"
+        },
+        {
+          "type": "Header",
+          "custom": "x-request-id",
+          "action": "exists"
+        }
+      ]
+    },
+    {
+      "_id": "auth-ping-rate-limit",
+      "colId": "auth-service",
+      "containerId": "auth-service",
+      "name": "Auth Service Ping (Rate Limit Test)",
+      "url": "http://localhost:3000/api/auth/ping",
+      "method": "GET",
+      "sortNum": 20000,
+      "created": "2024-01-20T12:00:00.000Z",
+      "modified": "2024-01-20T12:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "tests": [
+        {
+          "type": "Status",
+          "custom": "",
+          "action": "equal",
+          "value": "429"
+        },
+        {
+          "type": "Header",
+          "custom": "retry-after",
+          "action": "exists"
+        }
+      ]
+    }
+  ]
+} 

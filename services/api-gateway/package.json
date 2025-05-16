@@ -1,0 +1,66 @@
+{
+  "name": "@ecom/api-gateway",
+  "version": "1.0.0",
+  "description": "API Gateway for E-commerce Microservices",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only --exit-child --watch src src/index.ts",
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean",
+    "lint": "eslint 'src/**/*.ts'",
+    "lint:fix": "eslint 'src/**/*.ts' --fix",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "api-gateway",
+    "microservices",
+    "fastify",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^8.3.0",
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/rate-limit": "^8.0.3",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.24.3",
+    "module-alias": "^2.2.3",
+    "pino": "^8.16.2",
+    "pino-pretty": "^10.2.3",
+    "undici": "^5.28.2",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/module-alias": "^2.0.4",
+    "@types/node": "^18.18.13",
+    "@typescript-eslint/eslint-plugin": "^6.12.0",
+    "@typescript-eslint/parser": "^6.12.0",
+    "@vitest/coverage-v8": "^0.34.6",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "prettier": "^3.1.0",
+    "rimraf": "^5.0.5",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.2",
+    "vitest": "^0.34.6"
+  },
+  "_moduleAliases": {
+    "@": "dist",
+    "@config": "dist/config",
+    "@controllers": "dist/controllers",
+    "@middlewares": "dist/middlewares",
+    "@routes": "dist/routes",
+    "@utils": "dist/utils",
+    "@types": "dist/types"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 

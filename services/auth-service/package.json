@@ -1,0 +1,64 @@
+{
+  "name": "auth-service",
+  "version": "1.0.0",
+  "description": "Authentication and Authorization Service for E-commerce Microservices",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev -r tsconfig-paths/register --respawn --transpile-only src/server.ts",
+    "typeorm": "typeorm-ts-node-commonjs",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "auth",
+    "microservices",
+    "fastify",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^8.3.0",
+    "@fastify/jwt": "^7.2.0",
+    "@fastify/swagger": "^8.8.0",
+    "@fastify/swagger-ui": "^1.9.3",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.21.0",
+    "google-auth-library": "^9.6.3",
+    "jsonwebtoken": "^9.0.1",
+    "pg": "^8.11.2",
+    "pino": "^8.15.0",
+    "pino-pretty": "^10.2.0",
+    "reflect-metadata": "^0.1.13",
+    "typeorm": "^0.3.17",
+    "zod": "^3.22.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.2",
+    "@types/jsonwebtoken": "^9.0.2",
+    "@types/node": "^20.5.0",
+    "@types/supertest": "^2.0.12",
+    "@typescript-eslint/eslint-plugin": "^6.4.0",
+    "@typescript-eslint/parser": "^6.4.0",
+    "@vitest/coverage-v8": "^0.34.1",
+    "eslint": "^8.47.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "prettier": "^3.0.2",
+    "supertest": "^6.3.3",
+    "testcontainers": "^10.2.1",
+    "ts-node-dev": "^2.0.0",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.1.6",
+    "vitest": "^0.34.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 
