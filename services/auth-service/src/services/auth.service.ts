@@ -28,6 +28,7 @@ export interface SignupData {
   email: string;
   password: string;
   name: string;
+  role?: UserRole;
 }
 
 export interface LoginResponse {
@@ -67,7 +68,7 @@ export class AuthService {
       // Create new user
       const user = this.userRepository.create({
         ...data,
-        role: UserRole.USER,
+        role: data.role || UserRole.USER,
         isEmailVerified: false
       });
 

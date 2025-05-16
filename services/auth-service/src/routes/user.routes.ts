@@ -53,17 +53,17 @@ export async function registerUserRoutes(
   const userService = new UserService(userRepository);
   const userController = new UserController(userService);
 
-  // Add schemas to swagger documentation
-  for (const [schemaName, schema] of Object.entries(swaggerSchemas)) {
-    server.addSchema({
-      $id: `users_${schemaName}`,
-      ...schema
-    });
-  }
-
   // Register routes under /users prefix
   server.register(
     async (fastifyInstance) => {
+      // Add schemas to swagger documentation
+      for (const [schemaName, schema] of Object.entries(swaggerSchemas)) {
+        fastifyInstance.addSchema({
+          $id: `users_${schemaName}`,
+          ...schema
+        });
+      }
+
       // Register controller routes
       await userController.register(fastifyInstance);
     },

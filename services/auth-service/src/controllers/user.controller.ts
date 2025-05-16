@@ -34,6 +34,10 @@ export class UserController {
       {
         preHandler: authGuard(),
         schema: {
+          tags: ['Users'],
+          summary: 'Get current user profile',
+          description: 'Returns the profile information of the currently authenticated user',
+          security: [{ bearerAuth: [] }],
           response: {
             200: {
               type: 'object',
@@ -47,6 +51,13 @@ export class UserController {
                 createdAt: { type: 'string' },
                 updatedAt: { type: 'string' },
                 lastLogin: { type: ['string', 'null'] }
+              }
+            },
+            401: {
+              type: 'object',
+              properties: {
+                status: { type: 'string', enum: ['error'] },
+                message: { type: 'string' }
               }
             }
           }

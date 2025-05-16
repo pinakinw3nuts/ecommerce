@@ -2,9 +2,12 @@ import fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { DataSource } from 'typeorm';
 import { NODE_ENV } from './config/env';
+import { swaggerOptions, swaggerUiOptions } from './config/swagger';
 import logger from './utils/logger';
 import { User, Address, LoyaltyProgramEnrollment } from './entities';
 import { UserService } from './services/user.service';
@@ -47,6 +50,15 @@ export async function createServer(options: ServerOptions): Promise<FastifyInsta
   // Register JWT plugin
   await app.register(jwt, {
     secret: process.env.JWT_SECRET || 'your-secret-key'
+  });
+
+  // Register Swagger plugins
+  await app.register(swagger, swaggerOptions);
+  await app.register(swaggerUi, swaggerUiOptions);
+
+  // Add a redirect from / to /documentation
+  app.get('/', (request, reply) => {
+    reply.redirect('/documentation');
   });
 
   // Add database to app context

@@ -2,13 +2,15 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { AuthService } from '../services/auth.service';
 import { validateRequest } from '../middlewares/validateRequest';
+import { UserRole } from '../entities/user.entity';
 
 // Define request schemas
 const signupSchema = {
   body: z.object({
     email: z.string().email(),
     password: z.string().min(8),
-    name: z.string().min(2)
+    name: z.string().min(2),
+    role: z.nativeEnum(UserRole).optional()
   })
 };
 
@@ -55,17 +57,26 @@ export class AuthController {
     // Register signup route
     fastify.post<SignupRequest>('/signup', {
       schema: {
+        tags: ['Authentication'],
+        summary: 'Register a new user',
+        description: 'Create a new user account with email and password',
         body: {
           type: 'object',
           required: ['email', 'password', 'name'],
           properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string', minLength: 8 },
-            name: { type: 'string', minLength: 2 }
+            email: { type: 'string', format: 'email', description: 'User email address' },
+            password: { type: 'string', minLength: 8, description: 'User password (minimum 8 characters)' },
+            name: { type: 'string', minLength: 2, description: 'User full name' },
+            role: { 
+              type: 'string', 
+              enum: ['ADMIN', 'USER'], 
+              description: 'User role (optional, defaults to USER)' 
+            }
           }
         },
         response: {
-          201: { $ref: 'auth_AuthResponse#' }
+          201: { $ref: 'auth_AuthResponse#' },
+          409: { $ref: 'auth_ErrorResponse#' }
         }
       },
       preHandler: validateRequest(signupSchema),
@@ -88,16 +99,20 @@ export class AuthController {
     // Register login route
     fastify.post<LoginRequest>('/login', {
       schema: {
+        tags: ['Authentication'],
+        summary: 'Login with email and password',
+        description: 'Authenticate user with email and password',
         body: {
           type: 'object',
           required: ['email', 'password'],
           properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string' }
+            email: { type: 'string', format: 'email', description: 'User email address' },
+            password: { type: 'string', description: 'User password' }
           }
         },
         response: {
-          200: { $ref: 'auth_AuthResponse#' }
+          200: { $ref: 'auth_AuthResponse#' },
+          401: { $ref: 'auth_ErrorResponse#' }
         }
       },
       preHandler: validateRequest(loginSchema),
@@ -129,15 +144,19 @@ export class AuthController {
     // Register Google login route
     fastify.post<GoogleLoginRequest>('/google-login', {
       schema: {
+        tags: ['Authentication'],
+        summary: 'Login with Google',
+        description: 'Authenticate user with Google OAuth token',
         body: {
           type: 'object',
           required: ['idToken'],
           properties: {
-            idToken: { type: 'string' }
+            idToken: { type: 'string', description: 'Google OAuth ID token' }
           }
         },
         response: {
-          200: { $ref: 'auth_AuthResponse#' }
+          200: { $ref: 'auth_AuthResponse#' },
+          401: { $ref: 'auth_ErrorResponse#' }
         }
       },
       preHandler: validateRequest(googleLoginSchema),
@@ -160,15 +179,19 @@ export class AuthController {
     // Register refresh token route
     fastify.post<RefreshTokenRequest>('/refresh-token', {
       schema: {
+        tags: ['Authentication'],
+        summary: 'Refresh access token',
+        description: 'Get a new access token using a refresh token',
         body: {
           type: 'object',
           required: ['refreshToken'],
           properties: {
-            refreshToken: { type: 'string' }
+            refreshToken: { type: 'string', description: 'Refresh token to get new access token' }
           }
         },
         response: {
-          200: { $ref: 'auth_TokenResponse#' }
+          200: { $ref: 'auth_TokenResponse#' },
+          401: { $ref: 'auth_ErrorResponse#' }
         }
       },
       preHandler: validateRequest(refreshTokenSchema),

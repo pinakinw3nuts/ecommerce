@@ -13,6 +13,10 @@ const envSchema = z.object({
     .refine((val) => !isNaN(val) && val > 0 && val < 65536, {
       message: 'Port must be a valid number between 1 and 65535'
     }),
+  HOST: z.string().default('0.0.0.0'),
+
+  // CORS configuration
+  CORS_ORIGIN: z.string().default('*'),
 
   // Database configuration
   DATABASE_URL: z.string({
@@ -89,6 +93,10 @@ export const config = {
   server: {
     port: env.PORT,
     nodeEnv: env.NODE_ENV,
+    host: env.HOST,
+  },
+  cors: {
+    origin: env.CORS_ORIGIN,
   },
   database: {
     url: env.DATABASE_URL,
@@ -119,6 +127,7 @@ export const {
   database,
   jwt,
   oauth,
+  cors,
   isDevelopment,
   isProduction,
   isTest,

@@ -28,111 +28,108 @@ const dataSource = new DataSource({
   url: config.database.url,
   entities: ['src/entities/**/*.entity.ts'],
   migrations: ['src/migrations/**/*.ts'],
-  synchronize: !config.isProduction, // Only enable in development
+  synchronize: !config.isProduction,
   logging: !config.isProduction
 });
 
+// Error handler
+server.setErrorHandler((error: FastifyError, request, reply) => {
+  const statusCode = error.statusCode || 500;
+  
+  logger.error({ 
+    err: error,
+    request: {
+      method: request.method,
+      url: request.url,
+      params: request.params,
+      query: request.query
+    }
+  }, 'Request error');
+
+  reply.status(statusCode).send({
+    status: 'error',
+    message: statusCode === 500 ? 'Internal Server Error' : error.message
+  });
+});
+
+async function setupServer() {
+  // Register Swagger
+  await server.register(swagger, {
+    swagger: {
+      info: {
+        title: 'Auth Service API',
+        description: 'Authentication and Authorization Service API Documentation',
+        version: '1.0.0'
+      },
+      host: `localhost:${config.server.port}`,
+      schemes: ['http'],
+      consumes: ['application/json'],
+      produces: ['application/json'],
+      tags: [
+        { name: 'Authentication', description: 'Authentication related endpoints' },
+        { name: 'Users', description: 'User management endpoints' }
+      ],
+      securityDefinitions: {
+        bearerAuth: {
+          type: 'apiKey',
+          name: 'Authorization',
+          in: 'header',
+          description: 'Enter the token with the `Bearer: ` prefix, e.g. "Bearer abcde12345".'
+        }
+      },
+      security: [{ bearerAuth: [] }]
+    }
+  });
+
+  // Register Swagger UI
+  await server.register(swaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: {
+      docExpansion: 'list',
+      deepLinking: false
+    },
+    uiHooks: {
+      onRequest: function (_request, _reply, next) { next(); },
+      preHandler: function (_request, _reply, next) { next(); }
+    },
+    staticCSP: true,
+    transformStaticCSP: (header) => header
+  });
+
+  // Register plugins
+  await server.register(cors, {
+    origin: config.cors.origin,
+    credentials: true
+  });
+
+  await server.register(helmet, {
+    contentSecurityPolicy: false,
+    global: true
+  });
+
+  // Register routes
+  await server.register(async (fastify) => {
+    await registerAuthRoutes(fastify, dataSource);
+    await registerUserRoutes(fastify, dataSource);
+  }, { prefix: '/api' });
+
+  return server;
+}
+
 export async function startServer() {
   try {
-    // Register plugins
-    await server.register(cors, {
-      origin: !config.isProduction,
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-      allowedHeaders: ['Content-Type', 'Authorization']
-    });
-
-    await server.register(helmet, {
-      global: true,
-      contentSecurityPolicy: config.isProduction
-    });
-
-    // Register Swagger documentation
-    await server.register(swagger, {
-      openapi: {
-        info: {
-          title: 'Auth Service API',
-          description: 'Authentication and User Management API',
-          version: '1.0.0'
-        },
-        servers: [
-          {
-            url: `http://localhost:${config.server.port}`,
-            description: 'Local development server'
-          }
-        ],
-        tags: [
-          {
-            name: 'Authentication',
-            description: 'Authentication related endpoints'
-          },
-          {
-            name: 'Users',
-            description: 'User profile and management endpoints'
-          }
-        ],
-        components: {
-          securitySchemes: {
-            bearerAuth: {
-              type: 'http',
-              scheme: 'bearer',
-              bearerFormat: 'JWT'
-            }
-          }
-        }
-      }
-    });
-
-    await server.register(swaggerUi, {
-      routePrefix: '/docs',
-      uiConfig: {
-        docExpansion: 'list',
-        deepLinking: true
-      },
-      staticCSP: true
-    });
-
-    // Connect to database
     await dataSource.initialize();
     logger.info('Database connection established');
-
-    // Register routes after Swagger is initialized
-    await registerAuthRoutes(server, dataSource);
-    await registerUserRoutes(server, dataSource);
-
-    // Register global error handler
-    server.setErrorHandler((error: FastifyError, request, reply) => {
-      const statusCode = error.statusCode || 500;
-      
-      // Log error details
-      logger.error({
-        err: error,
-        statusCode,
-        url: request.url,
-        method: request.method
-      }, 'Request error');
-
-      // Don't expose internal errors to client
-      const message = statusCode === 500 
-        ? 'Internal Server Error'
-        : error.message;
-
-      reply.status(statusCode).send({
-        status: 'error',
-        message
-      });
+    
+    const app = await setupServer();
+    await app.listen({ 
+      port: config.server.port, 
+      host: config.server.host 
     });
-
-    // Start the server
-    const address = await server.listen({
-      port: config.server.port,
-      host: '0.0.0.0'
-    });
-
-    logger.info(`Server listening at ${address}`);
-    return server;
+    
+    return app;
   } catch (error) {
-    logger.error(error);
+    logger.error({ err: error }, 'Failed to start server');
     process.exit(1);
   }
 }
