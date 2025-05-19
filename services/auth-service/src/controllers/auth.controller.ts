@@ -1,8 +1,9 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { AuthService } from '../services/auth.service';
 import { validateRequest } from '../middlewares/validateRequest';
 import { UserRole } from '../entities/user.entity';
+import { RouteShorthandOptionsWithHandler } from 'fastify';
 
 // Define request schemas
 const signupSchema = {
@@ -80,7 +81,7 @@ export class AuthController {
         }
       },
       preHandler: validateRequest(signupSchema),
-      handler: async (request, reply) => {
+      handler: async (request: FastifyRequest<SignupRequest>, reply: FastifyReply) => {
         try {
           const user = await this.authService.signup(request.body);
           return reply.status(201).send(user);
@@ -94,7 +95,7 @@ export class AuthController {
           throw error;
         }
       }
-    });
+    } as RouteShorthandOptionsWithHandler);
 
     // Register login route
     fastify.post<LoginRequest>('/login', {
@@ -116,7 +117,7 @@ export class AuthController {
         }
       },
       preHandler: validateRequest(loginSchema),
-      handler: async (request, reply) => {
+      handler: async (request: FastifyRequest<LoginRequest>, reply: FastifyReply) => {
         try {
           const { email, password } = request.body;
           const result = await this.authService.login(email, password);
@@ -139,7 +140,7 @@ export class AuthController {
           throw error;
         }
       }
-    });
+    } as RouteShorthandOptionsWithHandler);
 
     // Register Google login route
     fastify.post<GoogleLoginRequest>('/google-login', {
@@ -160,7 +161,7 @@ export class AuthController {
         }
       },
       preHandler: validateRequest(googleLoginSchema),
-      handler: async (request, reply) => {
+      handler: async (request: FastifyRequest<GoogleLoginRequest>, reply: FastifyReply) => {
         try {
           const result = await this.authService.googleLogin(request.body.idToken);
           return reply.send(result);
@@ -174,7 +175,7 @@ export class AuthController {
           throw error;
         }
       }
-    });
+    } as RouteShorthandOptionsWithHandler);
 
     // Register refresh token route
     fastify.post<RefreshTokenRequest>('/refresh-token', {
@@ -195,7 +196,7 @@ export class AuthController {
         }
       },
       preHandler: validateRequest(refreshTokenSchema),
-      handler: async (request, reply) => {
+      handler: async (request: FastifyRequest<RefreshTokenRequest>, reply: FastifyReply) => {
         try {
           const result = await this.authService.refreshToken(request.body.refreshToken);
           return reply.send(result);
@@ -209,6 +210,6 @@ export class AuthController {
           throw error;
         }
       }
-    });
+    } as RouteShorthandOptionsWithHandler);
   }
 } 

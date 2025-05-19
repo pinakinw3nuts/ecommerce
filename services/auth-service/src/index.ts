@@ -1,4 +1,5 @@
-import fastify, { FastifyError, FastifyBaseLogger, RawServerDefault } from 'fastify';
+import fastify from 'fastify';
+import type { FastifyError, FastifyRequest, FastifyReply, FastifyInstance, HookHandlerDoneFunction } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
@@ -10,7 +11,7 @@ import { registerUserRoutes } from './routes/user.routes';
 import logger from './utils/logger';
 
 // Create Fastify instance
-const server = fastify<RawServerDefault, any, any, FastifyBaseLogger>({
+const server = fastify({
   logger,
   trustProxy: true,
   ajv: {
@@ -20,7 +21,7 @@ const server = fastify<RawServerDefault, any, any, FastifyBaseLogger>({
       useDefaults: true
     }
   }
-});
+}) as any; // Temporary type assertion to resolve plugin registration issues
 
 // Initialize database connection
 const dataSource = new DataSource({
@@ -33,7 +34,7 @@ const dataSource = new DataSource({
 });
 
 // Error handler
-server.setErrorHandler((error: FastifyError, request, reply) => {
+server.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
   const statusCode = error.statusCode || 500;
   
   logger.error({ 
@@ -89,11 +90,11 @@ async function setupServer() {
       deepLinking: false
     },
     uiHooks: {
-      onRequest: function (_request, _reply, next) { next(); },
-      preHandler: function (_request, _reply, next) { next(); }
+      onRequest: function (_request: FastifyRequest, _reply: FastifyReply, next: HookHandlerDoneFunction) { next(); },
+      preHandler: function (_request: FastifyRequest, _reply: FastifyReply, next: HookHandlerDoneFunction) { next(); }
     },
     staticCSP: true,
-    transformStaticCSP: (header) => header
+    transformStaticCSP: (header: string) => header
   });
 
   // Register plugins
@@ -108,7 +109,7 @@ async function setupServer() {
   });
 
   // Register routes
-  await server.register(async (fastify) => {
+  await server.register(async (fastify: FastifyInstance) => {
     await registerAuthRoutes(fastify, dataSource);
     await registerUserRoutes(fastify, dataSource);
   }, { prefix: '/api' });
