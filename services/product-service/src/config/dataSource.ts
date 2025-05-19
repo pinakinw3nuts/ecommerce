@@ -37,5 +37,5 @@ export const AppDataSource = new DataSource({
     ProductBundle
   ],
   migrations: [],
-  subscribers: [],
+  subscribers: []
 }); 

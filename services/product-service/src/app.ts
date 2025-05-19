@@ -23,6 +23,8 @@ export async function buildApp() {
   await app.register(fastifySwagger, swaggerConfig);
   await app.register(fastifySwaggerUi, swaggerUiOptions);
 
+  console.log('Registering public routes...');
+
   // Register public routes
   await app.register(async (publicApp) => {
     await publicApp.register(productRoutes, { prefix: '/products' });
@@ -31,7 +33,10 @@ export async function buildApp() {
     await publicApp.register(attributeRoutes, { prefix: '/attributes' });
     await publicApp.register(brandController.registerPublicRoutes, { prefix: '/brands' });
     await publicApp.register(couponController.registerPublicRoutes, { prefix: '/coupons' });
+    console.log('Public routes registered successfully');
   }, { prefix: '/api/v1' });
+
+  console.log('Registering protected routes...');
 
   // Register protected routes with auth middleware
   await app.register(async (protectedApp) => {
@@ -48,6 +53,7 @@ export async function buildApp() {
     await protectedApp.register(attributeRoutes, { prefix: '/attributes' });
     await protectedApp.register(brandController.registerProtectedRoutes, { prefix: '/brands' });
     await protectedApp.register(couponController.registerProtectedRoutes, { prefix: '/coupons' });
+    console.log('Protected routes registered successfully');
   }, { prefix: '/api/v1' });
 
   return app;

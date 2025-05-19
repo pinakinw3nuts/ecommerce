@@ -21,6 +21,15 @@ export class CouponService {
     isFirstPurchaseOnly?: boolean;
     productIds?: string[];
   }) {
+    // Check if coupon code already exists
+    const existingCoupon = await this.couponRepo.findOne({
+      where: { code: data.code }
+    });
+
+    if (existingCoupon) {
+      throw new Error(`Coupon code '${data.code}' already exists`);
+    }
+
     // Validate discount amount for percentage type
     if (data.discountType === 'PERCENTAGE' && (data.discountAmount <= 0 || data.discountAmount > 100)) {
       throw new Error('Percentage discount must be between 0 and 100');
@@ -67,21 +76,48 @@ export class CouponService {
     const currentDate = new Date();
     const where: any = {};
 
+    console.log('listCoupons - Input options:', options);
+
     if (options?.isActive !== undefined) {
       where.isActive = options.isActive;
     }
 
-    if (!options?.includeExpired) {
+    // Only filter by endDate if includeExpired is explicitly set to false
+    if (options?.includeExpired === false) {
       where.endDate = MoreThan(currentDate);
     }
 
-    return this.couponRepo.find({
-      where,
-      skip: options?.skip,
-      take: options?.take,
-      order: { createdAt: 'DESC' },
-      relations: ['products']
-    });
+    // console.log('listCoupons - Query conditions:', {
+    //   where,
+    //   skip: options?.skip,
+    //   take: options?.take,
+    //   currentDate
+    // });
+
+    try {
+      // First try to get total count
+      const total = await this.couponRepo.count();
+      // console.log('Total coupons in database:', total);
+
+      // Now try to get all coupons without any conditions
+      const allCoupons = await this.couponRepo.find();
+      // console.log('All coupons without conditions:', allCoupons);
+
+      // Then try with our conditions
+      const result = await this.couponRepo.find({
+        where,
+        skip: options?.skip,
+        take: options?.take,
+        order: { createdAt: 'DESC' },
+        relations: ['products']
+      });
+
+      // console.log('listCoupons - Raw query result:', result);
+      return result;
+    } catch (error) {
+      console.error('Error in listCoupons:', error);
+      throw error;
+    }
   }
 
   async updateCoupon(id: string, data: Partial<{

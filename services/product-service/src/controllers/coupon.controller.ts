@@ -77,7 +77,9 @@ export const couponController = {
           includeExpired?: boolean;
         }
       }>, reply) => {
+        // console.log('GET /coupons - Query params:', request.query);
         const coupons = await couponService.listCoupons(request.query);
+        // console.log('GET /coupons - Found coupons:', coupons);
         return reply.send(coupons);
       }
     });
