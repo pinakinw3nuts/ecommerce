@@ -1,0 +1,33 @@
+version: '3.9'
+
+services:
+  product-service:
+    build: .
+    container_name: product-service
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - DATABASE_URL=postgres://postgres:postgres123@postgres:5432/product_service_db
+      - FILE_STORAGE_PATH=/app/uploads
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: product-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+      - POSTGRES_DB=product_service_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - product_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  product_pgdata: 
