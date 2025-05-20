@@ -1,5 +1,5 @@
 import { FindOptionsWhere, Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
-import { AppDataSource } from '../app';
+import { AppDataSource } from '../config/database';
 import { Order, OrderStatus } from '../entities/Order';
 import { OrderItem } from '../entities/OrderItem';
 import { OrderNote } from '../entities/OrderNote';

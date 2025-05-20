@@ -1,22 +1,12 @@
-import fastify, { FastifyInstance } from 'fastify';
+import { FastifyInstance, fastify } from 'fastify';
+import { config } from './config';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
-import swagger from '@fastify/swagger';
-import swaggerUi from '@fastify/swagger-ui';
-import { DataSource } from 'typeorm';
-import { config } from './config';
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
 import { orderRoutes } from './routes/order.routes';
 import { noteRoutes } from './routes/note.routes';
-
-// Create database connection
-export const AppDataSource = new DataSource({
-  type: 'postgres',
-  url: config.databaseUrl,
-  synchronize: config.isDevelopment,
-  logging: config.isDevelopment,
-  entities: ['src/entities/**/*.ts'],
-  migrations: ['src/migrations/**/*.ts'],
-});
+import { AppDataSource } from './config/database';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
@@ -32,99 +22,70 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   });
 
-  try {
-    // Initialize database connection
-    await AppDataSource.initialize();
-    app.log.info('Database connection initialized');
+  // Initialize database connection
+  await AppDataSource.initialize();
 
-    // Register plugins
-    await app.register(fastifyCors, {
-      origin: config.corsOrigins,
-      credentials: true
-    });
+  // Register plugins
+  await app.register(fastifyJwt, {
+    secret: config.jwtSecret
+  });
 
-    await app.register(fastifyJwt, {
-      secret: config.jwtSecret,
-      sign: {
-        expiresIn: '1d'
+  await app.register(fastifyCors, {
+    origin: config.corsOrigins
+  });
+
+  // Register Swagger
+  await app.register(fastifySwagger, {
+    swagger: {
+      info: {
+        title: 'Order Service API',
+        description: 'API documentation for the Order Service',
+        version: '1.0.0'
+      },
+      securityDefinitions: {
+        bearerAuth: {
+          type: 'apiKey',
+          name: 'Authorization',
+          in: 'header'
+        }
       }
-    });
+    }
+  });
 
-    // Register Swagger
-    await app.register(swagger, {
-      openapi: {
-        info: {
-          title: 'Order Service API',
-          description: 'API documentation for the Order Service',
-          version: '1.0.0',
-        },
-        servers: [
-          {
-            url: `http://localhost:${config.port}`,
-            description: 'Local development server',
-          },
-        ],
-        components: {
-          securitySchemes: {
-            bearerAuth: {
-              type: 'http',
-              scheme: 'bearer',
-              bearerFormat: 'JWT',
-            },
-          },
-        },
-        security: [{ bearerAuth: [] }],
-        tags: [
-          { name: 'Orders', description: 'Order management endpoints' },
-          { name: 'Notes', description: 'Order notes endpoints' },
-          { name: 'Health', description: 'Health check endpoint' },
-        ],
-      },
-    });
+  await app.register(fastifySwaggerUi, {
+    routePrefix: '/documentation'
+  });
 
-    await app.register(swaggerUi, {
-      routePrefix: '/documentation',
-      uiConfig: {
-        docExpansion: 'list',
-        deepLinking: true,
-      },
-      staticCSP: true,
-    });
+  // Register routes
+  await app.register(orderRoutes, { prefix: '/api/orders' });
+  await app.register(noteRoutes, { prefix: '/api/orders' });
 
-    // Register routes
-    await app.register(orderRoutes, { prefix: '/api/orders' });
-    await app.register(noteRoutes, { prefix: '/api/orders' });
-
-    // Health check route
-    app.get('/health', {
-      schema: {
-        tags: ['Health'],
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              status: { type: 'string' },
-              timestamp: { type: 'string', format: 'date-time' },
-            },
+  // Health check route
+  app.get('/health', {
+    schema: {
+      tags: ['Health'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            status: { type: 'string' },
+            timestamp: { type: 'string', format: 'date-time' },
           },
         },
       },
-    }, async () => {
-      return { status: 'ok', timestamp: new Date().toISOString() };
-    });
+    },
+  }, async () => {
+    return { status: 'ok', timestamp: new Date().toISOString() };
+  });
 
-    // Global error handler
-    app.setErrorHandler((error, request, reply) => {
-      app.log.error(error);
-      reply.status(500).send({
-        message: 'Internal Server Error',
-        error: error.message
-      });
+  // Global error handler
+  app.setErrorHandler((error, request, reply) => {
+    app.log.error(error);
+    reply.status(500).send({
+      message: 'Internal Server Error',
+      error: error.message
     });
+  });
 
-    return app;
-  } catch (error) {
-    console.error('Error during app initialization:', error);
-    throw error;
-  }
+  return app;
 } 
