@@ -4,7 +4,7 @@ import { CheckoutService } from '../services/checkout.service';
 import { CouponService } from '../services/coupon.service';
 import { ShippingService } from '../services/shipping.service';
 import { validateZodSchema } from '../utils/validate-schema';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 
 // Cart item schema
 const cartItemSchema = z.object({

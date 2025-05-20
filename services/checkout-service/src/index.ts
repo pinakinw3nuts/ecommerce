@@ -2,8 +2,11 @@ import fastify, { FastifyInstance } from 'fastify';
 import fastifyEnv from '@fastify/env';
 import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
+import fastifyRateLimit from '@fastify/rate-limit';
 import { TypeormPlugin } from './plugins/typeorm';
-import { SwaggerPlugin } from './plugins/swagger';
+import { swaggerConfig, swaggerUiOptions } from './config/swagger';
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
 import { CouponService } from './services/coupon.service';
 import { CheckoutService } from './services/checkout.service';
 import { ShippingService } from './services/shipping.service';
@@ -11,73 +14,51 @@ import { Coupon } from './entities/Coupon';
 import { CheckoutSession } from './entities/CheckoutSession';
 import adminCouponRoutes from './routes/admin/coupon.routes';
 import checkoutRoutes from './routes/checkout.routes';
-
-// Environment variable schema
-const schema = {
-  type: 'object',
-  required: ['PORT', 'DATABASE_URL', 'JWT_SECRET'],
-  properties: {
-    PORT: {
-      type: 'number',
-      default: 3000
-    },
-    DATABASE_URL: {
-      type: 'string'
-    },
-    JWT_SECRET: {
-      type: 'string'
-    },
-    NODE_ENV: {
-      type: 'string',
-      default: 'development'
-    }
-  }
-};
+import { config } from './config/env';
+import { authGuard } from './middleware/auth.guard';
 
 // Configure Fastify Instance
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
     logger: {
-      level: process.env.NODE_ENV === 'development' ? 'debug' : 'info'
+      level: config.isDevelopment ? 'debug' : 'info'
     }
   });
 
   // Register env config
   await app.register(fastifyEnv, {
-    schema,
+    schema: {
+      type: 'object',
+      required: ['DATABASE_URL', 'JWT_SECRET'],
+      properties: {
+        DATABASE_URL: { type: 'string' },
+        JWT_SECRET: { type: 'string' }
+      }
+    },
     dotenv: true
   });
 
-  // Register plugins
+  // Register rate limiter
+  await app.register(fastifyRateLimit, {
+    max: 100, // max 100 requests
+    timeWindow: '1 minute', // per 1 minute
+    allowList: ['127.0.0.1'], // exclude localhost
+    redis: config.redis?.url ? {
+      url: config.redis.url
+    } : undefined
+  });
+
+  // Register CORS
   await app.register(fastifyCors, {
     origin: true,
     credentials: true
   });
 
-  await app.register(fastifyJwt, {
-    secret: process.env.JWT_SECRET as string
-  });
+  // Register Swagger
+  await app.register(fastifySwagger, swaggerConfig);
+  await app.register(fastifySwaggerUi, swaggerUiOptions);
 
-  // Register Swagger documentation first
-  await app.register(SwaggerPlugin);
-
-  // Register custom TypeORM plugin
-  await app.register(TypeormPlugin);
-
-  // Initialize services
-  const couponService = new CouponService(app.typeorm.getRepository(Coupon));
-  const shippingService = new ShippingService();
-  const checkoutService = new CheckoutService(
-    app.typeorm.getRepository(CheckoutSession),
-    couponService,
-    shippingService
-  );
-
-  // Register routes
-  await app.register(adminCouponRoutes, { prefix: '/api/admin/coupons', couponService });
-  await app.register(checkoutRoutes, { prefix: '/api/checkout', checkoutService });
-
-  // Add health check route
+  // Add health check route before any auth
   app.get('/health', {
     schema: {
       description: 'Health check endpoint',
@@ -97,8 +78,51 @@ export async function buildApp(): Promise<FastifyInstance> {
     timestamp: new Date().toISOString()
   }));
 
+  // Register JWT authentication
+  await app.register(fastifyJwt, {
+    secret: config.jwt.secret
+  });
+
+  // Register TypeORM plugin
+  await app.register(TypeormPlugin);
+
+  // Initialize services
+  const couponService = new CouponService(app.typeorm.getRepository(Coupon));
+  const shippingService = new ShippingService();
+  const checkoutService = new CheckoutService(
+    app.typeorm.getRepository(CheckoutSession),
+    couponService,
+    shippingService
+  );
+
+  // Register public routes
+  await app.register(async (publicApp) => {
+    // Register public checkout routes
+    await publicApp.register(checkoutRoutes, { 
+      prefix: '/checkout',
+      checkoutService,
+      couponService,
+      shippingService
+    });
+  }, { prefix: '/api/v1' });
+
+  // Register protected routes
+  await app.register(async (protectedApp) => {
+    // Add auth decorator to indicate protected context
+    protectedApp.decorate('auth', true);
+    
+    // Add auth middleware
+    protectedApp.addHook('preHandler', authGuard);
+    
+    // Register protected admin routes
+    await protectedApp.register(adminCouponRoutes, { 
+      prefix: '/admin/coupons',
+      couponService 
+    });
+  }, { prefix: '/api/v1' });
+
   // Global error handler
-  app.setErrorHandler((error, _, reply) => {
+  app.setErrorHandler((error, _request, reply) => {
     app.log.error(error);
     
     // Handle validation errors

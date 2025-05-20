@@ -2,7 +2,7 @@ import { Repository } from 'typeorm';
 import { CheckoutSession, CheckoutStatus } from '../entities/CheckoutSession';
 import { CouponService } from './coupon.service';
 import { ShippingService } from './shipping.service';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 
 interface CartItem {
   productId: string;

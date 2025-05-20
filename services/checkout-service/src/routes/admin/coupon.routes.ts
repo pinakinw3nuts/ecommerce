@@ -5,11 +5,35 @@ import fastifySensible from '@fastify/sensible';
 import { CouponService } from '../../services/coupon.service';
 import { authGuard } from '../../middleware/auth.guard';
 import { roleGuard } from '../../middleware/role.guard';
-import { Coupon, CouponType } from '../../entities/Coupon';
+import { CouponType } from '../../entities/Coupon';
 
 interface CouponPluginOptions {
   couponService: CouponService;
 }
+
+// JSON Schema for Coupon
+const couponJsonSchema = {
+  type: 'object',
+  required: ['id', 'code', 'type', 'value', 'isActive'],
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    code: { type: 'string', minLength: 3, maxLength: 50 },
+    type: { type: 'string', enum: [CouponType.PERCENTAGE, CouponType.FIXED_AMOUNT] },
+    value: { type: 'number', minimum: 0 },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    maxUses: { type: 'integer', minimum: 1, nullable: true },
+    minimumPurchaseAmount: { type: 'number', minimum: 0, nullable: true },
+    applicableProducts: {
+      type: 'array',
+      items: { type: 'string' },
+      nullable: true
+    },
+    isActive: { type: 'boolean' },
+    usageCount: { type: 'integer', minimum: 0 },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' }
+  }
+};
 
 // Input validation schemas
 const createCouponSchema = z.object({
@@ -25,8 +49,7 @@ const createCouponSchema = z.object({
       if (type === CouponType.PERCENTAGE && val > 100) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'Percentage value must be between 0 and 100',
-          path: ['value']
+          message: 'Percentage value must be between 0 and 100'
         });
         return false;
       }
@@ -35,8 +58,7 @@ const createCouponSchema = z.object({
   expiresAt: z.string()
     .datetime()
     .nullable()
-    .optional()
-    .transform(val => val ? new Date(val) : null),
+    .optional(),
   maxUses: z.number()
     .int()
     .positive()
@@ -73,32 +95,67 @@ export default fp(async function adminCouponRoutes(
   await fastify.register(fastifySensible);
   const { couponService } = opts;
 
+  // Register schemas
+  fastify.addSchema({
+    $id: 'coupon',
+    ...couponJsonSchema
+  });
+
   // Add authentication and role guards for all routes
   fastify.addHook('preHandler', authGuard);
   fastify.addHook('preHandler', roleGuard('admin'));
 
   // Create coupon
-  fastify.post<{ Body: z.infer<typeof createCouponSchema> }>(
-    '/',
-    {
-      schema: {
-        body: {
+  fastify.post('/', {
+    schema: {
+      description: 'Create a new coupon',
+      tags: ['coupons'],
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        required: ['code', 'type', 'value'],
+        properties: {
+          code: { type: 'string', minLength: 3, maxLength: 50, pattern: '^[A-Z0-9_-]+$' },
+          type: { type: 'string', enum: [CouponType.PERCENTAGE, CouponType.FIXED_AMOUNT] },
+          value: { type: 'number', minimum: 0 },
+          expiresAt: { type: 'string', format: 'date-time', nullable: true },
+          maxUses: { type: 'integer', minimum: 1, nullable: true },
+          minimumPurchaseAmount: { type: 'number', minimum: 0, nullable: true },
+          applicableProducts: { 
+            type: 'array', 
+            items: { type: 'string' },
+            nullable: true 
+          },
+          isActive: { type: 'boolean', default: true }
+        }
+      },
+      response: {
+        200: {
           type: 'object',
-          required: ['code', 'type', 'value'],
           properties: {
-            code: { type: 'string', minLength: 3, maxLength: 50 },
-            type: { type: 'string', enum: [CouponType.PERCENTAGE, CouponType.FIXED_AMOUNT] },
-            value: { type: 'number', minimum: 0 },
-            expiresAt: { type: 'string', format: 'date-time' },
-            maxUses: { type: 'number', minimum: 1 },
-            minimumPurchaseAmount: { type: 'number', minimum: 0 },
-            applicableProducts: { type: 'array', items: { type: 'string' } },
-            isActive: { type: 'boolean' }
+            success: { type: 'boolean' },
+            data: couponJsonSchema
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            message: { type: 'string' }
+          }
+        },
+        409: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            message: { type: 'string' }
           }
         }
       }
     },
-    async (request) => {
+    handler: async (request) => {
       const couponData = createCouponSchema.parse(request.body);
 
       // Check if coupon code already exists
@@ -107,6 +164,7 @@ export default fp(async function adminCouponRoutes(
         throw fastify.httpErrors.conflict('Coupon code already exists');
       }
 
+      // Transform data for database
       const createData = {
         code: couponData.code,
         type: couponData.type,
@@ -114,8 +172,12 @@ export default fp(async function adminCouponRoutes(
         isActive: couponData.isActive,
         expiresAt: couponData.expiresAt ? new Date(couponData.expiresAt) : null,
         ...(couponData.maxUses !== undefined && { maxUses: couponData.maxUses }),
-        ...(couponData.minimumPurchaseAmount !== undefined && { minimumPurchaseAmount: couponData.minimumPurchaseAmount }),
-        ...(couponData.applicableProducts !== undefined && { applicableProducts: couponData.applicableProducts })
+        ...(couponData.minimumPurchaseAmount !== undefined && { 
+          minimumPurchaseAmount: couponData.minimumPurchaseAmount 
+        }),
+        ...(couponData.applicableProducts !== undefined && { 
+          applicableProducts: couponData.applicableProducts 
+        })
       };
 
       const coupon = await couponService.create(createData);
@@ -125,25 +187,51 @@ export default fp(async function adminCouponRoutes(
         data: coupon
       };
     }
-  );
+  });
 
   // List coupons with pagination and filters
-  fastify.get<{ Querystring: z.infer<typeof listCouponsSchema> }>(
-    '/',
-    {
-      schema: {
-        querystring: {
+  fastify.get('/', {
+    schema: {
+      description: 'List all coupons with pagination and filters',
+      tags: ['coupons'],
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          isActive: { type: 'boolean' },
+          type: { type: 'string', enum: [CouponType.PERCENTAGE, CouponType.FIXED_AMOUNT] }
+        }
+      },
+      response: {
+        200: {
           type: 'object',
           properties: {
-            page: { type: 'number', minimum: 1, default: 1 },
-            limit: { type: 'number', minimum: 1, maximum: 100, default: 20 },
-            isActive: { type: 'boolean' },
-            type: { type: 'string', enum: [CouponType.PERCENTAGE, CouponType.FIXED_AMOUNT] }
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                items: {
+                  type: 'array',
+                  items: couponJsonSchema
+                },
+                pagination: {
+                  type: 'object',
+                  properties: {
+                    page: { type: 'integer' },
+                    limit: { type: 'integer' },
+                    total: { type: 'integer' },
+                    pages: { type: 'integer' }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
-    async (request) => {
+    handler: async (request) => {
       const { page, limit, isActive, type } = listCouponsSchema.parse(request.query);
       
       const [coupons, total] = await couponService.findAll({
@@ -166,24 +254,42 @@ export default fp(async function adminCouponRoutes(
         }
       };
     }
-  );
+  });
 
   // Get coupon by ID
-  fastify.get<{ Params: { id: string } }>(
-    '/:id',
-    {
-      schema: {
-        params: {
+  fastify.get<{ Params: { id: string } }>('/:id', {
+    schema: {
+      description: 'Get a coupon by ID',
+      tags: ['coupons'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' }
+        }
+      },
+      response: {
+        200: {
           type: 'object',
-          required: ['id'],
           properties: {
-            id: { type: 'string', format: 'uuid' }
+            success: { type: 'boolean' },
+            data: couponJsonSchema
+          }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            message: { type: 'string' }
           }
         }
       }
     },
-    async (request) => {
-      const coupon = await couponService.findById(request.params.id);
+    handler: async (request) => {
+      const { id } = request.params;
+      const coupon = await couponService.findById(id);
       
       if (!coupon) {
         throw fastify.httpErrors.notFound('Coupon not found');
@@ -194,43 +300,73 @@ export default fp(async function adminCouponRoutes(
         data: coupon
       };
     }
-  );
+  });
 
   // Update coupon
-  fastify.put<{ Params: { id: string }; Body: z.infer<typeof updateCouponSchema> }>(
-    '/:id',
-    {
-      schema: {
-        params: {
+  fastify.put<{ Params: { id: string }; Body: z.infer<typeof updateCouponSchema> }>('/:id', {
+    schema: {
+      description: 'Update a coupon',
+      tags: ['coupons'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' }
+        }
+      },
+      body: {
+        type: 'object',
+        properties: {
+          code: { type: 'string', minLength: 3, maxLength: 50, pattern: '^[A-Z0-9_-]+$' },
+          type: { type: 'string', enum: [CouponType.PERCENTAGE, CouponType.FIXED_AMOUNT] },
+          value: { type: 'number', minimum: 0 },
+          expiresAt: { type: 'string', format: 'date-time', nullable: true },
+          maxUses: { type: 'integer', minimum: 1, nullable: true },
+          minimumPurchaseAmount: { type: 'number', minimum: 0, nullable: true },
+          applicableProducts: { 
+            type: 'array', 
+            items: { type: 'string' },
+            nullable: true 
+          },
+          isActive: { type: 'boolean' }
+        }
+      },
+      response: {
+        200: {
           type: 'object',
-          required: ['id'],
           properties: {
-            id: { type: 'string', format: 'uuid' }
+            success: { type: 'boolean' },
+            data: couponJsonSchema
           }
         },
-        body: {
+        404: {
           type: 'object',
           properties: {
-            code: { type: 'string', minLength: 3, maxLength: 50 },
-            type: { type: 'string', enum: [CouponType.PERCENTAGE, CouponType.FIXED_AMOUNT] },
-            value: { type: 'number', minimum: 0 },
-            expiresAt: { type: 'string', format: 'date-time', nullable: true },
-            maxUses: { type: 'number', minimum: 1, nullable: true },
-            minimumPurchaseAmount: { type: 'number', minimum: 0, nullable: true },
-            applicableProducts: { type: 'array', items: { type: 'string' }, nullable: true },
-            isActive: { type: 'boolean' }
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            message: { type: 'string' }
+          }
+        },
+        409: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            message: { type: 'string' }
           }
         }
       }
     },
-    async (request) => {
+    handler: async (request) => {
+      const { id } = request.params;
       const couponData = updateCouponSchema.parse({
         ...request.body,
-        id: request.params.id
+        id
       });
 
       // Check if coupon exists
-      const existingCoupon = await couponService.findById(couponData.id);
+      const existingCoupon = await couponService.findById(id);
       if (!existingCoupon) {
         throw fastify.httpErrors.notFound('Coupon not found');
       }
@@ -243,15 +379,23 @@ export default fp(async function adminCouponRoutes(
         }
       }
 
-      const { id, ...rawUpdateData } = couponData;
-      const updateData = Object.entries(rawUpdateData)
-        .filter(([_, value]) => value !== undefined)
-        .reduce((acc, [key, value]) => {
-          if (key === 'expiresAt' && typeof value === 'string') {
-            return { ...acc, [key]: new Date(value) };
-          }
-          return { ...acc, [key]: value };
-        }, {} as Partial<Coupon>);
+      // Transform data for database
+      const updateData = {
+        ...(couponData.code && { code: couponData.code }),
+        ...(couponData.type && { type: couponData.type }),
+        ...(couponData.value && { value: couponData.value }),
+        ...(couponData.isActive !== undefined && { isActive: couponData.isActive }),
+        ...(couponData.expiresAt !== undefined && { 
+          expiresAt: couponData.expiresAt ? new Date(couponData.expiresAt) : null 
+        }),
+        ...(couponData.maxUses !== undefined && { maxUses: couponData.maxUses }),
+        ...(couponData.minimumPurchaseAmount !== undefined && { 
+          minimumPurchaseAmount: couponData.minimumPurchaseAmount 
+        }),
+        ...(couponData.applicableProducts !== undefined && { 
+          applicableProducts: couponData.applicableProducts 
+        })
+      };
 
       const updatedCoupon = await couponService.update(id, updateData);
 
@@ -260,35 +404,53 @@ export default fp(async function adminCouponRoutes(
         data: updatedCoupon
       };
     }
-  );
+  });
 
   // Delete coupon
-  fastify.delete<{ Params: { id: string } }>(
-    '/:id',
-    {
-      schema: {
-        params: {
+  fastify.delete<{ Params: { id: string } }>('/:id', {
+    schema: {
+      description: 'Delete a coupon',
+      tags: ['coupons'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' }
+        }
+      },
+      response: {
+        200: {
           type: 'object',
-          required: ['id'],
           properties: {
-            id: { type: 'string', format: 'uuid' }
+            success: { type: 'boolean' },
+            message: { type: 'string' }
+          }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            message: { type: 'string' }
           }
         }
       }
     },
-    async (request) => {
-      const coupon = await couponService.findById(request.params.id);
+    handler: async (request) => {
+      const { id } = request.params;
+      const coupon = await couponService.findById(id);
       
       if (!coupon) {
         throw fastify.httpErrors.notFound('Coupon not found');
       }
 
-      await couponService.delete(request.params.id);
+      await couponService.delete(id);
 
       return {
         success: true,
         message: 'Coupon deleted successfully'
       };
     }
-  );
+  });
 }); 

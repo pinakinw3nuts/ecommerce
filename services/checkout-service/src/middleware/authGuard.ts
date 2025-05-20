@@ -2,7 +2,7 @@ import { FastifyRequest } from 'fastify';
 import { verify } from 'jsonwebtoken';
 import createError from 'http-errors';
 import { config } from '../config/env';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 import { UserPayload } from '../types/auth';
 
 /**
@@ -29,7 +29,7 @@ const extractToken = (request: FastifyRequest): string => {
  */
 const verifyToken = (token: string): UserPayload => {
   try {
-    const decoded = verify(token, config.JWT_SECRET);
+    const decoded = verify(token, config.jwt.secret);
     if (typeof decoded === 'string' || !('id' in decoded)) {
       throw new Error('Invalid token payload');
     }

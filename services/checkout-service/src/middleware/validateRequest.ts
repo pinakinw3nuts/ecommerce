@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { z, ZodError } from 'zod';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 
 /**
  * Formats ZodError into a user-friendly error response

@@ -1,37 +1,32 @@
 import pino from 'pino';
-import { config } from '../config/env';
 
-// Configure the logger
-const logger = pino({
-  name: 'checkout-service',
-  level: config.NODE_ENV === 'development' ? 'debug' : 'info',
-  timestamp: pino.stdTimeFunctions.isoTime,
-  formatters: {
-    level: (label) => {
-      return { level: label };
-    },
-  },
-  transport: config.NODE_ENV === 'development' 
-    ? {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          ignore: 'pid,hostname',
-          translateTime: 'SYS:standard',
-        },
+// Create a logger factory function that accepts configuration
+export function createLogger(config: { isDevelopment: boolean }) {
+  return pino({
+    level: config.isDevelopment ? 'debug' : 'info',
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        ignore: 'pid,hostname',
+        translateTime: 'SYS:standard'
       }
-    : {
-        target: 'pino/file',
-        options: {}
-      },
-  base: {
-    env: config.NODE_ENV,
-    service: 'checkout-service',
-  },
-});
+    }
+  });
+}
 
-// Export default logger instance
-export default logger;
+// Create a default logger with basic configuration
+// This will be replaced with properly configured logger after env loads
+const defaultLogger = createLogger({ isDevelopment: process.env.NODE_ENV === 'development' });
+
+// Export the logger instance
+export let logger = defaultLogger;
+
+// Function to reconfigure the logger
+export function configureLogger(config: { isDevelopment: boolean }) {
+  logger = createLogger(config);
+  return logger;
+}
 
 // Export type for use in other files
 export type Logger = typeof logger;
