@@ -1,0 +1,85 @@
+{
+  "compilerOptions": {
+    // Language and Environment
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+
+    // Type Checking
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "useUnknownInCatchVariables": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+
+    // Modules
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@config/*": ["src/config/*"],
+      "@controllers/*": ["src/controllers/*"],
+      "@services/*": ["src/services/*"],
+      "@entities/*": ["src/entities/*"],
+      "@utils/*": ["src/utils/*"],
+      "@routes/*": ["src/routes/*"],
+      "@middleware/*": ["src/middleware/*"],
+      "@types/*": ["src/types/*"]
+    },
+
+    // Emit
+    "outDir": "./dist",
+    "removeComments": false,
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "newLine": "lf",
+    "stripInternal": true,
+
+    // Interop Constraints
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": false,
+    "checkJs": false,
+
+    // Projects
+    "composite": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+
+    // Output Formatting
+    "noErrorTruncation": true,
+    "preserveConstEnums": true,
+
+    // Completeness
+    "skipLibCheck": true,
+
+    // Experimental
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+} 

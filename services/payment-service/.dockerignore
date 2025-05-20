@@ -1,0 +1,40 @@
+# Node.js dependencies
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# TypeScript build output
+dist
+build
+
+# Environment files
+.env
+.env.*
+
+# Development tools
+.git
+.github
+.vscode
+.idea
+*.log
+
+# Testing
+coverage
+*.test.ts
+*.spec.ts
+test
+tests
+
+# Temporary files
+tmp
+temp
+.DS_Store
+
+# Documentation
+docs
+*.md
+
+# Docker files
+Dockerfile*
+.dockerignore 

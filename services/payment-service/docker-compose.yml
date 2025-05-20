@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  payment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payment-service
+    restart: unless-stopped
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=development
+      - PORT=3006
+      - HOST=0.0.0.0
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=ecom
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-sk_test_example}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_example}
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret-key}
+      - CORS_ORIGIN=*
+    volumes:
+      - ./src:/app/src
+      - ./.env:/app/.env
+    depends_on:
+      - postgres
+    networks:
+      - payment-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: payment-postgres
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=ecom
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Optional: Initialize database with schema
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - payment-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  payment-network:
+    driver: bridge 
