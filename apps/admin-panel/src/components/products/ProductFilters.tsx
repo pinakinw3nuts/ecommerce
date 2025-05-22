@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
-import { Search, X, Filter, Calendar } from 'lucide-react';
+import { Search, Filter, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface FilterState {
   search: string;
   categories: string[];
   statuses: string[];
-  dateRange: {
-    from: string;
-    to: string;
-  };
-  priceRange: {
+  valueRange: {
     min: string;
     max: string;
   };
@@ -26,13 +22,13 @@ const CATEGORIES = [
   { value: 'electronics', label: 'Electronics' },
   { value: 'clothing', label: 'Clothing' },
   { value: 'books', label: 'Books' },
-  { value: 'home', label: 'Home & Garden' },
+  { value: 'home', label: 'Home & Garden' }
 ];
 
 const STATUSES = [
   { value: 'in_stock', label: 'In Stock' },
   { value: 'low_stock', label: 'Low Stock' },
-  { value: 'out_of_stock', label: 'Out of Stock' },
+  { value: 'out_of_stock', label: 'Out of Stock' }
 ];
 
 export function ProductFilters({ filters, onChange, onReset }: ProductFiltersProps) {
@@ -56,17 +52,31 @@ export function ProductFilters({ filters, onChange, onReset }: ProductFiltersPro
     onChange({ ...filters, statuses });
   };
 
-  const handleDateChange = (field: 'from' | 'to', value: string) => {
+  const handleValueChange = (field: 'min' | 'max', value: string) => {
     onChange({
       ...filters,
-      dateRange: { ...filters.dateRange, [field]: value },
+      valueRange: { ...filters.valueRange, [field]: value },
     });
   };
 
-  const handlePriceChange = (field: 'min' | 'max', value: string) => {
+  const handleRemoveCategory = (category: string) => {
     onChange({
       ...filters,
-      priceRange: { ...filters.priceRange, [field]: value },
+      categories: filters.categories.filter(c => c !== category)
+    });
+  };
+
+  const handleRemoveStatus = (status: string) => {
+    onChange({
+      ...filters,
+      statuses: filters.statuses.filter(s => s !== status)
+    });
+  };
+
+  const handleRemoveValueRange = () => {
+    onChange({
+      ...filters,
+      valueRange: { min: '', max: '' }
     });
   };
 
@@ -74,14 +84,12 @@ export function ProductFilters({ filters, onChange, onReset }: ProductFiltersPro
     filters.search ||
     filters.categories.length > 0 ||
     filters.statuses.length > 0 ||
-    filters.dateRange.from ||
-    filters.dateRange.to ||
-    filters.priceRange.min ||
-    filters.priceRange.max;
+    filters.valueRange.min ||
+    filters.valueRange.max;
 
   return (
     <div className="space-y-4">
-      {/* Search Bar */}
+      {/* Search Bar and Filter Button */}
       <div className="flex items-center gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -89,7 +97,7 @@ export function ProductFilters({ filters, onChange, onReset }: ProductFiltersPro
             type="text"
             value={filters.search}
             onChange={handleSearchChange}
-            placeholder="Search products..."
+            placeholder="Search products by name or category..."
             className="w-full rounded-md border border-gray-300 pl-10 pr-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -106,8 +114,7 @@ export function ProductFilters({ filters, onChange, onReset }: ProductFiltersPro
               <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-600">
                 {(filters.categories.length > 0 ? 1 : 0) +
                   (filters.statuses.length > 0 ? 1 : 0) +
-                  (filters.dateRange.from || filters.dateRange.to ? 1 : 0) +
-                  (filters.priceRange.min || filters.priceRange.max ? 1 : 0)}
+                  (filters.valueRange.min || filters.valueRange.max ? 1 : 0)}
               </span>
             )}
           </Button>
@@ -117,7 +124,7 @@ export function ProductFilters({ filters, onChange, onReset }: ProductFiltersPro
               <div className="space-y-4">
                 {/* Category Filter */}
                 <div>
-                  <h4 className="font-medium mb-2">Categories</h4>
+                  <h4 className="font-medium mb-2">Category</h4>
                   <div className="flex flex-wrap gap-2">
                     {CATEGORIES.map(category => (
                       <button
@@ -161,69 +168,45 @@ export function ProductFilters({ filters, onChange, onReset }: ProductFiltersPro
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-sm text-gray-500 mb-1">Min</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={filters.priceRange.min}
-                        onChange={(e) => handlePriceChange('min', e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        placeholder="0.00"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={filters.valueRange.min}
+                          onChange={(e) => handleValueChange('min', e.target.value)}
+                          className="w-full rounded-md border border-gray-300 pl-7 pr-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          placeholder="0"
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm text-gray-500 mb-1">Max</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={filters.priceRange.max}
-                        onChange={(e) => handlePriceChange('max', e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        placeholder="1000.00"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Date Range Filter */}
-                <div>
-                  <h4 className="font-medium mb-2">Created Date</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-sm text-gray-500 mb-1">From</label>
-                      <input
-                        type="date"
-                        value={filters.dateRange.from}
-                        onChange={(e) => handleDateChange('from', e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-500 mb-1">To</label>
-                      <input
-                        type="date"
-                        value={filters.dateRange.to}
-                        onChange={(e) => handleDateChange('to', e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={filters.valueRange.max}
+                          onChange={(e) => handleValueChange('max', e.target.value)}
+                          className="w-full rounded-md border border-gray-300 pl-7 pr-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          placeholder="100"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Reset Button */}
                 {hasActiveFilters && (
-                  <div className="border-t pt-4 mt-4">
+                  <div className="pt-2">
                     <Button
                       variant="outline"
-                      size="sm"
                       className="w-full"
-                      onClick={() => {
-                        onReset();
-                        setIsOpen(false);
-                      }}
+                      onClick={onReset}
                     >
-                      <X className="h-4 w-4 mr-2" />
                       Reset Filters
                     </Button>
                   </div>
@@ -236,66 +219,59 @@ export function ProductFilters({ filters, onChange, onReset }: ProductFiltersPro
 
       {/* Active Filters */}
       {hasActiveFilters && (
-        <div className="flex flex-wrap items-center gap-2">
-          {filters.categories.map(category => (
-            <span
-              key={category}
-              className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700"
+        <div className="flex flex-wrap gap-2">
+          {filters.categories.map(category => {
+            const categoryLabel = CATEGORIES.find(c => c.value === category)?.label || category;
+            return (
+              <div
+                key={category}
+                className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-sm text-red-700"
+              >
+                <span>Category: {categoryLabel}</span>
+                <button
+                  onClick={() => handleRemoveCategory(category)}
+                  className="ml-1 rounded-full p-0.5 hover:bg-red-100"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+          
+          {filters.statuses.map(status => {
+            const statusLabel = STATUSES.find(s => s.value === status)?.label || status;
+            return (
+              <div
+                key={status}
+                className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-sm text-red-700"
+              >
+                <span>Status: {statusLabel}</span>
+                <button
+                  onClick={() => handleRemoveStatus(status)}
+                  className="ml-1 rounded-full p-0.5 hover:bg-red-100"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+
+          {(filters.valueRange.min || filters.valueRange.max) && (
+            <div
+              className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-sm text-red-700"
             >
-              Category: {CATEGORIES.find(c => c.value === category)?.label || category}
+              <span>
+                Price: {filters.valueRange.min && `$${filters.valueRange.min}`}
+                {filters.valueRange.min && filters.valueRange.max && ' - '}
+                {filters.valueRange.max && `$${filters.valueRange.max}`}
+              </span>
               <button
-                onClick={() => handleCategoryToggle(category)}
-                className="ml-1 rounded-full p-1 hover:bg-blue-100"
+                onClick={handleRemoveValueRange}
+                className="ml-1 rounded-full p-0.5 hover:bg-red-100"
               >
                 <X className="h-3 w-3" />
               </button>
-            </span>
-          ))}
-          {filters.statuses.map(status => (
-            <span
-              key={status}
-              className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700"
-            >
-              Status: {STATUSES.find(s => s.value === status)?.label || status}
-              <button
-                onClick={() => handleStatusToggle(status)}
-                className="ml-1 rounded-full p-1 hover:bg-blue-100"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          {(filters.priceRange.min || filters.priceRange.max) && (
-            <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
-              Price: 
-              {filters.priceRange.min && filters.priceRange.max
-                ? `$${filters.priceRange.min} - $${filters.priceRange.max}`
-                : filters.priceRange.min
-                ? `Min $${filters.priceRange.min}`
-                : `Max $${filters.priceRange.max}`}
-              <button
-                onClick={() => onChange({ ...filters, priceRange: { min: '', max: '' } })}
-                className="ml-1 rounded-full p-1 hover:bg-blue-100"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          )}
-          {(filters.dateRange.from || filters.dateRange.to) && (
-            <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
-              <Calendar className="h-3 w-3 mr-1" />
-              {filters.dateRange.from && filters.dateRange.to
-                ? `${filters.dateRange.from} - ${filters.dateRange.to}`
-                : filters.dateRange.from
-                ? `From ${filters.dateRange.from}`
-                : `Until ${filters.dateRange.to}`}
-              <button
-                onClick={() => onChange({ ...filters, dateRange: { from: '', to: '' } })}
-                className="ml-1 rounded-full p-1 hover:bg-blue-100"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
+            </div>
           )}
         </div>
       )}

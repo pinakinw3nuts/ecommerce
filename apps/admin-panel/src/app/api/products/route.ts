@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const categories = searchParams.get('categories')?.split(',').filter(Boolean) || [];
     const statuses = searchParams.get('statuses')?.split(',').filter(Boolean) || [];
+    const priceMin = searchParams.get('priceMin') ? Number(searchParams.get('priceMin')) : null;
+    const priceMax = searchParams.get('priceMax') ? Number(searchParams.get('priceMax')) : null;
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
@@ -33,7 +35,8 @@ export async function GET(request: NextRequest) {
     if (search) {
       const searchLower = search.toLowerCase();
       filteredProducts = filteredProducts.filter(product => 
-        product.name.toLowerCase().includes(searchLower)
+        product.name.toLowerCase().includes(searchLower) ||
+        product.category.toLowerCase().includes(searchLower)
       );
     }
 
@@ -45,6 +48,14 @@ export async function GET(request: NextRequest) {
     // Apply status filter
     if (statuses.length > 0) {
       filteredProducts = filteredProducts.filter(product => statuses.includes(product.status));
+    }
+
+    // Apply price range filter
+    if (priceMin !== null) {
+      filteredProducts = filteredProducts.filter(product => product.price >= priceMin);
+    }
+    if (priceMax !== null) {
+      filteredProducts = filteredProducts.filter(product => product.price <= priceMax);
     }
 
     // Apply sorting

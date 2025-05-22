@@ -4,109 +4,110 @@ import { Button } from '@/components/ui/Button';
 
 interface FilterState {
   search: string;
-  statuses: string[];
-  paymentStatuses: string[];
-  dateRange: {
-    from: string;
-    to: string;
+  categories: string[];
+  status: string[];
+  priceRange: {
+    min: string;
+    max: string;
   };
-  valueRange: {
+  stockRange: {
     min: string;
     max: string;
   };
 }
 
-interface OrderFiltersProps {
+interface InventoryFiltersProps {
   filters: FilterState;
   onChange: (filters: FilterState) => void;
   onReset: () => void;
 }
 
 const STATUSES = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'processing', label: 'Processing' },
-  { value: 'shipped', label: 'Shipped' },
-  { value: 'delivered', label: 'Delivered' },
-  { value: 'cancelled', label: 'Cancelled' }
+  { value: 'in_stock', label: 'In Stock' },
+  { value: 'low_stock', label: 'Low Stock' },
+  { value: 'out_of_stock', label: 'Out of Stock' }
 ];
 
-const PAYMENT_STATUSES = [
-  { value: 'paid', label: 'Paid' },
-  { value: 'unpaid', label: 'Unpaid' },
-  { value: 'refunded', label: 'Refunded' }
+const CATEGORIES = [
+  { value: 'electronics', label: 'Electronics' },
+  { value: 'clothing', label: 'Clothing' },
+  { value: 'books', label: 'Books' },
+  { value: 'home', label: 'Home & Garden' },
+  { value: 'sports', label: 'Sports' },
+  { value: 'toys', label: 'Toys' }
 ];
 
-export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) {
+export function InventoryFilters({ filters, onChange, onReset }: InventoryFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange({ ...filters, search: e.target.value });
   };
 
+  const handleCategoryToggle = (category: string) => {
+    const categories = filters.categories.includes(category)
+      ? filters.categories.filter(c => c !== category)
+      : [...filters.categories, category];
+    onChange({ ...filters, categories });
+  };
+
   const handleStatusToggle = (status: string) => {
-    const statuses = filters.statuses.includes(status)
-      ? filters.statuses.filter(s => s !== status)
-      : [...filters.statuses, status];
-    onChange({ ...filters, statuses });
+    const statuses = filters.status.includes(status)
+      ? filters.status.filter(s => s !== status)
+      : [...filters.status, status];
+    onChange({ ...filters, status: statuses });
   };
 
-  const handlePaymentStatusToggle = (status: string) => {
-    const paymentStatuses = filters.paymentStatuses.includes(status)
-      ? filters.paymentStatuses.filter(s => s !== status)
-      : [...filters.paymentStatuses, status];
-    onChange({ ...filters, paymentStatuses });
-  };
-
-  const handleDateChange = (field: 'from' | 'to', value: string) => {
+  const handlePriceChange = (field: 'min' | 'max', value: string) => {
     onChange({
       ...filters,
-      dateRange: { ...filters.dateRange, [field]: value },
+      priceRange: { ...filters.priceRange, [field]: value },
     });
   };
 
-  const handleValueChange = (field: 'min' | 'max', value: string) => {
+  const handleStockChange = (field: 'min' | 'max', value: string) => {
     onChange({
       ...filters,
-      valueRange: { ...filters.valueRange, [field]: value },
+      stockRange: { ...filters.stockRange, [field]: value },
+    });
+  };
+
+  const handleRemoveCategory = (category: string) => {
+    onChange({
+      ...filters,
+      categories: filters.categories.filter(c => c !== category)
     });
   };
 
   const handleRemoveStatus = (status: string) => {
     onChange({
       ...filters,
-      statuses: filters.statuses.filter(s => s !== status)
+      status: filters.status.filter(s => s !== status)
     });
   };
 
-  const handleRemovePaymentStatus = (status: string) => {
+  const handleRemovePriceRange = () => {
     onChange({
       ...filters,
-      paymentStatuses: filters.paymentStatuses.filter(s => s !== status)
+      priceRange: { min: '', max: '' }
     });
   };
 
-  const handleRemoveDateRange = () => {
+  const handleRemoveStockRange = () => {
     onChange({
       ...filters,
-      dateRange: { from: '', to: '' }
-    });
-  };
-
-  const handleRemoveValueRange = () => {
-    onChange({
-      ...filters,
-      valueRange: { min: '', max: '' }
+      stockRange: { min: '', max: '' }
     });
   };
 
   const hasActiveFilters = 
     filters.search ||
-    filters.statuses.length > 0 ||
-    filters.paymentStatuses.length > 0 ||
-    filters.dateRange.from ||
-    filters.dateRange.to ||
-    filters.valueRange.min ||
-    filters.valueRange.max;
+    filters.categories.length > 0 ||
+    filters.status.length > 0 ||
+    filters.priceRange.min ||
+    filters.priceRange.max ||
+    filters.stockRange.min ||
+    filters.stockRange.max;
 
   return (
     <div className="space-y-4">
@@ -118,7 +119,7 @@ export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) 
             type="text"
             value={filters.search}
             onChange={handleSearchChange}
-            placeholder="Search orders..."
+            placeholder="Search inventory..."
             className="w-full rounded-md border border-gray-300 pl-10 pr-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -133,10 +134,10 @@ export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) 
             Filters
             {hasActiveFilters && (
               <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-600">
-                {(filters.statuses.length > 0 ? 1 : 0) +
-                  (filters.paymentStatuses.length > 0 ? 1 : 0) +
-                  ((filters.dateRange.from || filters.dateRange.to) ? 1 : 0) +
-                  ((filters.valueRange.min || filters.valueRange.max) ? 1 : 0)}
+                {(filters.categories.length > 0 ? 1 : 0) +
+                  (filters.status.length > 0 ? 1 : 0) +
+                  ((filters.priceRange.min || filters.priceRange.max) ? 1 : 0) +
+                  ((filters.stockRange.min || filters.stockRange.max) ? 1 : 0)}
               </span>
             )}
           </Button>
@@ -144,16 +145,36 @@ export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) 
           {isOpen && (
             <div className="absolute right-0 mt-2 w-80 rounded-md border border-gray-200 bg-white p-4 shadow-lg z-50">
               <div className="space-y-4">
+                {/* Category Filter */}
+                <div>
+                  <h4 className="font-medium mb-2">Category</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {CATEGORIES.map(category => (
+                      <button
+                        key={category.value}
+                        onClick={() => handleCategoryToggle(category.value)}
+                        className={`rounded-full px-3 py-1 text-sm font-medium transition-colors
+                          ${filters.categories.includes(category.value)
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                      >
+                        {category.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Status Filter */}
                 <div>
-                  <h4 className="font-medium mb-2">Order Status</h4>
+                  <h4 className="font-medium mb-2">Status</h4>
                   <div className="flex flex-wrap gap-2">
                     {STATUSES.map(status => (
                       <button
                         key={status.value}
                         onClick={() => handleStatusToggle(status.value)}
                         className={`rounded-full px-3 py-1 text-sm font-medium transition-colors
-                          ${filters.statuses.includes(status.value)
+                          ${filters.status.includes(status.value)
                             ? 'bg-blue-100 text-blue-700'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
@@ -164,29 +185,9 @@ export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) 
                   </div>
                 </div>
 
-                {/* Payment Status Filter */}
+                {/* Price Range Filter */}
                 <div>
-                  <h4 className="font-medium mb-2">Payment Status</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {PAYMENT_STATUSES.map(status => (
-                      <button
-                        key={status.value}
-                        onClick={() => handlePaymentStatusToggle(status.value)}
-                        className={`rounded-full px-3 py-1 text-sm font-medium transition-colors
-                          ${filters.paymentStatuses.includes(status.value)
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
-                      >
-                        {status.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Order Value Range Filter */}
-                <div>
-                  <h4 className="font-medium mb-2">Order Value</h4>
+                  <h4 className="font-medium mb-2">Price Range</h4>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-sm text-gray-500 mb-1">Min</label>
@@ -196,8 +197,8 @@ export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) 
                           type="number"
                           min="0"
                           step="0.01"
-                          value={filters.valueRange.min}
-                          onChange={(e) => handleValueChange('min', e.target.value)}
+                          value={filters.priceRange.min}
+                          onChange={(e) => handlePriceChange('min', e.target.value)}
                           className="w-full rounded-md border border-gray-300 pl-7 pr-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                           placeholder="0"
                         />
@@ -211,8 +212,8 @@ export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) 
                           type="number"
                           min="0"
                           step="0.01"
-                          value={filters.valueRange.max}
-                          onChange={(e) => handleValueChange('max', e.target.value)}
+                          value={filters.priceRange.max}
+                          onChange={(e) => handlePriceChange('max', e.target.value)}
                           className="w-full rounded-md border border-gray-300 pl-7 pr-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                           placeholder="100"
                         />
@@ -221,26 +222,30 @@ export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) 
                   </div>
                 </div>
 
-                {/* Order Date Range Filter */}
+                {/* Stock Range Filter */}
                 <div>
-                  <h4 className="font-medium mb-2">Order Date</h4>
+                  <h4 className="font-medium mb-2">Stock Range</h4>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-sm text-gray-500 mb-1">From</label>
+                      <label className="block text-sm text-gray-500 mb-1">Min</label>
                       <input
-                        type="date"
-                        value={filters.dateRange.from}
-                        onChange={(e) => handleDateChange('from', e.target.value)}
+                        type="number"
+                        min="0"
+                        value={filters.stockRange.min}
+                        onChange={(e) => handleStockChange('min', e.target.value)}
                         className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="0"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-500 mb-1">To</label>
+                      <label className="block text-sm text-gray-500 mb-1">Max</label>
                       <input
-                        type="date"
-                        value={filters.dateRange.to}
-                        onChange={(e) => handleDateChange('to', e.target.value)}
+                        type="number"
+                        min="0"
+                        value={filters.stockRange.max}
+                        onChange={(e) => handleStockChange('max', e.target.value)}
                         className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="100"
                       />
                     </div>
                   </div>
@@ -267,14 +272,32 @@ export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) 
       {/* Active Filters */}
       {hasActiveFilters && (
         <div className="flex flex-wrap gap-2">
-          {filters.statuses.map(status => {
+          {filters.categories.map(category => {
+            const categoryLabel = CATEGORIES.find(c => c.value === category)?.label || category;
+            return (
+              <div
+                key={category}
+                className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-sm text-red-700"
+              >
+                <span>Category: {categoryLabel}</span>
+                <button
+                  onClick={() => handleRemoveCategory(category)}
+                  className="ml-1 rounded-full p-0.5 hover:bg-red-100"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+
+          {filters.status.map(status => {
             const statusLabel = STATUSES.find(s => s.value === status)?.label || status;
             return (
               <div
                 key={status}
                 className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-sm text-red-700"
               >
-                <span>Order Status: {statusLabel}</span>
+                <span>Status: {statusLabel}</span>
                 <button
                   onClick={() => handleRemoveStatus(status)}
                   className="ml-1 rounded-full p-0.5 hover:bg-red-100"
@@ -285,35 +308,17 @@ export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) 
             );
           })}
 
-          {filters.paymentStatuses.map(status => {
-            const statusLabel = PAYMENT_STATUSES.find(s => s.value === status)?.label || status;
-            return (
-              <div
-                key={status}
-                className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-sm text-red-700"
-              >
-                <span>Payment: {statusLabel}</span>
-                <button
-                  onClick={() => handleRemovePaymentStatus(status)}
-                  className="ml-1 rounded-full p-0.5 hover:bg-red-100"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            );
-          })}
-
-          {(filters.dateRange.from || filters.dateRange.to) && (
+          {(filters.priceRange.min || filters.priceRange.max) && (
             <div
               className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-sm text-red-700"
             >
               <span>
-                Date: {filters.dateRange.from && filters.dateRange.from}
-                {filters.dateRange.from && filters.dateRange.to && ' - '}
-                {filters.dateRange.to && filters.dateRange.to}
+                Price: {filters.priceRange.min && `$${filters.priceRange.min}`}
+                {filters.priceRange.min && filters.priceRange.max && ' - '}
+                {filters.priceRange.max && `$${filters.priceRange.max}`}
               </span>
               <button
-                onClick={handleRemoveDateRange}
+                onClick={handleRemovePriceRange}
                 className="ml-1 rounded-full p-0.5 hover:bg-red-100"
               >
                 <X className="h-3 w-3" />
@@ -321,17 +326,17 @@ export function OrderFilters({ filters, onChange, onReset }: OrderFiltersProps) 
             </div>
           )}
 
-          {(filters.valueRange.min || filters.valueRange.max) && (
+          {(filters.stockRange.min || filters.stockRange.max) && (
             <div
               className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-sm text-red-700"
             >
               <span>
-                Value: {filters.valueRange.min && `$${filters.valueRange.min}`}
-                {filters.valueRange.min && filters.valueRange.max && ' - '}
-                {filters.valueRange.max && `$${filters.valueRange.max}`}
+                Stock: {filters.stockRange.min && filters.stockRange.min}
+                {filters.stockRange.min && filters.stockRange.max && ' - '}
+                {filters.stockRange.max && filters.stockRange.max}
               </span>
               <button
-                onClick={handleRemoveValueRange}
+                onClick={handleRemoveStockRange}
                 className="ml-1 rounded-full p-0.5 hover:bg-red-100"
               >
                 <X className="h-3 w-3" />

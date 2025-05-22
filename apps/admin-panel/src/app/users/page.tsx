@@ -19,12 +19,16 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
-  Pencil
+  Pencil,
+  X,
+  Filter
 } from 'lucide-react';
 import Table, { type Column, TableInstance } from '@/components/Table';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
 import { UserFilters } from '@/components/users/UserFilters';
+import { Pagination } from '@/components/ui/Pagination';
+import { CommonFilters, FilterConfig, FilterState, DateRangeFilter } from '@/components/ui/CommonFilters';
 
 interface PaginationData {
   total: number;
@@ -49,6 +53,50 @@ interface ApiResponse {
   pagination: PaginationData;
 }
 
+interface UserFilterState extends FilterState {
+  roles: string[];
+  statuses: string[];
+  dateRange: {
+    from: string;
+    to: string;
+  };
+}
+
+const filterConfig: FilterConfig = {
+  search: {
+    placeholder: 'Search users by name or email...',
+  },
+  filterGroups: [
+    {
+      name: 'Role',
+      key: 'roles',
+      options: [
+        { value: 'admin', label: 'Admin' },
+        { value: 'moderator', label: 'Moderator' },
+        { value: 'user', label: 'User' },
+      ],
+    },
+    {
+      name: 'Status',
+      key: 'statuses',
+      options: [
+        { value: 'active', label: 'Active' },
+        { value: 'banned', label: 'Banned' },
+        { value: 'pending', label: 'Pending' },
+      ],
+    },
+  ],
+  hasDateRange: true,
+  dateRangeLabel: 'Registration Date',
+};
+
+const initialFilters: UserFilterState = {
+  search: '',
+  roles: [],
+  statuses: [],
+  dateRange: { from: '', to: '' },
+};
+
 const fetcher = async (url: string) => {
   const response = await fetch(url, {
     credentials: 'include',
@@ -71,17 +119,17 @@ export default function UsersPage() {
   const [pageSize, setPageSize] = useState(10);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isLoadingUserOperation, setIsLoadingUserOperation] = useState(false);
-  const [filters, setFilters] = useState({
-    search: '',
-    roles: [] as string[],
-    statuses: [] as string[],
-    dateRange: {
-      from: '',
-      to: '',
-    },
-  });
+  const [filters, setFilters] = useState<UserFilterState>(initialFilters);
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+
+  const hasActiveFilters = 
+    filters.search ||
+    filters.roles.length > 0 ||
+    filters.statuses.length > 0 ||
+    filters.dateRange.from ||
+    filters.dateRange.to;
 
   // Build query string from filters
   const queryString = new URLSearchParams({
@@ -250,10 +298,15 @@ export default function UsersPage() {
     setSelectedUsers([]); // Clear selection
   };
 
-  const handleFiltersChange = (newFilters: typeof filters) => {
-    setFilters(newFilters);
-    setPage(1); // Reset to first page when filters change
-    setSelectedUsers([]); // Clear selection
+  const handleFiltersChange = (newFilters: FilterState) => {
+    setFilters({
+      search: newFilters.search,
+      roles: (newFilters.roles as string[]) || [],
+      statuses: (newFilters.statuses as string[]) || [],
+      dateRange: (newFilters.dateRange as DateRangeFilter) || { from: '', to: '' },
+    });
+    setPage(1);
+    setSelectedUsers([]);
   };
 
   const handleFiltersReset = () => {
@@ -504,7 +557,8 @@ export default function UsersPage() {
       </div>
 
       {/* Filters */}
-      <UserFilters
+      <CommonFilters
+        config={filterConfig}
         filters={filters}
         onChange={handleFiltersChange}
         onReset={handleFiltersReset}
@@ -560,114 +614,43 @@ export default function UsersPage() {
           }}
         />
 
-        {/* Pagination Controls */}
+        {/* Pagination */}
         <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-          <div className="flex flex-1 justify-between sm:hidden">
-            <Button
-              variant="outline"
-              onClick={() => handlePageChange(page - 1)}
-              disabled={!data?.pagination.hasPrevious || isLoading}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => handlePageChange(page + 1)}
-              disabled={!data?.pagination.hasMore || isLoading}
-            >
-              Next
-            </Button>
-          </div>
-          
-          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <p className="text-sm text-gray-700">
-                Showing{' '}
-                <span className="font-medium">
-                  {data ? (page - 1) * pageSize + 1 : 0}
-                </span>{' '}
-                to{' '}
-                <span className="font-medium">
-                  {data
-                    ? Math.min(page * pageSize, data.pagination.total)
-                    : 0}
-                </span>{' '}
-                of{' '}
-                <span className="font-medium">{data?.pagination.total || 0}</span>{' '}
-                results
-              </p>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-gray-700">
+              Showing{' '}
+              <span className="font-medium">
+                {data ? (page - 1) * pageSize + 1 : 0}
+              </span>{' '}
+              to{' '}
+              <span className="font-medium">
+                {data
+                  ? Math.min(page * pageSize, data.pagination.total)
+                  : 0}
+              </span>{' '}
+              of{' '}
+              <span className="font-medium">{data?.pagination.total || 0}</span>{' '}
+              results
+            </p>
 
-              <select
-                value={pageSize}
-                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value={10}>10 per page</option>
-                <option value={25}>25 per page</option>
-                <option value={50}>50 per page</option>
-                <option value={100}>100 per page</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(1)}
-                disabled={page === 1 || isLoading}
-              >
-                First
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(page - 1)}
-                disabled={!data?.pagination.hasPrevious || isLoading}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </Button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: data?.pagination.totalPages || 0 }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === data?.pagination.totalPages || Math.abs(p - page) <= 1)
-                  .map((p, i, arr) => (
-                    <React.Fragment key={p}>
-                      {i > 0 && arr[i - 1] !== p - 1 && (
-                        <span className="px-2 text-gray-500">...</span>
-                      )}
-                      <button
-                        onClick={() => handlePageChange(p)}
-                        disabled={isLoading}
-                        className={`min-w-[32px] rounded px-2 py-1 text-sm ${
-                          p === page
-                            ? 'bg-blue-50 text-blue-600 font-medium'
-                            : 'text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    </React.Fragment>
-                  ))}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(page + 1)}
-                disabled={!data?.pagination.hasMore || isLoading}
-              >
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(data?.pagination.totalPages || 1)}
-                disabled={page === data?.pagination.totalPages || isLoading}
-              >
-                Last
-              </Button>
-            </div>
+            <select
+              value={pageSize}
+              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value={10}>10 per page</option>
+              <option value={25}>25 per page</option>
+              <option value={50}>50 per page</option>
+              <option value={100}>100 per page</option>
+            </select>
           </div>
+
+          <Pagination
+            currentPage={page}
+            pageSize={pageSize}
+            totalItems={data?.pagination.total || 0}
+            onPageChange={handlePageChange}
+          />
         </div>
       </div>
     </div>

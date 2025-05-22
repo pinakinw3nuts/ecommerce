@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './Button';
 
 interface PaginationProps {
@@ -14,52 +14,81 @@ export function Pagination({ currentPage, pageSize, totalItems, onPageChange }: 
 
   const getPageNumbers = () => {
     const pages = [];
-    const maxPagesToShow = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
-
-    if (endPage - startPage + 1 < maxPagesToShow) {
-      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    const maxPagesToShow = 7; // Show max 7 page numbers including first, last, and ellipsis
+    
+    if (totalPages <= maxPagesToShow) {
+      // If total pages are less than max, show all pages
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Always show first page
+      pages.push(1);
+      
+      if (currentPage > 3) {
+        pages.push('...');
+      }
+      
+      // Show pages around current page
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+        pages.push(i);
+      }
+      
+      if (currentPage < totalPages - 2) {
+        pages.push('...');
+      }
+      
+      // Always show last page
+      if (totalPages > 1) {
+        pages.push(totalPages);
+      }
     }
-
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(i);
-    }
-
+    
     return pages;
   };
 
   if (totalPages <= 1) return null;
 
   return (
-    <nav className="flex items-center gap-1">
+    <div className="flex items-center gap-2">
       <Button
         variant="outline"
         size="sm"
         onClick={() => onPageChange(1)}
         disabled={currentPage === 1}
+        className="px-3 py-2 text-sm"
       >
-        <ChevronsLeft className="h-4 w-4" />
+        First
       </Button>
+      
       <Button
         variant="outline"
         size="sm"
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
+        className="px-3 py-2 text-sm"
       >
-        <ChevronLeft className="h-4 w-4" />
+        <ChevronLeft className="h-4 w-4 mr-1" />
+        Previous
       </Button>
 
-      {getPageNumbers().map(pageNumber => (
-        <Button
-          key={pageNumber}
-          variant={pageNumber === currentPage ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => onPageChange(pageNumber)}
-          className="min-w-[2rem]"
-        >
-          {pageNumber}
-        </Button>
+      {getPageNumbers().map((pageNumber, index) => (
+        pageNumber === '...' ? (
+          <span key={`ellipsis-${index}`} className="px-2 text-gray-500">...</span>
+        ) : (
+          <button
+            key={pageNumber}
+            onClick={() => onPageChange(pageNumber as number)}
+            disabled={pageNumber === currentPage}
+            className={`min-w-[32px] rounded px-2 py-1 text-sm ${
+              pageNumber === currentPage
+                ? 'bg-blue-50 text-blue-600 font-medium'
+                : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            {pageNumber}
+          </button>
+        )
       ))}
 
       <Button
@@ -67,17 +96,21 @@ export function Pagination({ currentPage, pageSize, totalItems, onPageChange }: 
         size="sm"
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
+        className="px-3 py-2 text-sm"
       >
-        <ChevronRight className="h-4 w-4" />
+        Next
+        <ChevronRight className="h-4 w-4 ml-1" />
       </Button>
+
       <Button
         variant="outline"
         size="sm"
         onClick={() => onPageChange(totalPages)}
         disabled={currentPage === totalPages}
+        className="px-3 py-2 text-sm"
       >
-        <ChevronsRight className="h-4 w-4" />
+        Last
       </Button>
-    </nav>
+    </div>
   );
 } 

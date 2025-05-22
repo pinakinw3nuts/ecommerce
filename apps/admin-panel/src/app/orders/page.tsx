@@ -14,27 +14,20 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  Filter,
+  X,
+  Search,
+  Plus,
 } from 'lucide-react';
-import Table from '@/components/Table';
+import Table, { type Column, TableInstance } from '@/components/Table';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
-import { TableInstance } from '@/components/Table';
 import { formatDate } from '@/lib/utils';
-import { OrderFilters } from '@/components/orders/OrderFilters';
+import { Pagination } from '@/components/ui/Pagination';
+import { CommonFilters, FilterConfig, FilterState } from '@/components/ui/CommonFilters';
+import { format } from 'date-fns';
 
-interface Order {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  email: string;
-  total: number;
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
-  paymentStatus: 'paid' | 'unpaid' | 'refunded';
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface PaginationInfo {
+interface PaginationData {
   total: number;
   totalPages: number;
   currentPage: number;
@@ -43,14 +36,90 @@ interface PaginationInfo {
   hasPrevious: boolean;
 }
 
-interface OrdersResponse {
-  orders: Order[];
-  pagination: PaginationInfo;
+interface Order {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerEmail: string;
+  status: 'pending' | 'processing' | 'completed' | 'cancelled';
+  paymentStatus: 'paid' | 'unpaid' | 'refunded';
+  total: number;
+  items: number;
+  createdAt: string;
 }
 
+interface ApiResponse {
+  orders: Order[];
+  pagination: PaginationData;
+}
+
+interface OrderFilterState extends FilterState {
+  status: string[];
+  paymentStatus: string[];
+  dateRange: {
+    from: string;
+    to: string;
+  };
+  valueRange: {
+    min: string;
+    max: string;
+  };
+}
+
+const filterConfig: FilterConfig = {
+  search: {
+    placeholder: 'Search orders by ID or customer...',
+  },
+  filterGroups: [
+    {
+      name: 'Status',
+      key: 'status',
+      options: [
+        { value: 'pending', label: 'Pending' },
+        { value: 'processing', label: 'Processing' },
+        { value: 'shipped', label: 'Shipped' },
+        { value: 'delivered', label: 'Delivered' },
+        { value: 'cancelled', label: 'Cancelled' },
+      ],
+    },
+    {
+      name: 'Payment Status',
+      key: 'paymentStatus',
+      options: [
+        { value: 'paid', label: 'Paid' },
+        { value: 'pending', label: 'Pending' },
+        { value: 'failed', label: 'Failed' },
+        { value: 'refunded', label: 'Refunded' },
+      ],
+    },
+  ],
+  hasDateRange: true,
+  dateRangeLabel: 'Order Date',
+  hasValueRange: true,
+  valueRangeLabel: 'Order Value',
+  valueRangeType: 'currency',
+};
+
+const initialFilters: OrderFilterState = {
+  search: '',
+  status: [],
+  paymentStatus: [],
+  dateRange: { from: '', to: '' },
+  valueRange: { min: '', max: '' },
+};
+
 const fetcher = async (url: string) => {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error('Failed to fetch');
+  const response = await fetch(url, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch data');
+  }
+  
   return response.json();
 };
 
@@ -60,44 +129,37 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
-  const [filters, setFilters] = useState({
-    search: '',
-    status: [] as string[],
-    paymentStatus: [] as string[],
-    dateRange: {
-      from: '',
-      to: '',
-    },
-    priceRange: {
-      min: '',
-      max: '',
-    },
-  });
+  const [filters, setFilters] = useState<OrderFilterState>(initialFilters);
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isLoadingOperation, setIsLoadingOperation] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
-  const getApiUrl = useCallback(() => {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      pageSize: pageSize.toString(),
-      sortBy,
-      sortOrder,
-    });
+  const hasActiveFilters = 
+    filters.search ||
+    filters.status.length > 0 ||
+    filters.paymentStatus.length > 0 ||
+    filters.dateRange.from ||
+    filters.dateRange.to ||
+    filters.valueRange.min ||
+    filters.valueRange.max;
 
-    if (filters.search) params.append('search', filters.search);
-    if (filters.status.length) params.append('status', filters.status.join(','));
-    if (filters.paymentStatus.length) params.append('paymentStatus', filters.paymentStatus.join(','));
-    if (filters.dateRange.from) params.append('dateFrom', filters.dateRange.from);
-    if (filters.dateRange.to) params.append('dateTo', filters.dateRange.to);
-    if (filters.priceRange.min) params.append('priceMin', filters.priceRange.min);
-    if (filters.priceRange.max) params.append('priceMax', filters.priceRange.max);
+  const queryString = new URLSearchParams({
+    page: page.toString(),
+    pageSize: pageSize.toString(),
+    ...(filters.search && { search: filters.search }),
+    ...(filters.status.length && { status: filters.status.join(',') }),
+    ...(filters.paymentStatus.length && { paymentStatus: filters.paymentStatus.join(',') }),
+    ...(filters.dateRange.from && { fromDate: filters.dateRange.from }),
+    ...(filters.dateRange.to && { toDate: filters.dateRange.to }),
+    ...(filters.valueRange.min && { minValue: filters.valueRange.min }),
+    ...(filters.valueRange.max && { maxValue: filters.valueRange.max }),
+    sortBy,
+    sortOrder,
+  }).toString();
 
-    return `/api/orders?${params.toString()}`;
-  }, [page, pageSize, filters, sortBy, sortOrder]);
-
-  const { data, error, isLoading, mutate } = useSWR<OrdersResponse>(
-    getApiUrl(),
+  const { data, error, isLoading, mutate } = useSWR<ApiResponse>(
+    `/api/orders?${queryString}`,
     fetcher
   );
 
@@ -195,16 +257,28 @@ export default function OrdersPage() {
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
-    setSelectedOrders([]); // Clear selection when changing pages
+    setSelectedOrders([]);
   };
 
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize);
-    setPage(1); // Reset to first page when changing page size
-    setSelectedOrders([]); // Clear selection
+    setPage(1);
+    setSelectedOrders([]);
   };
 
-  const columns = [
+  const handleFiltersChange = (newFilters: FilterState) => {
+    setFilters(newFilters as OrderFilterState);
+    setPage(1);
+    setSelectedOrders([]);
+  };
+
+  const handleFiltersReset = () => {
+    setFilters(initialFilters);
+    setPage(1);
+    setSelectedOrders([]);
+  };
+
+  const columns: Column<Order>[] = [
     {
       header: ({ table }: { table: TableInstance }) => (
         <input
@@ -246,8 +320,9 @@ export default function OrdersPage() {
           </span>
         </button>
       ),
+      accessorKey: 'orderNumber' as keyof Order,
       cell: ({ row }: { row: Order }) => (
-        <div className="font-medium">{row.orderNumber}</div>
+        <div className="font-medium text-blue-600">#{row.orderNumber}</div>
       ),
     },
     {
@@ -270,35 +345,12 @@ export default function OrdersPage() {
           </span>
         </button>
       ),
+      accessorKey: 'customerName' as keyof Order,
       cell: ({ row }: { row: Order }) => (
         <div>
           <div className="font-medium">{row.customerName}</div>
-          <div className="text-sm text-gray-500">{row.email}</div>
+          <div className="text-sm text-gray-500">{row.customerEmail}</div>
         </div>
-      ),
-    },
-    {
-      header: () => (
-        <button
-          onClick={() => handleSort('total')}
-          className="flex items-center gap-1 hover:text-blue-600"
-        >
-          Total
-          <span className="inline-flex">
-            {sortBy === 'total' ? (
-              sortOrder === 'asc' ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )
-            ) : (
-              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
-            )}
-          </span>
-        </button>
-      ),
-      cell: ({ row }: { row: Order }) => (
-        <div className="font-medium">${row.total.toFixed(2)}</div>
       ),
     },
     {
@@ -321,15 +373,16 @@ export default function OrdersPage() {
           </span>
         </button>
       ),
+      accessorKey: 'status' as keyof Order,
       cell: ({ row }: { row: Order }) => (
         <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
           ${row.status === 'completed'
             ? 'bg-green-100 text-green-700'
             : row.status === 'processing'
             ? 'bg-blue-100 text-blue-700'
-            : row.status === 'pending'
-            ? 'bg-yellow-100 text-yellow-700'
-            : 'bg-red-100 text-red-700'
+            : row.status === 'cancelled'
+            ? 'bg-red-100 text-red-700'
+            : 'bg-yellow-100 text-yellow-700'
           }`}
         >
           {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
@@ -356,12 +409,13 @@ export default function OrdersPage() {
           </span>
         </button>
       ),
+      accessorKey: 'paymentStatus' as keyof Order,
       cell: ({ row }: { row: Order }) => (
         <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
           ${row.paymentStatus === 'paid'
             ? 'bg-green-100 text-green-700'
-            : row.paymentStatus === 'unpaid'
-            ? 'bg-yellow-100 text-yellow-700'
+            : row.paymentStatus === 'refunded'
+            ? 'bg-orange-100 text-orange-700'
             : 'bg-red-100 text-red-700'
           }`}
         >
@@ -372,10 +426,38 @@ export default function OrdersPage() {
     {
       header: () => (
         <button
+          onClick={() => handleSort('total')}
+          className="flex items-center gap-1 hover:text-blue-600"
+        >
+          Total
+          <span className="inline-flex">
+            {sortBy === 'total' ? (
+              sortOrder === 'asc' ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
+        </button>
+      ),
+      accessorKey: 'total' as keyof Order,
+      cell: ({ row }: { row: Order }) => (
+        <div className="font-medium">
+          ${row.total.toFixed(2)}
+          <div className="text-sm text-gray-500">{row.items} items</div>
+        </div>
+      ),
+    },
+    {
+      header: () => (
+        <button
           onClick={() => handleSort('createdAt')}
           className="flex items-center gap-1 hover:text-blue-600"
         >
-          Created At
+          Date
           <span className="inline-flex">
             {sortBy === 'createdAt' ? (
               sortOrder === 'asc' ? (
@@ -389,9 +471,10 @@ export default function OrdersPage() {
           </span>
         </button>
       ),
+      accessorKey: 'createdAt' as keyof Order,
       cell: ({ row }: { row: Order }) => (
         <span className="text-sm text-gray-500">
-          {formatDate(new Date(row.createdAt))}
+          {format(new Date(row.createdAt), 'MMM d, yyyy')}
         </span>
       ),
     },
@@ -429,15 +512,13 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 p-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-semibold">Orders</h1>
         <div className="flex items-center gap-2">
-          <ShoppingBag className="h-6 w-6 text-gray-600" />
-          <h1 className="text-2xl font-semibold text-gray-900">Orders</h1>
-        </div>
-        <div className="flex items-center gap-3">
           <Button
             variant="outline"
+            size="sm"
             onClick={handleExport}
             disabled={isLoadingOperation}
           >
@@ -448,44 +529,34 @@ export default function OrdersPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <OrderFilters
-          filters={filters}
-          onChange={setFilters}
-          onReset={() => {
-            setFilters({
-              search: '',
-              status: [],
-              paymentStatus: [],
-              dateRange: { from: '', to: '' },
-              priceRange: { min: '', max: '' },
-            });
-            setPage(1);
-            setSelectedOrders([]); // Clear selection when filters reset
-          }}
-        />
-      </div>
+      <CommonFilters
+        config={filterConfig}
+        filters={filters}
+        onChange={handleFiltersChange}
+        onReset={handleFiltersReset}
+      />
 
       {/* Bulk Actions */}
       {selectedOrders.length > 0 && (
-        <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <span className="text-sm font-medium text-gray-700">
-            {selectedOrders.length} orders selected
+        <div className="flex items-center gap-4 py-4">
+          <span className="text-sm text-gray-600">
+            {selectedOrders.length} items selected
           </span>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2">
             <Button
-              variant="destructive"
+              variant="outline"
               size="sm"
               onClick={handleBulkDelete}
               disabled={isLoadingOperation}
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              Delete
+              Delete Selected
             </Button>
           </div>
         </div>
       )}
 
+      {/* Table */}
       <div className="rounded-lg border border-gray-200">
         <Table
           data={data?.orders ?? []}
@@ -497,118 +568,43 @@ export default function OrdersPage() {
           }}
         />
 
-        {/* Pagination Controls */}
+        {/* Pagination */}
         <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-          <div className="flex flex-1 justify-between sm:hidden">
-            <Button
-              variant="outline"
-              onClick={() => setPage(page - 1)}
-              disabled={page === 1 || isLoading}
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-gray-700">
+              Showing{' '}
+              <span className="font-medium">
+                {data ? (page - 1) * pageSize + 1 : 0}
+              </span>{' '}
+              to{' '}
+              <span className="font-medium">
+                {data
+                  ? Math.min(page * pageSize, data.pagination.total)
+                  : 0}
+              </span>{' '}
+              of{' '}
+              <span className="font-medium">{data?.pagination.total || 0}</span>{' '}
+              results
+            </p>
+
+            <select
+              value={pageSize}
+              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setPage(page + 1)}
-              disabled={!data?.pagination.hasMore || isLoading}
-            >
-              Next
-            </Button>
+              <option value={10}>10 per page</option>
+              <option value={25}>25 per page</option>
+              <option value={50}>50 per page</option>
+              <option value={100}>100 per page</option>
+            </select>
           </div>
 
-          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <p className="text-sm text-gray-700">
-                Showing{' '}
-                <span className="font-medium">
-                  {data ? (page - 1) * pageSize + 1 : 0}
-                </span>{' '}
-                to{' '}
-                <span className="font-medium">
-                  {data
-                    ? Math.min(page * pageSize, data.pagination.total)
-                    : 0}
-                </span>{' '}
-                of{' '}
-                <span className="font-medium">{data?.pagination.total || 0}</span>{' '}
-                results
-              </p>
-
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                  setSelectedOrders([]); // Clear selection
-                }}
-                className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value={10}>10 per page</option>
-                <option value={25}>25 per page</option>
-                <option value={50}>50 per page</option>
-                <option value={100}>100 per page</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(1)}
-                disabled={page === 1 || isLoading}
-              >
-                First
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(page - 1)}
-                disabled={page === 1 || isLoading}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </Button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: data?.pagination.totalPages || 0 }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === data?.pagination.totalPages || Math.abs(p - page) <= 1)
-                  .map((p, i, arr) => (
-                    <React.Fragment key={p}>
-                      {i > 0 && arr[i - 1] !== p - 1 && (
-                        <span className="px-2 text-gray-500">...</span>
-                      )}
-                      <button
-                        onClick={() => setPage(p)}
-                        disabled={isLoading}
-                        className={`min-w-[32px] rounded px-2 py-1 text-sm ${
-                          p === page
-                            ? 'bg-blue-50 text-blue-600 font-medium'
-                            : 'text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    </React.Fragment>
-                  ))}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(page + 1)}
-                disabled={!data?.pagination.hasMore || isLoading}
-              >
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(data?.pagination.totalPages || 1)}
-                disabled={page === data?.pagination.totalPages || isLoading}
-              >
-                Last
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            currentPage={page}
+            pageSize={pageSize}
+            totalItems={data?.pagination.total || 0}
+            onPageChange={handlePageChange}
+          />
         </div>
       </div>
     </div>
