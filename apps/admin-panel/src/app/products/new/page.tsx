@@ -1,8 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Package } from 'lucide-react';
+import { Package, ArrowLeft } from 'lucide-react';
 import { ProductForm } from '@/components/products/ProductForm';
+import { Button } from '@/components/ui/Button';
 
 export default function NewProductPage() {
   const router = useRouter();
@@ -27,8 +28,14 @@ export default function NewProductPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Package className="h-6 w-6 text-gray-600" />
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          onClick={() => router.back()}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
         <h1 className="text-2xl font-semibold text-gray-900">Create New Product</h1>
       </div>
 

@@ -1,46 +1,119 @@
 import { NextResponse } from 'next/server';
 
-// Mock data generator for payments
-const generateMockPayments = () => {
-  const gateways = ['Stripe', 'Razorpay', 'COD', 'Invoice'] as const;
-  const statuses = ['PAID', 'FAILED', 'REFUNDED'] as const;
+// Mock data - will be replaced with database calls
+const mockPayments = Array.from({ length: 100 }, (_, i) => ({
+  id: `payment-${i + 1}`,
+  orderId: `ORD-${String(i + 1).padStart(6, '0')}`,
+  amount: Math.floor(Math.random() * 1000) + 0.99,
+  gateway: ['Stripe', 'Razorpay', 'COD', 'Invoice'][Math.floor(Math.random() * 4)] as 'Stripe' | 'Razorpay' | 'COD' | 'Invoice',
+  status: ['PAID', 'FAILED', 'REFUNDED'][Math.floor(Math.random() * 3)] as 'PAID' | 'FAILED' | 'REFUNDED',
+  timestamp: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toISOString(),
+  refundStatus: Math.random() > 0.8 ? {
+    status: ['PENDING', 'COMPLETED', 'FAILED'][Math.floor(Math.random() * 3)] as 'PENDING' | 'COMPLETED' | 'FAILED',
+    reason: Math.random() > 0.5 ? 'Customer requested refund' : undefined,
+    refundedAt: Math.random() > 0.5 ? new Date(Date.now() - Math.floor(Math.random() * 5000000000)).toISOString() : undefined,
+  } : undefined,
+}));
 
-  return Array.from({ length: 50 }, (_, i) => {
-    const id = `pmt_${(i + 1).toString().padStart(6, '0')}`;
-    const orderId = `ord_${(i + 1).toString().padStart(6, '0')}`;
-    const gateway = gateways[Math.floor(Math.random() * gateways.length)];
-    const status = statuses[Math.floor(Math.random() * statuses.length)];
-    const amount = Math.floor(Math.random() * 1000) + 50; // Random amount between 50 and 1050
-    const timestamp = new Date(Date.now() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000).toISOString(); // Random date in last 30 days
-
-    // Add refund status for some REFUNDED payments
-    const refundStatus = status === 'REFUNDED' ? {
-      status: 'COMPLETED' as const,
-      reason: 'Customer requested refund',
-      refundedAt: new Date(new Date(timestamp).getTime() + 24 * 60 * 60 * 1000).toISOString(), // 1 day after payment
-    } : undefined;
-
-    return {
-      id,
-      orderId,
-      amount,
-      gateway,
-      status,
-      timestamp,
-      refundStatus,
-    };
-  });
-};
-
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const { searchParams } = new URL(request.url);
+    
+    // Parse query parameters
+    const page = parseInt(searchParams.get('page') || '1');
+    const pageSize = parseInt(searchParams.get('pageSize') || '10');
+    const search = searchParams.get('search') || '';
+    const status = searchParams.get('status')?.split(',') || [];
+    const gateway = searchParams.get('gateway')?.split(',') || [];
+    const dateFrom = searchParams.get('dateFrom');
+    const dateTo = searchParams.get('dateTo');
+    const amountMin = searchParams.get('amountMin');
+    const amountMax = searchParams.get('amountMax');
+    const sortBy = searchParams.get('sortBy') || 'timestamp';
+    const sortOrder = searchParams.get('sortOrder') || null;
 
-    // In a real application, you would fetch payments from a database or payment service
-    const payments = generateMockPayments();
+    // Apply filters
+    let filteredPayments = [...mockPayments];
 
-    return NextResponse.json(payments);
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredPayments = filteredPayments.filter(payment =>
+        payment.orderId.toLowerCase().includes(searchLower)
+      );
+    }
+
+    if (status.length > 0) {
+      filteredPayments = filteredPayments.filter(payment =>
+        status.includes(payment.status)
+      );
+    }
+
+    if (gateway.length > 0) {
+      filteredPayments = filteredPayments.filter(payment =>
+        gateway.includes(payment.gateway)
+      );
+    }
+
+    if (dateFrom) {
+      filteredPayments = filteredPayments.filter(payment =>
+        new Date(payment.timestamp) >= new Date(dateFrom)
+      );
+    }
+
+    if (dateTo) {
+      filteredPayments = filteredPayments.filter(payment =>
+        new Date(payment.timestamp) <= new Date(dateTo)
+      );
+    }
+
+    if (amountMin) {
+      filteredPayments = filteredPayments.filter(payment =>
+        payment.amount >= parseFloat(amountMin)
+      );
+    }
+
+    if (amountMax) {
+      filteredPayments = filteredPayments.filter(payment =>
+        payment.amount <= parseFloat(amountMax)
+      );
+    }
+
+    // Apply sorting
+    if (sortBy && sortOrder) {
+      filteredPayments.sort((a: any, b: any) => {
+        const aValue = a[sortBy];
+        const bValue = b[sortBy];
+        
+        if (typeof aValue === 'string') {
+          return sortOrder === 'asc'
+            ? aValue.localeCompare(bValue)
+            : bValue.localeCompare(aValue);
+        }
+        
+        return sortOrder === 'asc'
+          ? aValue - bValue
+          : bValue - aValue;
+      });
+    }
+
+    // Apply pagination
+    const total = filteredPayments.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const paginatedPayments = filteredPayments.slice(start, end);
+
+    return NextResponse.json({
+      payments: paginatedPayments,
+      pagination: {
+        total,
+        totalPages,
+        currentPage: page,
+        pageSize,
+        hasMore: end < total,
+        hasPrevious: page > 1
+      }
+    });
   } catch (error) {
     console.error('Error fetching payments:', error);
     return NextResponse.json(

@@ -17,7 +17,7 @@ interface RowInstance<T> {
   getToggleSelectedHandler: () => () => void;
 }
 
-interface Column<T> {
+export interface Column<T> {
   header: string | React.ReactNode | ((props: { table: TableInstance }) => React.ReactNode);
   accessorKey?: keyof T;
   cell?: (props: { row: T; table: TableInstance & { getRowProps: (row: T) => { getIsSelected: () => boolean; getToggleSelectedHandler: () => () => void } } }) => React.ReactNode;
