@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Mock users data
+// Mock users data with more realistic information
 const mockUsers = Array.from({ length: 100 }, (_, i) => ({
   id: `user-${i + 1}`,
-  name: `User ${i + 1}`,
+  name: `${['John', 'Jane', 'Mike', 'Sarah', 'David', 'Emma', 'James', 'Lisa'][Math.floor(Math.random() * 8)]} ${['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis'][Math.floor(Math.random() * 8)]}`,
   email: `user${i + 1}@example.com`,
   role: i === 0 ? 'admin' : i < 5 ? 'moderator' : 'user',
   status: i % 10 === 0 ? 'banned' : 'active',
   createdAt: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toISOString(),
+  lastLogin: new Date(Date.now() - Math.floor(Math.random() * 1000000000)).toISOString(),
+  phoneNumber: `+1${Math.floor(Math.random() * 1000000000)}`,
+  isEmailVerified: Math.random() > 0.2,
+  country: ['US', 'UK', 'CA', 'AU', 'FR', 'DE'][Math.floor(Math.random() * 6)],
 }));
 
 export async function GET(request: NextRequest) {
@@ -26,6 +30,7 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('dateTo');
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const country = searchParams.get('country');
 
     // Filter users
     let filteredUsers = [...mockUsers];
@@ -35,7 +40,8 @@ export async function GET(request: NextRequest) {
       const searchLower = search.toLowerCase();
       filteredUsers = filteredUsers.filter(user => 
         user.name.toLowerCase().includes(searchLower) ||
-        user.email.toLowerCase().includes(searchLower)
+        user.email.toLowerCase().includes(searchLower) ||
+        user.phoneNumber.includes(search)
       );
     }
 
@@ -47,6 +53,11 @@ export async function GET(request: NextRequest) {
     // Apply status filter
     if (statuses.length > 0) {
       filteredUsers = filteredUsers.filter(user => statuses.includes(user.status));
+    }
+
+    // Apply country filter
+    if (country) {
+      filteredUsers = filteredUsers.filter(user => user.country === country);
     }
 
     // Apply date range filter
@@ -61,7 +72,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Apply sorting
-    filteredUsers.sort((a, b) => {
+    filteredUsers.sort((a: any, b: any) => {
       const aValue = a[sortBy as keyof typeof a];
       const bValue = b[sortBy as keyof typeof b];
       
@@ -123,17 +134,29 @@ export async function POST(request: NextRequest) {
   try {
     const userData = await request.json();
     
-    // In a real app, you would:
-    // 1. Validate the user data
-    // 2. Create the user in your database
-    // 3. Return the created user
+    // Validate required fields
+    if (!userData.name || !userData.email) {
+      return NextResponse.json(
+        { error: 'Name and email are required' },
+        { status: 400 }
+      );
+    }
     
-    // For now, we'll just return a mock response
+    // Create new user with mock data
     const newUser = {
       id: `user-${mockUsers.length + 1}`,
       ...userData,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      lastLogin: null,
+      status: 'active',
+      role: 'user',
+      isEmailVerified: false,
+      country: userData.country || 'US',
+      phoneNumber: userData.phoneNumber || null,
     };
+
+    // In a real app, you would save to database here
+    mockUsers.push(newUser);
 
     return NextResponse.json(newUser);
   } catch (error) {
