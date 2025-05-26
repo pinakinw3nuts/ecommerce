@@ -1,6 +1,6 @@
 import { Repository } from 'typeorm';
 import { OAuth2Client } from 'google-auth-library';
-import { User, UserRole } from '../entities/user.entity';
+import { User, UserRole, UserStatus } from '../entities/user.entity';
 import { comparePassword } from '../utils/password';
 import {
   signAccessToken,
@@ -8,7 +8,7 @@ import {
   verifyToken,
   RefreshTokenPayload
 } from '../utils/jwt';
-import { config } from '../config/env';
+import { configTyped } from '../config/env';
 import logger from '../utils/logger';
 
 const authLogger = logger.child({ module: 'auth-service' });
@@ -42,8 +42,8 @@ export class AuthService {
 
   constructor(private userRepository: Repository<User>) {
     this.googleClient = new OAuth2Client(
-      config.oauth.google.clientId,
-      config.oauth.google.clientSecret
+      configTyped.oauth.google.clientId,
+      configTyped.oauth.google.clientSecret
     );
   }
 
@@ -92,8 +92,18 @@ export class AuthService {
   /**
    * Authenticate user with email and password
    */
-  async login(email: string, password: string): Promise<LoginResponse> {
+  async login(email: string, password: string, requestedRole?: string): Promise<LoginResponse> {
     try {
+      if (!email || !password) {
+        throw new AuthenticationError(
+          'Email and password are required',
+          'INVALID_CREDENTIALS',
+          400
+        );
+      }
+
+      logger.debug({ email, requestedRole }, 'Login attempt');
+
       // Find user with password
       const user = await this.userRepository
         .createQueryBuilder('user')
@@ -102,16 +112,27 @@ export class AuthService {
         .getOne();
 
       if (!user) {
+        logger.debug({ email }, 'User not found');
+        // Use same error message as invalid password for security
         throw new AuthenticationError(
           'Invalid credentials',
           'INVALID_CREDENTIALS'
         );
       }
 
+      logger.debug({ 
+        userId: user.id, 
+        role: user.role,
+        status: user.status,
+        isLocked: user.isAccountLocked()
+      }, 'User found');
+
       // Check if account is locked
       if (user.isAccountLocked()) {
+        const lockTime = user.accountLockedUntil;
+        logger.warn({ userId: user.id, lockTime }, 'Account is locked');
         throw new AuthenticationError(
-          'Account is temporarily locked',
+          `Account is temporarily locked until ${lockTime?.toISOString()}`,
           'ACCOUNT_LOCKED',
           423
         );
@@ -119,14 +140,45 @@ export class AuthService {
 
       // Verify password
       const isPasswordValid = await comparePassword(password, user.password);
+      logger.debug({ userId: user.id, isPasswordValid }, 'Password verification result');
 
       if (!isPasswordValid) {
         user.incrementFailedLoginAttempts();
         await this.userRepository.save(user);
 
+        const attemptsLeft = 5 - user.failedLoginAttempts;
+        logger.warn({ 
+          userId: user.id, 
+          failedAttempts: user.failedLoginAttempts,
+          attemptsLeft
+        }, 'Invalid password');
+
+        if (attemptsLeft > 0) {
+          throw new AuthenticationError(
+            `Invalid credentials. ${attemptsLeft} attempts remaining before account lockout.`,
+            'INVALID_CREDENTIALS'
+          );
+        } else {
+          throw new AuthenticationError(
+            'Account has been locked due to too many failed attempts. Please try again later.',
+            'ACCOUNT_LOCKED',
+            423
+          );
+        }
+      }
+
+      // Validate role if requested
+      if (requestedRole && user.role !== requestedRole) {
+        logger.warn({ 
+          userId: user.id, 
+          userRole: user.role, 
+          requestedRole 
+        }, 'Insufficient permissions');
+
         throw new AuthenticationError(
-          'Invalid credentials',
-          'INVALID_CREDENTIALS'
+          'Insufficient permissions for requested access',
+          'INSUFFICIENT_PERMISSIONS',
+          403
         );
       }
 
@@ -153,15 +205,23 @@ export class AuthService {
       // Generate tokens
       const tokens = await this.generateTokens(user);
 
-      authLogger.info({ userId: user.id }, 'User logged in successfully');
+      logger.info({ userId: user.id }, 'User logged in successfully');
 
       return {
         user: this.sanitizeUser(user),
         ...tokens
       };
     } catch (error) {
-      authLogger.error({ error, email }, 'Login failed');
-      throw error;
+      if (error instanceof AuthenticationError) {
+        throw error;
+      }
+      
+      logger.error({ error, email }, 'Login failed');
+      throw new AuthenticationError(
+        'An error occurred during login',
+        'LOGIN_FAILED',
+        500
+      );
     }
   }
 
@@ -170,17 +230,44 @@ export class AuthService {
    */
   async googleLogin(idToken: string): Promise<LoginResponse> {
     try {
+      if (!idToken) {
+        throw new AuthenticationError(
+          'Google ID token is required',
+          'INVALID_TOKEN',
+          400
+        );
+      }
+
       // Verify Google token
-      const ticket = await this.googleClient.verifyIdToken({
-        idToken,
-        audience: config.oauth.google.clientId
-      });
+      let ticket;
+      try {
+        ticket = await this.googleClient.verifyIdToken({
+          idToken,
+          audience: configTyped.oauth.google.clientId
+        });
+      } catch (error) {
+        authLogger.error({ error }, 'Google token verification failed');
+        throw new AuthenticationError(
+          'Invalid or expired Google token',
+          'INVALID_GOOGLE_TOKEN',
+          401
+        );
+      }
 
       const payload = ticket.getPayload();
       if (!payload?.email) {
         throw new AuthenticationError(
-          'Invalid Google token',
-          'INVALID_GOOGLE_TOKEN'
+          'Email not found in Google token',
+          'INVALID_GOOGLE_TOKEN',
+          400
+        );
+      }
+
+      if (!payload.email_verified) {
+        throw new AuthenticationError(
+          'Google email is not verified',
+          'EMAIL_NOT_VERIFIED',
+          400
         );
       }
 
@@ -193,10 +280,20 @@ export class AuthService {
       });
 
       if (user) {
+        // Check if account is locked
+        if (user.isAccountLocked()) {
+          throw new AuthenticationError(
+            'Account is temporarily locked',
+            'ACCOUNT_LOCKED',
+            423
+          );
+        }
+
         // Update Google ID if not set
         if (!user.googleId) {
           user.googleId = payload.sub;
           await this.userRepository.save(user);
+          authLogger.info({ userId: user.id }, 'Updated user with Google ID');
         }
       } else {
         // Create new user
@@ -205,10 +302,26 @@ export class AuthService {
           name: payload.name || payload.email.split('@')[0],
           googleId: payload.sub,
           isEmailVerified: true,
-          role: UserRole.USER
+          role: UserRole.USER,
+          status: UserStatus.ACTIVE
         });
-        await this.userRepository.save(user);
+        
+        try {
+          await this.userRepository.save(user);
+          authLogger.info({ userId: user.id }, 'New user created via Google OAuth');
+        } catch (error) {
+          authLogger.error({ error, email: payload.email }, 'Failed to create user from Google OAuth');
+          throw new AuthenticationError(
+            'Failed to create user account',
+            'USER_CREATION_FAILED',
+            500
+          );
+        }
       }
+
+      // Update last login
+      user.lastLogin = new Date();
+      await this.userRepository.save(user);
 
       // Generate tokens
       const tokens = await this.generateTokens(user);
@@ -220,8 +333,16 @@ export class AuthService {
         ...tokens
       };
     } catch (error) {
+      if (error instanceof AuthenticationError) {
+        throw error;
+      }
+
       authLogger.error({ error }, 'Google login failed');
-      throw error;
+      throw new AuthenticationError(
+        'An error occurred during Google login',
+        'GOOGLE_LOGIN_FAILED',
+        500
+      );
     }
   }
 
@@ -284,6 +405,151 @@ export class AuthService {
     ]);
 
     return { accessToken, refreshToken };
+  }
+
+  /**
+   * Authenticate admin user with email and password
+   */
+  async adminLogin(email: string, password: string): Promise<LoginResponse> {
+    try {
+      if (!email || !password) {
+        throw new AuthenticationError(
+          'Email and password are required',
+          'INVALID_CREDENTIALS',
+          400
+        );
+      }
+
+      logger.debug({ email }, 'Admin login attempt');
+
+      // Find user with password and ensure they are an admin
+      const user = await this.userRepository
+        .createQueryBuilder('user')
+        .where('user.email = :email', { email })
+        .andWhere('user.role = :role', { role: UserRole.ADMIN })
+        .addSelect('user.password')
+        .getOne();
+
+      if (!user) {
+        logger.debug({ email }, 'Admin not found or user is not an admin');
+        throw new AuthenticationError(
+          'Invalid admin credentials',
+          'INVALID_CREDENTIALS'
+        );
+      }
+
+      logger.debug({ 
+        userId: user.id, 
+        role: user.role,
+        status: user.status,
+        isLocked: user.isAccountLocked()
+      }, 'Admin user found');
+
+      // Check if account is locked
+      if (user.isAccountLocked()) {
+        const lockTime = user.accountLockedUntil;
+        logger.warn({ userId: user.id, lockTime }, 'Admin account is locked');
+        throw new AuthenticationError(
+          `Account is temporarily locked until ${lockTime?.toISOString()}`,
+          'ACCOUNT_LOCKED',
+          423
+        );
+      }
+
+      // Verify password with constant-time comparison
+      const isPasswordValid = await comparePassword(password, user.password);
+      logger.debug({ userId: user.id, isPasswordValid }, 'Admin password verification result');
+
+      if (!isPasswordValid) {
+        user.incrementFailedLoginAttempts();
+        await this.userRepository.save(user);
+
+        const attemptsLeft = 3 - user.failedLoginAttempts; // Stricter limit for admin accounts
+        logger.warn({ 
+          userId: user.id, 
+          failedAttempts: user.failedLoginAttempts,
+          attemptsLeft
+        }, 'Invalid admin password');
+
+        if (attemptsLeft > 0) {
+          throw new AuthenticationError(
+            `Invalid credentials. ${attemptsLeft} attempts remaining before account lockout.`,
+            'INVALID_CREDENTIALS'
+          );
+        } else {
+          throw new AuthenticationError(
+            'Account has been locked due to too many failed attempts. Please contact support.',
+            'ACCOUNT_LOCKED',
+            423
+          );
+        }
+      }
+
+      // Store the password before it gets removed
+      const currentPassword = user.password;
+
+      // Reset failed attempts and update last login
+      user.resetFailedLoginAttempts();
+      user.lastLogin = new Date();
+      
+      // Save with password preserved
+      await this.userRepository
+        .createQueryBuilder()
+        .update(User)
+        .set({
+          failedLoginAttempts: user.failedLoginAttempts,
+          lastLogin: user.lastLogin,
+          accountLockedUntil: user.accountLockedUntil,
+          password: currentPassword
+        })
+        .where('id = :id', { id: user.id })
+        .execute();
+
+      // Generate tokens with admin-specific claims
+      const tokens = await this.generateAdminTokens(user);
+
+      logger.info({ userId: user.id }, 'Admin logged in successfully');
+
+      return {
+        user: this.sanitizeUser(user),
+        ...tokens
+      };
+    } catch (error) {
+      if (error instanceof AuthenticationError) {
+        throw error;
+      }
+      
+      logger.error({ error, email }, 'Admin login failed');
+      throw new AuthenticationError(
+        'An error occurred during admin login',
+        'LOGIN_FAILED',
+        500
+      );
+    }
+  }
+
+  /**
+   * Generate admin-specific access and refresh tokens
+   */
+  private async generateAdminTokens(user: User) {
+    const [accessToken, refreshToken] = await Promise.all([
+      signAccessToken({
+        userId: user.id,
+        email: user.email,
+        role: UserRole.ADMIN
+      }),
+      signRefreshToken({
+        userId: user.id,
+        version: 1
+      })
+    ]);
+
+    return { 
+      accessToken, 
+      refreshToken,
+      expiresIn: configTyped.jwt.expiresIn,
+      refreshExpiresIn: configTyped.jwt.refreshExpiresIn
+    };
   }
 
   /**

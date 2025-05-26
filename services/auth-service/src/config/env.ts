@@ -1,134 +1,119 @@
-import { config as dotenvConfig } from 'dotenv';
-import { z } from 'zod';
+import dotenv from 'dotenv';
+import { cleanEnv, str, num } from 'envalid';
 
-// Load environment variables from .env file
-dotenvConfig();
+// Load environment variables
+dotenv.config();
 
-// Define environment schema with Zod
-const envSchema = z.object({
-  // Server configuration
-  PORT: z.string()
-    .default('3001')
-    .transform((val) => parseInt(val, 10))
-    .refine((val) => !isNaN(val) && val > 0 && val < 65536, {
-      message: 'Port must be a valid number between 1 and 65535'
-    }),
-  HOST: z.string().default('0.0.0.0'),
+export const config = cleanEnv(process.env, {
+  NODE_ENV: str({ choices: ['development', 'test', 'production'], default: 'development' }),
+  PORT: num({ default: 3001 }),
+  HOST: str({ default: '0.0.0.0' }),
+  
+  // Database
+  DB_HOST: str({ default: 'localhost' }),
+  DB_PORT: num({ default: 5432 }),
+  DB_USERNAME: str(),
+  DB_PASSWORD: str(),
+  DB_DATABASE: str(),
+  DB_SYNC: str({ default: 'false' }),
+  DB_LOGGING: str({ default: 'false' }),
 
-  // CORS configuration
-  CORS_ORIGIN: z.string().default('*'),
-
-  // Database configuration
-  DATABASE_URL: z.string({
-    required_error: 'Database URL is required',
-  }).url({
-    message: 'Invalid database URL format',
-  }),
-
-  // JWT configuration
-  JWT_SECRET: z.string({
-    required_error: 'JWT secret is required',
-  }).min(32, {
-    message: 'JWT secret must be at least 32 characters long',
-  }),
-
-  JWT_REFRESH_SECRET: z.string({
-    required_error: 'JWT refresh secret is required',
-  }).min(32, {
-    message: 'JWT refresh secret must be at least 32 characters long',
-  }),
-
-  TOKEN_EXPIRES_IN: z.string()
-    .default('15m')
-    .refine((val) => {
-      const timeUnit = val.slice(-1);
-      const timeValue = parseInt(val.slice(0, -1));
-      return (
-        !isNaN(timeValue) &&
-        timeValue > 0 &&
-        ['s', 'm', 'h', 'd'].includes(timeUnit)
-      );
-    }, {
-      message: 'Token expiration must be a positive number followed by s, m, h, or d (e.g., 15m, 24h)',
-    }),
-
-  // OAuth configuration
-  GOOGLE_CLIENT_ID: z.string({
-    required_error: 'Google Client ID is required',
-  }).min(1, {
-    message: 'Google Client ID cannot be empty',
-  }),
-
-  GOOGLE_CLIENT_SECRET: z.string({
-    required_error: 'Google Client Secret is required',
-  }).min(1, {
-    message: 'Google Client Secret cannot be empty',
-  }),
-
-  // Environment
-  NODE_ENV: z.enum(['development', 'production', 'test'])
-    .default('development'),
-
-  // Optional: Refresh token configuration
-  REFRESH_TOKEN_EXPIRES_IN: z.string()
-    .default('7d')
-    .refine((val) => {
-      const timeUnit = val.slice(-1);
-      const timeValue = parseInt(val.slice(0, -1));
-      return (
-        !isNaN(timeValue) &&
-        timeValue > 0 &&
-        ['s', 'm', 'h', 'd'].includes(timeUnit)
-      );
-    }, {
-      message: 'Refresh token expiration must be a positive number followed by s, m, h, or d (e.g., 7d)',
-    }),
+  // JWT
+  JWT_SECRET: str(),
+  JWT_EXPIRES_IN: str({ default: '15m' }),
+  JWT_REFRESH_SECRET: str(),
+  JWT_REFRESH_EXPIRES_IN: str({ default: '7d' }),
+  
+  // Redis
+  REDIS_HOST: str({ default: 'localhost' }),
+  REDIS_PORT: num({ default: 6379 }),
+  REDIS_PASSWORD: str({ default: '' }),
+  REDIS_DB: num({ default: 0 }),
+  
+  // CORS
+  CORS_ORIGIN: str({ default: '*' }),
+  
+  // OAuth
+  GOOGLE_CLIENT_ID: str(),
+  GOOGLE_CLIENT_SECRET: str(),
+  
+  // Email
+  SMTP_HOST: str({ default: 'smtp.gmail.com' }),
+  SMTP_PORT: num({ default: 587 }),
+  SMTP_USER: str(),
+  SMTP_PASS: str(),
+  SMTP_FROM: str({ default: 'noreply@example.com' })
 });
 
-// Parse and validate environment variables
-const env = envSchema.parse(process.env);
+// Export typed configuration
+export const configTyped = {
+  env: config.NODE_ENV,
+  isDevelopment: config.NODE_ENV === 'development',
+  isProduction: config.NODE_ENV === 'production',
+  port: config.PORT,
+  host: config.HOST,
 
-// Export typed config object
-export const config = {
-  server: {
-    port: env.PORT,
-    nodeEnv: env.NODE_ENV,
-    host: env.HOST,
+  db: {
+    host: config.DB_HOST,
+    port: config.DB_PORT,
+    username: config.DB_USERNAME,
+    password: config.DB_PASSWORD,
+    database: config.DB_DATABASE,
+    synchronize: config.DB_SYNC === 'true',
+    logging: config.DB_LOGGING === 'true',
+    url: `postgresql://${config.DB_USERNAME}:${config.DB_PASSWORD}@${config.DB_HOST}:${config.DB_PORT}/${config.DB_DATABASE}`
   },
-  cors: {
-    origin: env.CORS_ORIGIN,
-  },
-  database: {
-    url: env.DATABASE_URL,
-  },
+
   jwt: {
-    secret: env.JWT_SECRET,
-    refreshSecret: env.JWT_REFRESH_SECRET,
-    expiresIn: env.TOKEN_EXPIRES_IN,
-    refreshExpiresIn: env.REFRESH_TOKEN_EXPIRES_IN,
+    secret: config.JWT_SECRET,
+    expiresIn: config.JWT_EXPIRES_IN,
+    refreshSecret: config.JWT_REFRESH_SECRET,
+    refreshExpiresIn: config.JWT_REFRESH_EXPIRES_IN
   },
+
+  cors: {
+    origin: config.CORS_ORIGIN
+  },
+
   oauth: {
     google: {
-      clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET,
-    },
+      clientId: config.GOOGLE_CLIENT_ID,
+      clientSecret: config.GOOGLE_CLIENT_SECRET
+    }
   },
-  isDevelopment: env.NODE_ENV === 'development',
-  isProduction: env.NODE_ENV === 'production',
-  isTest: env.NODE_ENV === 'test',
+
+  redis: {
+    host: config.REDIS_HOST,
+    port: config.REDIS_PORT,
+    password: config.REDIS_PASSWORD,
+    db: config.REDIS_DB
+  },
+
+  smtp: {
+    host: config.SMTP_HOST,
+    port: config.SMTP_PORT,
+    auth: {
+      user: config.SMTP_USER,
+      pass: config.SMTP_PASS
+    },
+    from: config.SMTP_FROM
+  }
 } as const;
 
 // Type declaration for the config object
-export type Config = typeof config;
+export type Config = typeof configTyped;
 
 // Export individual config sections for convenience
 export const {
-  server,
-  database,
-  jwt,
-  oauth,
-  cors,
+  env,
   isDevelopment,
   isProduction,
-  isTest,
-} = config; 
+  port,
+  host,
+  db,
+  jwt,
+  cors,
+  oauth,
+  redis,
+  smtp,
+} = configTyped; 

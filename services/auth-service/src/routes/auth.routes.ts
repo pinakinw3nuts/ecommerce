@@ -3,6 +3,8 @@ import { AuthController } from '../controllers/auth.controller';
 import { AuthService } from '../services/auth.service';
 import { User } from '../entities/user.entity';
 import { DataSource } from 'typeorm';
+import { Redis } from 'ioredis';
+import { configTyped } from '../config/env';
 
 // Define swagger schemas outside the route registration
 const swaggerSchemas = {
@@ -76,9 +78,17 @@ export async function registerAuthRoutes(
   server: FastifyInstance<RawServerDefault, any, any, FastifyBaseLogger>,
   dataSource: DataSource
 ): Promise<void> {
+  // Initialize Redis connection
+  const redis = new Redis({
+    host: configTyped.redis.host,
+    port: configTyped.redis.port,
+    password: configTyped.redis.password,
+    db: configTyped.redis.db
+  });
+
   const userRepository = dataSource.getRepository(User);
   const authService = new AuthService(userRepository);
-  const authController = new AuthController(authService);
+  const authController = new AuthController(authService, redis);
 
   // Register routes under /auth prefix
   server.register(async (fastify) => {
@@ -93,4 +103,9 @@ export async function registerAuthRoutes(
     // Register controller routes
     await authController.register(fastify);
   }, { prefix: '/auth' });
+
+  // Cleanup Redis on server close
+  server.addHook('onClose', async () => {
+    await redis.quit();
+  });
 } 

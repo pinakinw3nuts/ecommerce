@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useRouter } from 'next/navigation';
-import { setToken } from '@/lib/auth';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
+import { loginAdmin } from '@/lib/auth';
+import { useToast } from '@/components/ui/use-toast';
 
 // Validation schema
 const loginSchema = z.object({
@@ -17,7 +19,8 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const [error, setError] = useState<string>('');
+  const searchParams = useSearchParams();
+  const toast = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
   const {
@@ -26,42 +29,25 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: 'admin@example.com', // For testing
-      password: 'admin123', // For testing
-    }
   });
 
   const onSubmit = async (data: LoginFormData) => {
     try {
       setIsLoading(true);
-      setError('');
-
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      const result = await response.json();
       
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to login');
-      }
+      await loginAdmin(data.email, data.password);
       
-      if (result.token) {
-        // Set the token
-        setToken(result.token);
-        
-        // Force a full page reload to update the server-side auth state
-        window.location.href = '/';
-      } else {
-        setError('Invalid response from server');
-      }
+      // Show success message
+      toast.success('Logged in successfully');
+
+      // Get return URL from query params or default to dashboard
+      const returnUrl = searchParams.get('returnUrl') || '/';
+      
+      // Redirect to the return URL or dashboard
+      window.location.href = returnUrl;
     } catch (err: any) {
-      setError(err.message || 'Failed to login');
+      console.error('Login error:', err);
+      toast.error(err.message || 'Failed to login');
     } finally {
       setIsLoading(false);
     }
@@ -77,12 +63,6 @@ export default function LoginPage() {
           Sign in to access the admin dashboard
         </p>
       </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
-          <span className="block sm:inline">{error}</span>
-        </div>
-      )}
 
       <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-4 rounded-md shadow-sm">
@@ -119,22 +99,20 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="group relative flex w-full justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </div>
-
-        {/* Test credentials helper text */}
-        <div className="text-sm text-center text-gray-600">
-          <p>Test credentials:</p>
-          <p>Email: admin@example.com</p>
-          <p>Password: admin123</p>
-        </div>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="group relative flex w-full justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Signing in...
+            </>
+          ) : (
+            'Sign in'
+          )}
+        </button>
       </form>
     </div>
   );

@@ -4,6 +4,8 @@ import { AuthService } from '../services/auth.service';
 import { validateRequest } from '../middlewares/validateRequest';
 import { UserRole } from '../entities/user.entity';
 import { RouteShorthandOptionsWithHandler } from 'fastify';
+import { adminLoginRateLimit } from '../middlewares/rateLimit';
+import { Redis } from 'ioredis';
 
 // Define request schemas
 const signupSchema = {
@@ -16,6 +18,13 @@ const signupSchema = {
 };
 
 const loginSchema = {
+  body: z.object({
+    email: z.string().email(),
+    password: z.string()
+  })
+};
+
+const adminLoginSchema = {
   body: z.object({
     email: z.string().email(),
     password: z.string()
@@ -52,7 +61,11 @@ interface RefreshTokenRequest {
 }
 
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  private redis: Redis;
+
+  constructor(private authService: AuthService, redis: Redis) {
+    this.redis = redis;
+  }
 
   async register(fastify: FastifyInstance) {
     // Register signup route
@@ -97,12 +110,12 @@ export class AuthController {
       }
     } as RouteShorthandOptionsWithHandler);
 
-    // Register login route
+    // Regular user login route
     fastify.post<LoginRequest>('/login', {
       schema: {
         tags: ['Authentication'],
-        summary: 'Login with email and password',
-        description: 'Authenticate user with email and password',
+        summary: 'Login with email and password (Regular Users)',
+        description: 'Authenticate regular user with email and password',
         body: {
           type: 'object',
           required: ['email', 'password'],
@@ -120,7 +133,7 @@ export class AuthController {
       handler: async (request: FastifyRequest<LoginRequest>, reply: FastifyReply) => {
         try {
           const { email, password } = request.body;
-          const result = await this.authService.login(email, password);
+          const result = await this.authService.login(email, password, 'user');
           return reply.send(result);
         } catch (error) {
           if (error instanceof Error) {
@@ -134,6 +147,75 @@ export class AuthController {
               return reply.status(423).send({
                 status: 'error',
                 message: 'Account is locked'
+              });
+            }
+            if (error.message === 'INSUFFICIENT_PERMISSIONS') {
+              return reply.status(403).send({
+                status: 'error',
+                message: 'User access required'
+              });
+            }
+          }
+          throw error;
+        }
+      }
+    } as RouteShorthandOptionsWithHandler);
+
+    // Admin login route
+    fastify.post<LoginRequest>('/admin/login', {
+      schema: {
+        tags: ['Authentication'],
+        summary: 'Login with email and password (Admin Only)',
+        description: 'Authenticate admin user with email and password',
+        body: {
+          type: 'object',
+          required: ['email', 'password'],
+          properties: {
+            email: { type: 'string', format: 'email', description: 'Admin email address' },
+            password: { type: 'string', description: 'Admin password' }
+          }
+        },
+        response: {
+          200: { $ref: 'auth_AuthResponse#' },
+          401: { $ref: 'auth_ErrorResponse#' },
+          403: { $ref: 'auth_ErrorResponse#' },
+          423: { $ref: 'auth_ErrorResponse#' },
+          429: {
+            type: 'object',
+            properties: {
+              status: { type: 'string' },
+              code: { type: 'string' },
+              message: { type: 'string' },
+              retryAfter: { type: 'number' }
+            }
+          }
+        }
+      },
+      onRequest: [adminLoginRateLimit(this.redis)],
+      preHandler: validateRequest(adminLoginSchema),
+      handler: async (request: FastifyRequest<LoginRequest>, reply: FastifyReply) => {
+        try {
+          const { email, password } = request.body;
+          const result = await this.authService.adminLogin(email, password);
+          return reply.send(result);
+        } catch (error) {
+          if (error instanceof Error) {
+            if (error.message === 'INVALID_CREDENTIALS') {
+              return reply.status(401).send({
+                status: 'error',
+                message: 'Invalid email or password'
+              });
+            }
+            if (error.message === 'ACCOUNT_LOCKED') {
+              return reply.status(423).send({
+                status: 'error',
+                message: 'Account is locked'
+              });
+            }
+            if (error.message === 'INSUFFICIENT_PERMISSIONS') {
+              return reply.status(403).send({
+                status: 'error',
+                message: 'Admin access required'
               });
             }
           }

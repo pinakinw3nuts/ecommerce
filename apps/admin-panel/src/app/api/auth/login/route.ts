@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { z } from 'zod';
-import jwt from 'jsonwebtoken';
 
-// Validation schema (matching the client-side schema)
+// Validation schema
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-// Mock credentials
-const MOCK_EMAIL = 'admin@example.com';
-const MOCK_PASSWORD = 'admin123';
-const JWT_SECRET = 'your-super-secret-jwt-key'; // In production, use environment variable
+const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:3001';
 
 export async function POST(request: Request) {
   try {
@@ -30,27 +27,43 @@ export async function POST(request: Request) {
 
     const { email, password } = validationResult.data;
 
-    // Check mock credentials
-    if (email === MOCK_EMAIL && password === MOCK_PASSWORD) {
-      // Generate mock JWT token
-      const token = jwt.sign(
-        {
-          userId: '1',
-          email: MOCK_EMAIL,
-          role: 'admin',
-        },
-        JWT_SECRET,
-        { expiresIn: '1d' }
-      );
+    // Call admin-specific login endpoint
+    const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/admin/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        password
+      }),
+    });
 
-      return NextResponse.json({ token });
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { message: data.message || 'Authentication failed' },
+        { status: response.status }
+      );
     }
 
-    // Invalid credentials
-    return NextResponse.json(
-      { message: 'Invalid email or password' },
-      { status: 401 }
-    );
+    // Create the response
+    const res = NextResponse.json({
+      token: data.accessToken,
+      user: data.user
+    });
+
+    // Set the token in an HTTP-only cookie
+    cookies().set('admin_token', data.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: '/',
+    });
+
+    return res;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(

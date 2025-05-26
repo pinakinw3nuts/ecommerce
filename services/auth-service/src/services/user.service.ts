@@ -26,6 +26,16 @@ export interface ChangePasswordData {
   newPassword: string;
 }
 
+export interface UserListParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  role?: string;
+  status?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
 export class UserService {
   constructor(private userRepository: Repository<User>) {}
 
@@ -276,6 +286,57 @@ export class UserService {
     } catch (error) {
       userLogger.error({ error, query }, 'Error searching users');
       throw error;
+    }
+  }
+
+  async findUsers(params: UserListParams) {
+    const { page = 1, pageSize = 10, search, role, status, sortBy, sortOrder } = params;
+    const query = this.userRepository.createQueryBuilder('user');
+
+    if (search) {
+      query.where('user.name ILIKE :search OR user.email ILIKE :search', { search: `%${search}%` });
+    }
+    if (role) {
+      query.andWhere('user.role = :role', { role });
+    }
+    if (status) {
+      query.andWhere('user.status = :status', { status });
+    }
+    if (sortBy) {
+      query.orderBy(`user.${sortBy}`, sortOrder === 'desc' ? 'DESC' : 'ASC');
+    }
+
+    const [users, total] = await query
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getManyAndCount();
+
+    return {
+      users,
+      pagination: {
+        total,
+        totalPages: Math.ceil(total / pageSize),
+        currentPage: page,
+        pageSize,
+        hasMore: page * pageSize < total,
+        hasPrevious: page > 1
+      }
+    };
+  }
+
+  async update(id: string, updates: Partial<User>): Promise<User> {
+    const user = await this.findById(id);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    Object.assign(user, updates);
+    return this.userRepository.save(user);
+  }
+
+  async delete(id: string): Promise<void> {
+    const result = await this.userRepository.delete(id);
+    if (result.affected === 0) {
+      throw new Error('User not found');
     }
   }
 } 

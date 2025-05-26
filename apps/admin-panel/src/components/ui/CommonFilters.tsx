@@ -18,27 +18,18 @@ export interface DateRangeFilter {
 }
 
 export interface FilterConfig {
-  search: {
+  [key: string]: {
+    type: 'text' | 'select' | 'daterange' | 'valueRange';
     placeholder: string;
+    options?: Array<{ value: string; label: string }>;
   };
-  filterGroups: {
-    name: string;
-    options: FilterOption[];
-    key: string;
-  }[];
-  hasDateRange?: boolean;
-  dateRangeLabel?: string;
-  hasValueRange?: boolean;
-  valueRangeLabel?: string;
-  valueRangeType?: 'number' | 'currency';
 }
 
 export interface FilterState {
-  search: string;
-  [key: string]: string | string[] | RangeFilter | DateRangeFilter;
+  [key: string]: string | string[] | DateRangeFilter | RangeFilter;
 }
 
-interface CommonFiltersProps {
+export interface CommonFiltersProps {
   config: FilterConfig;
   filters: FilterState;
   onChange: (filters: FilterState) => void;
@@ -65,8 +56,15 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
     }
   }, [isOpen]);
 
+  const handleChange = (key: string, value: string | string[] | DateRangeFilter | RangeFilter) => {
+    onChange({
+      ...filters,
+      [key]: value
+    });
+  };
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange({ ...filters, search: e.target.value });
+    handleChange('search', e.target.value);
   };
 
   const handleOptionToggle = (groupKey: string, value: string) => {
@@ -74,34 +72,25 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
     const newValues = currentValues.includes(value)
       ? currentValues.filter(v => v !== value)
       : [...currentValues, value];
-    onChange({ ...filters, [groupKey]: newValues });
+    handleChange(groupKey, newValues);
   };
 
   const handleRemoveFilter = (groupKey: string, value: string) => {
     const currentValues = (filters[groupKey] as string[]) || [];
-    onChange({
-      ...filters,
-      [groupKey]: currentValues.filter(v => v !== value)
-    });
+    handleChange(groupKey, currentValues.filter(v => v !== value));
   };
 
   const handleValueRangeChange = (field: 'min' | 'max', value: string) => {
-    onChange({
-      ...filters,
-      valueRange: {
-        ...(filters.valueRange as RangeFilter),
-        [field]: value,
-      },
+    handleChange('valueRange', {
+      ...(filters.valueRange as RangeFilter),
+      [field]: value,
     });
   };
 
   const handleDateRangeChange = (field: 'from' | 'to', value: string) => {
-    onChange({
-      ...filters,
-      dateRange: {
-        ...(filters.dateRange as DateRangeFilter),
-        [field]: value,
-      },
+    handleChange('dateRange', {
+      ...(filters.dateRange as DateRangeFilter),
+      [field]: value,
     });
   };
 
@@ -109,14 +98,14 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
   const getActiveFilters = () => {
     const active: { group: string; value: string; label: string }[] = [];
     
-    config.filterGroups.forEach(group => {
-      const values = filters[group.key] as string[];
+    Object.entries(config).forEach(([key, field]) => {
+      const values = filters[key] as string[];
       if (values?.length) {
         values.forEach(value => {
-          const option = group.options.find(opt => opt.value === value);
+          const option = field.options?.find(opt => opt.value === value);
           if (option) {
             active.push({
-              group: group.name + 's',
+              group: key,
               value: value,
               label: option.label
             });
@@ -149,9 +138,9 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            value={filters.search}
+            value={(filters.search as string) || ''}
             onChange={handleSearchChange}
-            placeholder={config.search.placeholder}
+            placeholder={Object.entries(config).find(([_, field]) => field.type === 'text')?.[1]?.placeholder || ''}
             className="w-full rounded-lg border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -182,100 +171,80 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
             >
               <div className="space-y-6">
                 {/* Filter Groups */}
-                {config.filterGroups.map((group) => (
-                  <div key={group.key} className="space-y-3">
-                    <h3 className="text-sm font-medium text-gray-900">{group.name}</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {group.options.map((option) => {
-                        const isSelected = (filters[group.key] as string[])?.includes(option.value);
-                        return (
-                          <button
-                            key={option.value}
-                            onClick={() => handleOptionToggle(group.key, option.value)}
-                            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors
-                              ${isSelected
-                                ? 'bg-gray-900 text-white'
-                                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                              }`}
-                          >
+                {Object.entries(config).map(([key, field]) => (
+                  <div key={key} className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-900">{field.placeholder}</h3>
+                    {field.type === 'text' && (
+                      <input
+                        type="text"
+                        value={filters[key] as string || ''}
+                        onChange={(e) => handleChange(key, e.target.value)}
+                        placeholder={field.placeholder}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    )}
+                    {field.type === 'select' && field.options && (
+                      <select
+                        value={(filters[key] as string[]) || []}
+                        onChange={(e) => handleChange(key, Array.from(e.target.selectedOptions, option => option.value))}
+                        multiple
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      >
+                        {field.options.map(option => (
+                          <option key={option.value} value={option.value}>
                             {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {field.type === 'daterange' && (
+                      <div className="flex gap-4">
+                        <input
+                          type="date"
+                          value={(filters[key] as DateRangeFilter)?.from || ''}
+                          onChange={(e) => handleChange(key, {
+                            ...(filters[key] as DateRangeFilter || { to: '' }),
+                            from: e.target.value
+                          })}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        />
+                        <input
+                          type="date"
+                          value={(filters[key] as DateRangeFilter)?.to || ''}
+                          onChange={(e) => handleChange(key, {
+                            ...(filters[key] as DateRangeFilter || { from: '' }),
+                            to: e.target.value
+                          })}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
 
-                {/* Date Range Filter */}
-                {config.hasDateRange && (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium text-gray-900">
-                      {config.dateRangeLabel || 'Date Range'}
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1.5">From</label>
-                        <div className="relative">
-                          <input
-                            type="date"
-                            value={(filters.dateRange as DateRangeFilter)?.from || ''}
-                            onChange={(e) => handleDateRangeChange('from', e.target.value)}
-                            className="w-full rounded-lg border border-gray-200 bg-white pl-3 pr-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="mm/dd/yyyy"
-                          />
-                          <Calendar className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1.5">To</label>
-                        <div className="relative">
-                          <input
-                            type="date"
-                            value={(filters.dateRange as DateRangeFilter)?.to || ''}
-                            onChange={(e) => handleDateRangeChange('to', e.target.value)}
-                            className="w-full rounded-lg border border-gray-200 bg-white pl-3 pr-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="mm/dd/yyyy"
-                          />
-                          <Calendar className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Value Range Filter */}
-                {config.hasValueRange && (
+                {Object.entries(config).find(([_, field]) => field.type === 'valueRange') && (
                   <div className="space-y-3">
                     <h3 className="text-sm font-medium text-gray-900">
-                      {config.valueRangeLabel || 'Value Range'}
+                      {Object.entries(config).find(([_, field]) => field.type === 'valueRange')?.[1]?.placeholder || 'Value Range'}
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="relative">
-                        {config.valueRangeType === 'currency' && (
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                        )}
                         <input
                           type="number"
                           placeholder="Min"
                           value={(filters.valueRange as RangeFilter)?.min || ''}
                           onChange={(e) => handleValueRangeChange('min', e.target.value)}
-                          className={`w-full rounded-lg border border-gray-200 bg-white py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                            config.valueRangeType === 'currency' ? 'pl-7 pr-3' : 'px-3'
-                          }`}
+                          className="w-full rounded-lg border border-gray-200 bg-white py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
                       <div className="relative">
-                        {config.valueRangeType === 'currency' && (
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                        )}
                         <input
                           type="number"
                           placeholder="Max"
                           value={(filters.valueRange as RangeFilter)?.max || ''}
                           onChange={(e) => handleValueRangeChange('max', e.target.value)}
-                          className={`w-full rounded-lg border border-gray-200 bg-white py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                            config.valueRangeType === 'currency' ? 'pl-7 pr-3' : 'px-3'
-                          }`}
+                          className="w-full rounded-lg border border-gray-200 bg-white py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
                     </div>

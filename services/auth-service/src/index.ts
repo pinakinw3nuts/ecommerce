@@ -1,13 +1,12 @@
 import fastify from 'fastify';
-import type { FastifyError, FastifyRequest, FastifyReply, FastifyInstance, HookHandlerDoneFunction } from 'fastify';
+import type { FastifyError, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { DataSource } from 'typeorm';
-import { config } from './config/env';
+import { configTyped } from './config/env';
 import { registerAuthRoutes } from './routes/auth.routes';
-import { registerUserRoutes } from './routes/user.routes';
 import logger from './utils/logger';
 
 // Create Fastify instance
@@ -21,16 +20,16 @@ const server = fastify({
       useDefaults: true
     }
   }
-}) as any; // Temporary type assertion to resolve plugin registration issues
+});
 
 // Initialize database connection
 const dataSource = new DataSource({
   type: 'postgres',
-  url: config.database.url,
+  url: configTyped.db.url,
   entities: ['src/entities/**/*.entity.ts'],
   migrations: ['src/migrations/**/*.ts'],
-  synchronize: !config.isProduction,
-  logging: !config.isProduction
+  synchronize: !configTyped.isProduction,
+  logging: !configTyped.isProduction
 });
 
 // Error handler
@@ -54,6 +53,14 @@ server.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: Fas
 });
 
 async function setupServer() {
+  // Register plugins
+  await server.register(cors, {
+    origin: configTyped.cors.origin,
+    credentials: true
+  });
+
+  await server.register(helmet);
+
   // Register Swagger
   await server.register(swagger, {
     swagger: {
@@ -62,56 +69,28 @@ async function setupServer() {
         description: 'Authentication and Authorization Service API Documentation',
         version: '1.0.0'
       },
-      host: `localhost:${config.server.port}`,
-      schemes: ['http'],
+      host: `${configTyped.host}:${configTyped.port}`,
+      schemes: ['http', 'https'],
       consumes: ['application/json'],
       produces: ['application/json'],
       tags: [
         { name: 'Authentication', description: 'Authentication related endpoints' },
         { name: 'Users', description: 'User management endpoints' }
-      ],
-      securityDefinitions: {
-        bearerAuth: {
-          type: 'apiKey',
-          name: 'Authorization',
-          in: 'header',
-          description: 'Enter the token with the `Bearer: ` prefix, e.g. "Bearer abcde12345".'
-        }
-      },
-      security: [{ bearerAuth: [] }]
+      ]
     }
   });
 
-  // Register Swagger UI
   await server.register(swaggerUi, {
     routePrefix: '/docs',
     uiConfig: {
       docExpansion: 'list',
-      deepLinking: false
-    },
-    uiHooks: {
-      onRequest: function (_request: FastifyRequest, _reply: FastifyReply, next: HookHandlerDoneFunction) { next(); },
-      preHandler: function (_request: FastifyRequest, _reply: FastifyReply, next: HookHandlerDoneFunction) { next(); }
-    },
-    staticCSP: true,
-    transformStaticCSP: (header: string) => header
-  });
-
-  // Register plugins
-  await server.register(cors, {
-    origin: config.cors.origin,
-    credentials: true
-  });
-
-  await server.register(helmet, {
-    contentSecurityPolicy: false,
-    global: true
+      deepLinking: true
+    }
   });
 
   // Register routes
-  await server.register(async (fastify: FastifyInstance) => {
+  await server.register(async (fastify) => {
     await registerAuthRoutes(fastify, dataSource);
-    await registerUserRoutes(fastify, dataSource);
   }, { prefix: '/api' });
 
   return server;
@@ -124,8 +103,8 @@ export async function startServer() {
     
     const app = await setupServer();
     await app.listen({ 
-      port: config.server.port, 
-      host: config.server.host 
+      port: configTyped.port, 
+      host: configTyped.host 
     });
     
     return app;
@@ -135,7 +114,7 @@ export async function startServer() {
   }
 }
 
-// Start server if this file is run directly
+// Start the server if this file is run directly
 if (require.main === module) {
   startServer();
 }

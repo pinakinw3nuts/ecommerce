@@ -9,7 +9,7 @@ export enum LoyaltyTier {
   PLATINUM = 'PLATINUM'
 }
 
-@Entity('loyalty_program_enrollments')
+@Entity('loyalty_program_enrollments', { synchronize: false })
 export class LoyaltyProgramEnrollment extends BaseEntity {
   @Column({ type: 'integer', default: 0 })
   points!: number;
@@ -17,7 +17,8 @@ export class LoyaltyProgramEnrollment extends BaseEntity {
   @Column({
     type: 'enum',
     enum: LoyaltyTier,
-    default: LoyaltyTier.BRONZE
+    default: LoyaltyTier.BRONZE,
+    enumName: 'loyalty_tier_enum'
   })
   tier!: LoyaltyTier;
 
@@ -57,7 +58,9 @@ export class LoyaltyProgramEnrollment extends BaseEntity {
       [LoyaltyTier.PLATINUM]: 10000
     };
 
-        const nextTier = this.getNextTier();    if (!nextTier) return false;    return this.points >= pointsThresholds[nextTier];
+    const nextTier = this.getNextTier();
+    if (!nextTier) return false;
+    return this.points >= pointsThresholds[nextTier];
   }
 
   // Helper method to get next tier

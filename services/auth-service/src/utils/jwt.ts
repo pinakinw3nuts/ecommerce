@@ -1,7 +1,7 @@
-import jwt, { SignOptions } from 'jsonwebtoken';
-import { config } from '../config/env';
+import jwt from 'jsonwebtoken';
+import { configTyped } from '../config/env';
 
-export interface TokenPayload {
+export interface AccessTokenPayload {
   userId: string;
   email: string;
   role: string;
@@ -12,73 +12,71 @@ export interface RefreshTokenPayload {
   version: number;
 }
 
-export interface VerifyTokenResult<T> {
+export interface TokenVerificationResult<T = any> {
   valid: boolean;
   expired: boolean;
   payload: T | null;
+  error?: string;
 }
 
 /**
- * Sign an access token
- * @param payload User information to include in the token
- * @returns Signed JWT access token
+ * Sign access token
  */
-export const signAccessToken = async (payload: TokenPayload): Promise<string> => {
-  const options: SignOptions = {
-    expiresIn: config.jwt.expiresIn as jwt.SignOptions['expiresIn']
+export async function signAccessToken(
+  payload: AccessTokenPayload
+): Promise<string> {
+  const options: jwt.SignOptions = {
+    expiresIn: configTyped.jwt.expiresIn as jwt.SignOptions['expiresIn'],
+    audience: 'user-service',
+    issuer: 'auth-service'
   };
-  return jwt.sign(payload, config.jwt.secret, options);
-};
+
+  return jwt.sign(payload, configTyped.jwt.secret, options);
+}
 
 /**
- * Sign a refresh token
- * @param payload Refresh token payload
- * @returns Signed JWT refresh token
+ * Sign refresh token
  */
-export const signRefreshToken = async (payload: RefreshTokenPayload): Promise<string> => {
-  const options: SignOptions = {
-    expiresIn: config.jwt.refreshExpiresIn as jwt.SignOptions['expiresIn']
+export async function signRefreshToken(
+  payload: RefreshTokenPayload
+): Promise<string> {
+  const options: jwt.SignOptions = {
+    expiresIn: configTyped.jwt.refreshExpiresIn as jwt.SignOptions['expiresIn'],
+    audience: 'user-service',
+    issuer: 'auth-service'
   };
-  return jwt.sign(payload, config.jwt.refreshSecret, options);
-};
+
+  return jwt.sign(payload, configTyped.jwt.refreshSecret, options);
+}
 
 /**
- * Verify and decode a JWT token
- * @param token JWT token to verify
- * @param isRefreshToken Whether this is a refresh token
- * @returns Object containing validation status and decoded payload
+ * Verify JWT token
  */
-export const verifyToken = <T extends object>(
+export function verifyToken<T = any>(
   token: string,
   isRefreshToken = false
-): VerifyTokenResult<T> => {
+): TokenVerificationResult<T> {
   try {
-    const decoded = jwt.verify(
-      token,
-      isRefreshToken ? config.jwt.refreshSecret : config.jwt.secret
-    ) as T;
+    const secret = isRefreshToken ? configTyped.jwt.refreshSecret : configTyped.jwt.secret;
+    const payload = jwt.verify(token, secret, {
+      audience: 'user-service',
+      issuer: 'auth-service'
+    }) as T;
 
     return {
       valid: true,
       expired: false,
-      payload: decoded,
+      payload
     };
   } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      return {
-        valid: false,
-        expired: true,
-        payload: null,
-      };
-    }
-
     return {
       valid: false,
-      expired: false,
+      expired: error instanceof jwt.TokenExpiredError,
       payload: null,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
-};
+}
 
 /**
  * Generate both access and refresh tokens for a user
@@ -105,8 +103,8 @@ export const generateAuthTokens = async (user: {
   return {
     accessToken,
     refreshToken,
-    expiresIn: config.jwt.expiresIn,
-    refreshExpiresIn: config.jwt.refreshExpiresIn,
+    expiresIn: configTyped.jwt.expiresIn,
+    refreshExpiresIn: configTyped.jwt.refreshExpiresIn,
   };
 };
 

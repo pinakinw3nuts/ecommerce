@@ -5,6 +5,7 @@ import { createServer } from '../server'
 import { User, UserRole, UserStatus } from '../entities'
 import { createTestDataSource } from './utils/test-database'
 import bcrypt from 'bcrypt'
+
 // Create a stub function for generateToken that just returns a string
 const generateToken = (_user: any) => 'test-token';
 
@@ -27,12 +28,7 @@ describe('User Profile Endpoints', () => {
       name: 'Test User',
       role: UserRole.USER,
       status: UserStatus.ACTIVE,
-      emailVerified: false,
-      phoneVerified: false,
-      preferences: {
-        newsletter: false,
-        marketing: false
-      }
+      isEmailVerified: false
     })
     await userRepository.save(testUser)
 
@@ -177,4 +173,4 @@ describe('User Profile Endpoints', () => {
       expect(response.statusCode).toBe(400)
     })
   })
-}) 
+})

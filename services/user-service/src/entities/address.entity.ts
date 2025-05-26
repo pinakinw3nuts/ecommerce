@@ -10,7 +10,7 @@ export enum AddressType {
   OTHER = 'OTHER'
 }
 
-@Entity('addresses')
+@Entity('addresses', { synchronize: false })
 export class Address extends BaseEntity {
   @Column()
   street!: string;
@@ -33,7 +33,8 @@ export class Address extends BaseEntity {
   @Column({
     type: 'enum',
     enum: AddressType,
-    default: AddressType.HOME
+    default: AddressType.HOME,
+    enumName: 'address_type_enum'
   })
   type!: AddressType;
 

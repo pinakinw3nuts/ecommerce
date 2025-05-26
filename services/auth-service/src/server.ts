@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { config } from './config/env';
+import { configTyped } from './config/env';
 import logger from './utils/logger';
 import { startServer } from './index';
 
@@ -51,10 +51,13 @@ async function bootstrap() {
     // Log startup information
     serverLogger.info(
       {
-        nodeEnv: config.server.nodeEnv,
-        port: config.server.port,
-        isDevelopment: config.isDevelopment,
-        isProduction: config.isProduction
+        server: {
+          nodeEnv: configTyped.env,
+          port: configTyped.port,
+          isDevelopment: configTyped.isDevelopment,
+          isProduction: configTyped.isProduction
+        },
+        nodeEnv: configTyped.env
       },
       'Starting Auth Service...'
     );
@@ -65,9 +68,12 @@ async function bootstrap() {
     // Log successful startup
     serverLogger.info(
       {
-        address: `http://localhost:${config.server.port}`,
-        docs: `http://localhost:${config.server.port}/docs`,
-        nodeEnv: config.server.nodeEnv
+        info: {
+          address: `http://localhost:${configTyped.port}`,
+          docs: `http://localhost:${configTyped.port}/docs`,
+          nodeEnv: configTyped.env
+        },
+        nodeEnv: configTyped.env
       },
       'Auth Service is ready'
     );

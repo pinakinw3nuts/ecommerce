@@ -1,169 +1,318 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import http from 'http';
 
-// Mock users data with more realistic information
-const mockUsers = Array.from({ length: 100 }, (_, i) => ({
-  id: `user-${i + 1}`,
-  name: `${['John', 'Jane', 'Mike', 'Sarah', 'David', 'Emma', 'James', 'Lisa'][Math.floor(Math.random() * 8)]} ${['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis'][Math.floor(Math.random() * 8)]}`,
-  email: `user${i + 1}@example.com`,
-  role: i === 0 ? 'admin' : i < 5 ? 'moderator' : 'user',
-  status: i % 10 === 0 ? 'banned' : 'active',
-  createdAt: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toISOString(),
-  lastLogin: new Date(Date.now() - Math.floor(Math.random() * 1000000000)).toISOString(),
-  phoneNumber: `+1${Math.floor(Math.random() * 1000000000)}`,
-  isEmailVerified: Math.random() > 0.2,
-  country: ['US', 'UK', 'CA', 'AU', 'FR', 'DE'][Math.floor(Math.random() * 6)],
-}));
+interface UserData {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  [key: string]: string; // Allow string indexing for sorting
+}
+
+interface HttpResponse {
+  ok: boolean;
+  status: number;
+  json: () => Promise<any>;
+}
+
+const USER_SERVICE_URL = process.env.NEXT_PUBLIC_USER_SERVICE_URL || 'http://127.0.0.1:3002';
+
+// Helper function to make HTTP requests
+function makeRequest(url: string, options: { method?: string; headers?: any; body?: any } = {}): Promise<HttpResponse> {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const reqOptions = {
+      hostname: urlObj.hostname,
+      port: urlObj.port,
+      path: `${urlObj.pathname}${urlObj.search}`,
+      method: options.method || 'GET',
+      headers: options.headers || {},
+      family: 4, // Force IPv4
+      lookup: (hostname: string, options: any, callback: (err: Error | null, address: string, family: number) => void) => {
+        // Always return IPv4 address
+        callback(null, '127.0.0.1', 4);
+      }
+    };
+
+    const req = http.request(reqOptions, (res) => {
+      let data = '';
+
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve({
+              ok: true,
+              status: res.statusCode,
+              json: () => Promise.resolve(data ? JSON.parse(data) : null)
+            });
+          } catch (e) {
+            resolve({
+              ok: true,
+              status: res.statusCode,
+              json: () => Promise.resolve(null)
+            });
+          }
+        } else {
+          try {
+            resolve({
+              ok: false,
+              status: res.statusCode || 500,
+              json: () => Promise.resolve(data ? JSON.parse(data) : null)
+            });
+          } catch (e) {
+            resolve({
+              ok: false,
+              status: res.statusCode || 500,
+              json: () => Promise.resolve(null)
+            });
+          }
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      reject(error);
+    });
+
+    if (options.body) {
+      req.write(JSON.stringify(options.body));
+    }
+
+    req.end();
+  });
+}
 
 export async function GET(request: NextRequest) {
   try {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Get the admin token
+    const cookieStore = cookies();
+    const token = cookieStore.get('admin_token');
 
-    // Get query params
-    const { searchParams } = new URL(request.url);
-    const page = Number(searchParams.get('page')) || 1;
-    const pageSize = Number(searchParams.get('pageSize')) || 10;
-    const search = searchParams.get('search') || '';
-    const roles = searchParams.get('roles')?.split(',').filter(Boolean) || [];
-    const statuses = searchParams.get('statuses')?.split(',').filter(Boolean) || [];
-    const dateFrom = searchParams.get('dateFrom');
-    const dateTo = searchParams.get('dateTo');
-    const sortBy = searchParams.get('sortBy') || 'createdAt';
-    const sortOrder = searchParams.get('sortOrder') || 'desc';
-    const country = searchParams.get('country');
-
-    // Filter users
-    let filteredUsers = [...mockUsers];
-
-    // Apply search filter
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredUsers = filteredUsers.filter(user => 
-        user.name.toLowerCase().includes(searchLower) ||
-        user.email.toLowerCase().includes(searchLower) ||
-        user.phoneNumber.includes(search)
+    if (!token) {
+      return NextResponse.json(
+        { message: 'Unauthorized', code: 'TOKEN_MISSING' },
+        { status: 401 }
       );
     }
 
-    // Apply role filter
-    if (roles.length > 0) {
-      filteredUsers = filteredUsers.filter(user => roles.includes(user.role));
-    }
+    // Get query parameters
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1');
+    const pageSize = parseInt(searchParams.get('pageSize') || '10');
+    const search = searchParams.get('search') || '';
+    const role = searchParams.get('role');
+    const status = searchParams.get('status');
+    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    const sortOrder = (searchParams.get('sortOrder') || 'desc').toUpperCase();
 
-    // Apply status filter
-    if (statuses.length > 0) {
-      filteredUsers = filteredUsers.filter(user => statuses.includes(user.status));
-    }
+    console.log('Received request with params:', {
+      page,
+      pageSize,
+      search,
+      role,
+      status,
+      sortBy,
+      sortOrder
+    });
 
-    // Apply country filter
-    if (country) {
-      filteredUsers = filteredUsers.filter(user => user.country === country);
-    }
+    // Build query string for user service
+    const queryString = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+      sortBy,
+      sortOrder,
+      ...(search && { search }),
+      ...(role && role !== 'all' && { role }),
+      ...(status && status !== 'all' && { status })
+    }).toString();
 
-    // Apply date range filter
-    if (dateFrom || dateTo) {
-      const fromDate = dateFrom ? new Date(dateFrom) : new Date(0);
-      const toDate = dateTo ? new Date(dateTo) : new Date();
-      
-      filteredUsers = filteredUsers.filter(user => {
-        const userDate = new Date(user.createdAt);
-        return userDate >= fromDate && userDate <= toDate;
-      });
-    }
+    const apiUrl = new URL(`/api/v1/users?${queryString}`, USER_SERVICE_URL).toString();
+    console.log('Calling user service:', apiUrl);
 
-    // Apply sorting
-    filteredUsers.sort((a: any, b: any) => {
-      const aValue = a[sortBy as keyof typeof a];
-      const bValue = b[sortBy as keyof typeof b];
-      
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortOrder === 'asc'
-          ? aValue.localeCompare(bValue)
-          : bValue.localeCompare(aValue);
+    const response = await makeRequest(apiUrl, {
+      headers: {
+        'Authorization': `Bearer ${token.value}`,
+        'Content-Type': 'application/json',
       }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
       
-      return sortOrder === 'asc'
-        ? (aValue > bValue ? 1 : -1)
-        : (bValue > aValue ? 1 : -1);
+      // Handle token expiration specifically
+      if (response.status === 401 && (
+        errorData?.code === 'TOKEN_EXPIRED' ||
+        errorData?.message?.toLowerCase().includes('expired') ||
+        errorData?.message?.toLowerCase().includes('invalid token')
+      )) {
+        return NextResponse.json(
+          { message: 'Token has expired', code: 'TOKEN_EXPIRED' },
+          { status: 401 }
+        );
+      }
+
+      // Handle other errors
+      throw new Error(errorData?.message || 'Failed to fetch users');
+    }
+
+    const data = await response.json();
+    console.log('User service response:', {
+      itemsCount: data.items?.length,
+      total: data.total,
+      page: data.page,
+      totalPages: data.totalPages
     });
 
-    // Calculate pagination
-    const total = filteredUsers.length;
-    const totalPages = Math.ceil(total / pageSize);
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    const paginatedUsers = filteredUsers.slice(start, end);
-
-    return NextResponse.json({
-      users: paginatedUsers,
+    // Transform the response to match the expected format
+    const transformedData = {
+      users: (data.items || []).map((user: any) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status?.toLowerCase() || 'pending',
+        createdAt: user.createdAt || new Date().toISOString(),
+      })),
       pagination: {
-        total,
-        totalPages,
-        currentPage: page,
-        pageSize,
-        hasMore: page < totalPages,
-        hasPrevious: page > 1,
-      },
+        total: data.total || 0,
+        totalPages: data.totalPages || 1,
+        currentPage: data.page || page,
+        pageSize: data.pageSize || pageSize,
+        hasMore: (data.page || page) < (data.totalPages || 1),
+        hasPrevious: (data.page || page) > 1
+      }
+    };
+
+    console.log('Transformed response:', {
+      usersCount: transformedData.users.length,
+      pagination: transformedData.pagination
     });
-  } catch (error) {
-    console.error('Error fetching users:', error);
+
+    return NextResponse.json(transformedData);
+
+  } catch (error: any) {
+    console.error('Error in users API:', error);
+    
+    // Return a structured error response
     return NextResponse.json(
-      { error: 'Failed to fetch users' },
-      { status: 500 }
+      { 
+        message: error.message || 'Internal Server Error',
+        code: error.code || 'INTERNAL_ERROR'
+      },
+      { status: error.status || 500 }
     );
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
+    const cookieStore = cookies();
+    const token = cookieStore.get('admin_token');
+
+    if (!token) {
+      return NextResponse.json(
+        { message: 'Unauthorized', code: 'TOKEN_MISSING' },
+        { status: 401 }
+      );
+    }
+
     const { id, status } = await request.json();
     
-    // In a real app, you would update the user in your database
-    // For now, we'll just return a success response
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error in users API:', error);
+    const response = await makeRequest(`${USER_SERVICE_URL}/api/v1/users/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token.value}`,
+        'Content-Type': 'application/json',
+      },
+      body: { status }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData?.message || 'Failed to update user');
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error: any) {
+    console.error('Error updating user:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
+      { 
+        message: error.message || 'Internal Server Error',
+        code: error.code || 'INTERNAL_ERROR'
+      },
+      { status: error.status || 500 }
     );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const cookieStore = cookies();
+    const token = cookieStore.get('admin_token');
+
+    if (!token) {
+      return NextResponse.json(
+        { message: 'Unauthorized', code: 'TOKEN_MISSING' },
+        { status: 401 }
+      );
+    }
+
     const userData = await request.json();
-    
+
     // Validate required fields
     if (!userData.name || !userData.email) {
       return NextResponse.json(
-        { error: 'Name and email are required' },
+        { message: 'Name and email are required', code: 'VALIDATION_ERROR' },
         { status: 400 }
       );
     }
-    
-    // Create new user with mock data
-    const newUser = {
-      id: `user-${mockUsers.length + 1}`,
-      ...userData,
-      createdAt: new Date().toISOString(),
-      lastLogin: null,
-      status: 'active',
-      role: 'user',
-      isEmailVerified: false,
-      country: userData.country || 'US',
-      phoneNumber: userData.phoneNumber || null,
-    };
 
-    // In a real app, you would save to database here
-    mockUsers.push(newUser);
+    const response = await makeRequest(`${USER_SERVICE_URL}/api/v1/users`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token.value}`,
+        'Content-Type': 'application/json',
+      },
+      body: userData
+    });
 
-    return NextResponse.json(newUser);
-  } catch (error) {
+    if (!response.ok) {
+      const errorData = await response.json();
+      
+      // Handle token expiration
+      if (response.status === 401 && (
+        errorData?.code === 'TOKEN_EXPIRED' ||
+        errorData?.message?.toLowerCase().includes('expired') ||
+        errorData?.message?.toLowerCase().includes('invalid token')
+      )) {
+        return NextResponse.json(
+          { message: 'Token has expired', code: 'TOKEN_EXPIRED' },
+          { status: 401 }
+        );
+      }
+
+      throw new Error(errorData?.message || 'Failed to create user');
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data, { status: 201 });
+
+  } catch (error: any) {
     console.error('Error creating user:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
+      { 
+        message: error.message || 'Internal Server Error',
+        code: error.code || 'INTERNAL_ERROR'
+      },
+      { status: error.status || 500 }
     );
   }
 } 

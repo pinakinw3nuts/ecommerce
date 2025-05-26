@@ -11,11 +11,12 @@ import logger from './utils/logger';
 import { User, Address, LoyaltyProgramEnrollment } from './entities';
 import { UserService } from './services/user.service';
 import { AddressService } from './services/address.service';
-import { createUserRouter } from './routes/user.routes';
+import userRoutes from './routes/user.routes';
 import { createAddressRouter } from './routes/address.routes';
 import { healthRoutes } from './routes/health.routes';
 import { CurrentUser } from './middlewares/auth';
 import { AppDataSource } from './data-source';
+import { createApp } from './app';
 
 interface ServerOptions {
   dataSource: typeof AppDataSource;
@@ -66,8 +67,15 @@ export async function createServer(options: ServerOptions): Promise<FastifyInsta
 
   // Register routes
   await app.register(healthRoutes);
-  await app.register(createUserRouter(new UserService(options.dataSource)), { prefix: '/api/v1' });
-  await app.register(createAddressRouter(new AddressService(options.dataSource)), { prefix: '/api/v1' });
+  await app.register(async (fastify) => {
+    fastify.decorate('userService', new UserService(options.dataSource));
+    await userRoutes(fastify);
+  }, { prefix: '/api/v1' });
+  await app.register(async (fastify) => {
+    const addressService = new AddressService(options.dataSource);
+    const router = createAddressRouter(addressService);
+    await router(fastify);
+  }, { prefix: '/api/v1' });
 
   // Global error handler
   app.setErrorHandler((error, request, reply) => {
@@ -144,34 +152,22 @@ async function shutdown(signal: string): Promise<void> {
   }
 }
 
-// Only start server if this file is run directly
-if (require.main === module) {
-  const start = async () => {
-    try {
-      await AppDataSource.initialize();
-      logger.info('Database connection established');
+const PORT = process.env.PORT || 3002;
+const HOST = process.env.HOST || '0.0.0.0';
 
-      app = await createServer({ dataSource: AppDataSource });
-
-      const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-      const address = await app.listen({ port, host: process.env.HOST || '0.0.0.0' });
-      logger.info(`Server listening at ${address}`);
-
-      // Handle graceful shutdown
-      const signals = ['SIGTERM', 'SIGINT'] as const;
-      for (const signal of signals) {
-        process.on(signal, async () => {
-          await shutdown(signal);
-        });
-      }
-    } catch (err) {
-      logger.error(err, 'Failed to start server');
-      await shutdown('STARTUP_ERROR');
-    }
-  };
-
-  start();
+async function start() {
+  try {
+    const app = await createApp();
+    await app.listen({ port: Number(PORT), host: HOST });
+    
+    app.log.info(`Server is running on http://${HOST}:${PORT}`);
+  } catch (error) {
+    console.error('Error starting server:', error);
+    process.exit(1);
+  }
 }
+
+start();
 
 // Add TypeScript type augmentation for Fastify
 declare module 'fastify' {

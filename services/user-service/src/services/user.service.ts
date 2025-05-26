@@ -3,6 +3,37 @@ import { hash } from 'bcrypt';
 import { User, UserStatus, Address, LoyaltyProgramEnrollment, LoyaltyTier, UserRole } from '../entities';
 import logger from '../utils/logger';
 import { CreateUserInput, UpdateUserInput } from '../schemas/user.schema';
+import { BadRequestError, NotFoundError } from '../utils/errors';
+
+export interface CreateUserDto {
+  name: string;
+  email: string;
+  password: string;
+  role?: UserRole;
+  phoneNumber?: string;
+  country?: string;
+}
+
+export interface UpdateUserDto {
+  name?: string;
+  email?: string;
+  password?: string;
+  role?: UserRole;
+  status?: UserStatus;
+  phoneNumber?: string;
+  country?: string;
+  isEmailVerified?: boolean;
+}
+
+export interface UserListParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  role?: UserRole;
+  status?: UserStatus;
+  sortBy?: keyof User;
+  sortOrder?: 'ASC' | 'DESC';
+}
 
 export class UserService {
   private userRepo: Repository<User>;
@@ -41,11 +72,7 @@ export class UserService {
         ...data,
         password: hashedPassword,
         status: data.status || UserStatus.ACTIVE,
-        role: data.role || UserRole.USER,
-        preferences: {
-          newsletter: false,
-          marketing: false
-        }
+        role: data.role || UserRole.USER
       });
 
       await queryRunner.manager.save(user);
@@ -125,12 +152,7 @@ export class UserService {
    * Update user preferences
    */
   async updateUserPreferences(id: string, preferences: any) {
-    const userData = await this.getUserById(id);
-    userData.preferences = {
-      ...userData.preferences,
-      ...preferences
-    };
-    return this.updateUser(id, { preferences: userData.preferences });
+    throw new Error('Preferences are not supported');
   }
 
   /**
@@ -284,5 +306,328 @@ export class UserService {
         createdAt: 'DESC'
       }
     });
+  }
+
+  /**
+   * Find users with advanced filters
+   */
+  async findUsersWithFilters(filters: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    roles?: string[];
+    statuses?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    country?: string;
+  }) {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      roles,
+      statuses,
+      dateFrom,
+      dateTo,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      country
+    } = filters;
+
+    const queryBuilder = this.userRepo.createQueryBuilder('user');
+
+    // Apply search filter
+    if (search) {
+      queryBuilder.andWhere(
+        '(user.name ILIKE :search OR user.email ILIKE :search OR user.phoneNumber ILIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
+
+    // Apply role filter
+    if (roles?.length) {
+      queryBuilder.andWhere('user.role IN (:...roles)', { roles });
+    }
+
+    // Apply status filter
+    if (statuses?.length) {
+      queryBuilder.andWhere('user.status IN (:...statuses)', { statuses });
+    }
+
+    // Apply country filter
+    if (country) {
+      queryBuilder.andWhere('user.country = :country', { country });
+    }
+
+    // Apply date range filter
+    if (dateFrom) {
+      queryBuilder.andWhere('user.createdAt >= :dateFrom', { dateFrom });
+    }
+    if (dateTo) {
+      queryBuilder.andWhere('user.createdAt <= :dateTo', { dateTo });
+    }
+
+    // Apply pagination
+    const [users, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      users,
+      pagination: {
+        total,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+        pageSize: limit,
+        hasMore: page < Math.ceil(total / limit),
+        hasPrevious: page > 1
+      }
+    };
+  }
+
+  async create(data: CreateUserDto): Promise<User> {
+    const existingUser = await this.userRepo.findOne({
+      where: { email: data.email },
+    });
+
+    if (existingUser) {
+      throw new BadRequestError('User with this email already exists');
+    }
+
+    const user = this.userRepo.create({
+      ...data,
+      password: await hash(data.password, 10),
+      status: UserStatus.PENDING,
+    });
+
+    return this.userRepo.save(user);
+  }
+
+  async findById(id: string): Promise<User> {
+    const user = await this.userRepo.findOne({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    return user;
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.userRepo.findOneBy({ email });
+  }
+
+  async update(id: string, data: UpdateUserDto): Promise<User> {
+    const user = await this.findById(id);
+
+    if (data.email && data.email !== user.email) {
+      const existingUser = await this.userRepo.findOne({
+        where: { email: data.email },
+      });
+
+      if (existingUser) {
+        throw new BadRequestError('Email already in use');
+      }
+    }
+
+    if (data.password) {
+      data.password = await hash(data.password, 10);
+    }
+
+    Object.assign(user, data);
+    return this.userRepo.save(user);
+  }
+
+  async delete(id: string): Promise<void> {
+    const user = await this.findById(id);
+    await this.userRepo.remove(user);
+  }
+
+  async list(params: UserListParams = {}) {
+    const {
+      page = 1,
+      pageSize = 10,
+      search,
+      role,
+      status,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
+    } = params;
+
+    try {
+      // First, check if the table exists
+      const tableExists = await this.dataSource.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'users'
+        );
+      `);
+
+      if (!tableExists[0].exists) {
+        return {
+          users: [],
+          total: 0,
+          page,
+          pageSize,
+          totalPages: 0
+        };
+      }
+
+      // Then, check what columns exist
+      const columns = await this.dataSource.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users';
+      `);
+
+      const existingColumns = columns.map(col => col.column_name);
+      logger.debug('Existing columns:', existingColumns);
+
+      const query = this.userRepo.createQueryBuilder('user');
+
+      // Build the select array
+      const selectColumns = ['user.id'];
+      
+      if (existingColumns.includes('created_at')) {
+        selectColumns.push('user.created_at');
+      }
+      if (existingColumns.includes('updated_at')) {
+        selectColumns.push('user.updated_at');
+      }
+      if (existingColumns.includes('name')) {
+        selectColumns.push('user.name');
+      }
+      if (existingColumns.includes('email')) {
+        selectColumns.push('user.email');
+      }
+      if (existingColumns.includes('role')) {
+        selectColumns.push('user.role');
+      }
+      if (existingColumns.includes('status')) {
+        selectColumns.push('user.status');
+      }
+      if (existingColumns.includes('is_email_verified')) {
+        selectColumns.push('user.is_email_verified');
+      }
+      if (existingColumns.includes('phone_number')) {
+        selectColumns.push('user.phone_number');
+      }
+      if (existingColumns.includes('country')) {
+        selectColumns.push('user.country');
+      }
+      if (existingColumns.includes('last_login')) {
+        selectColumns.push('user.last_login');
+      }
+
+      logger.debug('Selected columns:', selectColumns);
+
+      // Apply the select columns
+      query.select(selectColumns);
+
+      // Add search condition if name and email columns exist
+      if (search && existingColumns.includes('name') && existingColumns.includes('email')) {
+        query.andWhere(
+          '(user.name ILIKE :search OR user.email ILIKE :search)',
+          { search: `%${search}%` }
+        );
+      }
+
+      // Add role filter if role column exists
+      if (role && existingColumns.includes('role')) {
+        query.andWhere('user.role = :role', { role });
+      }
+
+      // Add status filter if status column exists
+      if (status && existingColumns.includes('status')) {
+        query.andWhere('user.status = :status', { status });
+      }
+
+      // Apply sorting
+      const snakeCaseColumn = this.toSnakeCase(sortBy);
+      if (existingColumns.includes(snakeCaseColumn)) {
+        query.orderBy(`user.${snakeCaseColumn}`, sortOrder.toUpperCase() as 'ASC' | 'DESC');
+      } else {
+        query.orderBy('user.created_at', sortOrder.toUpperCase() as 'ASC' | 'DESC');
+      }
+
+      // Add pagination
+      query.skip((page - 1) * pageSize)
+        .take(pageSize);
+
+      // Log the generated query
+      logger.debug('Generated SQL query:', query.getQuery());
+
+      const [users, total] = await query.getManyAndCount();
+      
+      // Map snake_case column names to camelCase
+      const mappedUsers = users.map(user => {
+        const rawUser = user as any;
+        const mappedUser: Partial<User> = {
+          id: rawUser.id,
+          name: rawUser.name,
+          email: rawUser.email,
+          role: rawUser.role,
+          status: rawUser.status,
+          country: rawUser.country,
+          createdAt: rawUser.created_at,
+          updatedAt: rawUser.updated_at,
+          isEmailVerified: rawUser.is_email_verified,
+          phoneNumber: rawUser.phone_number,
+          lastLogin: rawUser.last_login
+        };
+        return mappedUser;
+      });
+
+      // Log the results
+      logger.debug('Query results:', { total, userCount: mappedUsers.length, firstUser: mappedUsers[0] });
+
+      return {
+        users: mappedUsers,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize)
+      };
+    } catch (error) {
+      logger.error(error, 'Failed to list users');
+      return {
+        users: [],
+        total: 0,
+        page,
+        pageSize,
+        totalPages: 0
+      };
+    }
+  }
+
+  // Helper method to convert camelCase to snake_case
+  private toSnakeCase(str: string): string {
+    return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+  }
+
+  async updateLastLogin(id: string): Promise<void> {
+    await this.userRepo.update(id, {
+      lastLogin: new Date(),
+    });
+  }
+
+  async verifyEmail(id: string): Promise<User> {
+    const user = await this.findById(id);
+    user.isEmailVerified = true;
+    user.status = UserStatus.ACTIVE;
+    return this.userRepo.save(user);
+  }
+
+  async updateStatus(id: string, status: UserStatus): Promise<User> {
+    const user = await this.findById(id);
+    user.status = status;
+    return this.userRepo.save(user);
   }
 } 

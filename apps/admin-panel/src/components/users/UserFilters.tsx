@@ -19,9 +19,8 @@ interface UserFiltersProps {
 }
 
 const USER_ROLES = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'moderator', label: 'Moderator' },
-  { value: 'user', label: 'User' },
+  { value: 'ADMIN', label: 'Admin' },
+  { value: 'USER', label: 'User' },
 ];
 
 const USER_STATUSES = [

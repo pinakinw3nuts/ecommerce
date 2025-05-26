@@ -15,13 +15,21 @@ export enum UserRole {
   USER = 'USER'
 }
 
+export enum UserStatus {
+  ACTIVE = 'active',
+  BANNED = 'banned',
+  PENDING = 'pending',
+  SUSPENDED = 'suspended',
+  RESTRICTED = 'restricted'
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ type: 'varchar', length: 255 })
-  name!: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  name: string | null = null;
 
   @Index('idx_user_email', { unique: true })
   @Column({ type: 'varchar', length: 255, unique: true })
@@ -31,11 +39,39 @@ export class User {
   password!: string;
 
   @Column({
-    type: 'enum',
-    enum: UserRole,
-    default: UserRole.USER
+    type: 'varchar',
+    length: 10,
+    default: UserRole.USER,
+    transformer: {
+      to: (value: UserRole) => value,
+      from: (value: string) => value as UserRole
+    }
   })
   role: UserRole = UserRole.USER;
+
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    default: UserStatus.PENDING,
+    enumName: 'users_status_enum'
+  })
+  status: UserStatus = UserStatus.PENDING;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+    name: 'phone_number'
+  })
+  phoneNumber: string | null = null;
+
+  @Column({
+    type: 'varchar',
+    length: 2,
+    nullable: true,
+    name: 'country'
+  })
+  country: string | null = null;
 
   @Column({
     type: 'varchar',
@@ -113,7 +149,7 @@ export class User {
     type: 'varchar',
     length: 255,
     nullable: true,
-    name: '2fa_secret',
+    name: 'two_factor_secret',
     select: false
   })
   twoFactorSecret: string | null = null;

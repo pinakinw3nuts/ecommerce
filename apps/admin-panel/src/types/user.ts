@@ -1,5 +1,12 @@
-export type UserRole = 'admin' | 'moderator' | 'user';
-export type UserStatus = 'active' | 'banned';
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  USER = 'USER',
+}
+
+export enum UserStatus {
+  ACTIVE = 'active',
+  BANNED = 'banned',
+}
 
 export interface User {
   id: string;
@@ -8,37 +15,34 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   createdAt: string;
-  lastLogin: string | null;
-  phoneNumber: string | null;
+  updatedAt: string;
+  lastLogin?: string;
   isEmailVerified: boolean;
-  country: string;
 }
 
 export interface UserListingParams {
   page?: number;
   pageSize?: number;
   search?: string;
-  roles?: UserRole[];
-  statuses?: UserStatus[];
+  roles?: string[];
+  statuses?: string[];
   dateFrom?: string;
   dateTo?: string;
-  sortBy?: keyof User;
-  sortOrder?: 'asc' | 'desc';
+  sortBy?: string;
+  sortOrder?: string;
   country?: string;
-}
-
-export interface PaginationData {
-  total: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
-  hasMore: boolean;
-  hasPrevious: boolean;
 }
 
 export interface UserListingResponse {
   users: User[];
-  pagination: PaginationData;
+  pagination: {
+    total: number;
+    totalPages: number;
+    currentPage: number;
+    pageSize: number;
+    hasMore: boolean;
+    hasPrevious: boolean;
+  };
 }
 
 export interface CreateUserData {
