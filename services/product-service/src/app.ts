@@ -7,10 +7,6 @@ import { swaggerConfig, swaggerUiOptions } from './config/swagger';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import { authMiddleware } from './middlewares/auth';
-import { productController } from './controllers/product.controller';
-import { categoryController } from './controllers/category.controller';
-import { reviewController } from './controllers/review.controller';
-import { attributeController } from './controllers/attribute.controller';
 import { brandController } from './controllers/brand.controller';
 import { couponController } from './controllers/coupon.controller';
 
@@ -54,7 +50,7 @@ export async function buildApp() {
     await protectedApp.register(brandController.registerProtectedRoutes, { prefix: '/brands' });
     await protectedApp.register(couponController.registerProtectedRoutes, { prefix: '/coupons' });
     console.log('Protected routes registered successfully');
-  }, { prefix: '/api/v1' });
+  }, { prefix: '/api/v1/admin' });
 
   return app;
 }

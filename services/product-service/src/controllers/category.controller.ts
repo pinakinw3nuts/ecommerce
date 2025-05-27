@@ -6,47 +6,147 @@ import { z } from 'zod';
 const categoryService = new CategoryService();
 
 const categorySchema = z.object({
-  name: z.string(),
+  name: z.string().min(2, 'Category name must be at least 2 characters'),
   description: z.string().optional(),
+  parentId: z.string().nullable().optional(),
+  imageUrl: z.string().optional(),
+  isActive: z.boolean().optional(),
 });
 
-interface CategoryParams {
-  id: string;
-}
+const updateCategorySchema = categorySchema.partial();
 
-interface CategoryBody {
-  name: string;
-  description?: string;
-}
+const listCategoriesSchema = z.object({
+  page: z.string().optional(),
+  pageSize: z.string().optional(),
+  search: z.string().optional(),
+  status: z.string().optional(),
+  parentId: z.string().nullable().optional(),
+  sortBy: z.string().optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+});
 
 export const categoryController = {
   registerPublicRoutes: async (fastify: FastifyInstance) => {
+    // List categories (public)
     fastify.get('/', {
       schema: {
         tags: ['categories'],
         summary: 'List all categories',
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'string' },
+            pageSize: { type: 'string' },
+            search: { type: 'string' },
+            status: { type: 'string' },
+            parentId: { type: ['string', 'null'] },
+            sortBy: { type: 'string' },
+            sortOrder: { type: 'string', enum: ['asc', 'desc'] },
+          },
+        },
         response: {
           200: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                name: { type: 'string' },
-                description: { type: 'string' }
-              }
-            }
-          }
-        }
+            type: 'object',
+            properties: {
+              categories: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    slug: { type: 'string' },
+                    description: { type: 'string' },
+                    imageUrl: { type: 'string' },
+                    isActive: { type: 'boolean' },
+                    parentId: { type: ['string', 'null'] },
+                    createdAt: { type: 'string' },
+                    updatedAt: { type: 'string' },
+                  },
+                },
+              },
+              pagination: {
+                type: 'object',
+                properties: {
+                  total: { type: 'number' },
+                  hasMore: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
       },
-      handler: async (request: FastifyRequest, reply: FastifyReply) => {
-        const categories = await categoryService.listCategories();
-        return reply.send(categories);
-      }
+      handler: async (request: FastifyRequest<{
+        Querystring: z.infer<typeof listCategoriesSchema>;
+      }>, reply: FastifyReply) => {
+        const { page, pageSize, search, status, parentId, sortBy, sortOrder } = request.query;
+        
+        const skip = page ? (parseInt(page) - 1) * (parseInt(pageSize || '10')) : 0;
+        const take = pageSize ? parseInt(pageSize) : 10;
+        
+        const result = await categoryService.listCategories({
+          skip,
+          take,
+          search,
+          isActive: status === 'active' ? true : status === 'inactive' ? false : undefined,
+          parentId: parentId === 'null' ? null : parentId,
+          sortBy,
+          sortOrder: sortOrder?.toUpperCase() as 'ASC' | 'DESC',
+        });
+
+        return reply.send({
+          categories: result.categories,
+          pagination: {
+            total: result.total,
+            hasMore: result.hasMore,
+          },
+        });
+      },
+    });
+
+    // Get category by ID (public)
+    fastify.get('/:id', {
+      schema: {
+        tags: ['categories'],
+        summary: 'Get category by ID',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              slug: { type: 'string' },
+              description: { type: 'string' },
+              imageUrl: { type: 'string' },
+              isActive: { type: 'boolean' },
+              parentId: { type: ['string', 'null'] },
+              createdAt: { type: 'string' },
+              updatedAt: { type: 'string' },
+            },
+          },
+        },
+      },
+      handler: async (request: FastifyRequest<{
+        Params: { id: string };
+      }>, reply: FastifyReply) => {
+        const category = await categoryService.getCategoryById(request.params.id);
+        if (!category) {
+          return reply.code(404).send({ message: 'Category not found' });
+        }
+        return reply.send(category);
+      },
     });
   },
 
   registerProtectedRoutes: async (fastify: FastifyInstance) => {
+    // Create category (protected)
     fastify.post('/', {
       schema: {
         tags: ['categories'],
@@ -55,9 +155,12 @@ export const categoryController = {
           type: 'object',
           required: ['name'],
           properties: {
-            name: { type: 'string' },
-            description: { type: 'string' }
-          }
+            name: { type: 'string', minLength: 2 },
+            description: { type: 'string' },
+            parentId: { type: ['string', 'null'] },
+            imageUrl: { type: 'string' },
+            isActive: { type: 'boolean' },
+          },
         },
         response: {
           201: {
@@ -65,18 +168,30 @@ export const categoryController = {
             properties: {
               id: { type: 'string' },
               name: { type: 'string' },
-              description: { type: 'string' }
-            }
-          }
-        }
+              slug: { type: 'string' },
+              description: { type: 'string' },
+              imageUrl: { type: 'string' },
+              isActive: { type: 'boolean' },
+              parentId: { type: ['string', 'null'] },
+              createdAt: { type: 'string' },
+              updatedAt: { type: 'string' },
+            },
+          },
+        },
       },
       preHandler: validateRequest(categorySchema),
-      handler: async (request: FastifyRequest<{ Body: CategoryBody }>, reply: FastifyReply) => {
-        const category = await categoryService.createCategory(request.body);
+      handler: async (request: FastifyRequest<{
+        Body: z.infer<typeof categorySchema>;
+      }>, reply: FastifyReply) => {
+        const category = await categoryService.createCategory({
+          ...request.body,
+          parentId: request.body.parentId === 'null' ? null : request.body.parentId,
+        });
         return reply.code(201).send(category);
-      }
+      },
     });
 
+    // Update category (protected)
     fastify.put('/:id', {
       schema: {
         tags: ['categories'],
@@ -85,15 +200,18 @@ export const categoryController = {
           type: 'object',
           required: ['id'],
           properties: {
-            id: { type: 'string', description: 'Category ID' }
-          }
+            id: { type: 'string' },
+          },
         },
         body: {
           type: 'object',
           properties: {
-            name: { type: 'string' },
-            description: { type: 'string' }
-          }
+            name: { type: 'string', minLength: 2 },
+            description: { type: 'string' },
+            parentId: { type: ['string', 'null'] },
+            imageUrl: { type: 'string' },
+            isActive: { type: 'boolean' },
+          },
         },
         response: {
           200: {
@@ -101,27 +219,31 @@ export const categoryController = {
             properties: {
               id: { type: 'string' },
               name: { type: 'string' },
-              description: { type: 'string' }
-            }
+              slug: { type: 'string' },
+              description: { type: 'string' },
+              imageUrl: { type: 'string' },
+              isActive: { type: 'boolean' },
+              parentId: { type: ['string', 'null'] },
+              createdAt: { type: 'string' },
+              updatedAt: { type: 'string' },
+            },
           },
-          404: {
-            type: 'object',
-            properties: {
-              message: { type: 'string' }
-            }
-          }
-        }
+        },
       },
-      preHandler: validateRequest(categorySchema.partial()),
-      handler: async (request: FastifyRequest<{ Params: CategoryParams, Body: Partial<CategoryBody> }>, reply: FastifyReply) => {
-        const category = await categoryService.updateCategory(request.params.id, request.body);
-        if (!category) {
-          return reply.code(404).send({ message: 'Category not found' });
-        }
+      preHandler: validateRequest(updateCategorySchema),
+      handler: async (request: FastifyRequest<{
+        Params: { id: string };
+        Body: z.infer<typeof updateCategorySchema>;
+      }>, reply: FastifyReply) => {
+        const category = await categoryService.updateCategory(request.params.id, {
+          ...request.body,
+          parentId: request.body.parentId === 'null' ? null : request.body.parentId,
+        });
         return reply.send(category);
-      }
+      },
     });
 
+    // Delete category (protected)
     fastify.delete('/:id', {
       schema: {
         tags: ['categories'],
@@ -130,29 +252,40 @@ export const categoryController = {
           type: 'object',
           required: ['id'],
           properties: {
-            id: { type: 'string', description: 'Category ID' }
-          }
-        },
-        response: {
-          204: {
-            type: 'null',
-            description: 'Category deleted successfully'
+            id: { type: 'string' },
           },
-          404: {
-            type: 'object',
-            properties: {
-              message: { type: 'string' }
-            }
-          }
-        }
+        },
       },
-      handler: async (request: FastifyRequest<{ Params: CategoryParams }>, reply: FastifyReply) => {
-        const result = await categoryService.deleteCategory(request.params.id);
-        if (!result) {
-          return reply.code(404).send({ message: 'Category not found' });
-        }
+      handler: async (request: FastifyRequest<{
+        Params: { id: string };
+      }>, reply: FastifyReply) => {
+        await categoryService.deleteCategory(request.params.id);
         return reply.code(204).send();
-      }
+      },
     });
-  }
+
+    // Bulk delete categories (protected)
+    fastify.post('/bulk-delete', {
+      schema: {
+        tags: ['categories'],
+        summary: 'Bulk delete categories',
+        body: {
+          type: 'object',
+          required: ['categoryIds'],
+          properties: {
+            categoryIds: {
+              type: 'array',
+              items: { type: 'string' },
+            },
+          },
+        },
+      },
+      handler: async (request: FastifyRequest<{
+        Body: { categoryIds: string[] };
+      }>, reply: FastifyReply) => {
+        await categoryService.bulkDeleteCategories(request.body.categoryIds);
+        return reply.code(204).send();
+      },
+    });
+  },
 }; 

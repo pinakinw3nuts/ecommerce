@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import Image from 'next/image';
@@ -25,20 +25,7 @@ import { TableInstance } from '@/components/Table';
 import { formatDate } from '@/lib/utils';
 import { Pagination } from '@/components/ui/Pagination';
 import { CommonFilters, type FilterState, type FilterConfig } from '@/components/ui/CommonFilters';
-
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  stock: number;
-  image: string;
-  isPublished: boolean;
-  category: string;
-  createdAt: string;
-  updatedAt: string;
-  status: 'in_stock' | 'low_stock' | 'out_of_stock';
-}
+import { Product, ProductsResponse } from '@/services/products';
 
 interface PaginationInfo {
   total: number;
@@ -49,41 +36,36 @@ interface PaginationInfo {
   hasPrevious: boolean;
 }
 
-interface ProductsResponse {
-  products: Product[];
-  pagination: PaginationInfo;
-}
-
 const filterConfig: FilterConfig = {
   search: {
+    type: 'text',
     placeholder: 'Search products by name or SKU...',
   },
-  filterGroups: [
-    {
-      name: 'Categories',
-      key: 'categories',
-      options: [
-        { value: 'electronics', label: 'Electronics' },
-        { value: 'clothing', label: 'Clothing' },
-        { value: 'books', label: 'Books' },
-        { value: 'home', label: 'Home' },
-        { value: 'sports', label: 'Sports' },
-        { value: 'toys', label: 'Toys' },
-      ],
-    },
-    {
-      name: 'Status',
-      key: 'statuses',
-      options: [
-        { value: 'in_stock', label: 'In Stock' },
-        { value: 'low_stock', label: 'Low Stock' },
-        { value: 'out_of_stock', label: 'Out of Stock' },
-      ],
-    },
-  ],
-  hasValueRange: true,
-  valueRangeLabel: 'Price Range',
-  valueRangeType: 'currency',
+  categories: {
+    type: 'select',
+    placeholder: 'Filter by category',
+    options: [
+      { value: 'electronics', label: 'Electronics' },
+      { value: 'clothing', label: 'Clothing' },
+      { value: 'books', label: 'Books' },
+      { value: 'home', label: 'Home' },
+      { value: 'sports', label: 'Sports' },
+      { value: 'toys', label: 'Toys' },
+    ],
+  },
+  statuses: {
+    type: 'select',
+    placeholder: 'Filter by status',
+    options: [
+      { value: 'in_stock', label: 'In Stock' },
+      { value: 'low_stock', label: 'Low Stock' },
+      { value: 'out_of_stock', label: 'Out of Stock' },
+    ],
+  },
+  valueRange: {
+    type: 'valueRange',
+    placeholder: 'Price Range',
+  },
 };
 
 const initialFilters: FilterState = {
@@ -97,9 +79,40 @@ const initialFilters: FilterState = {
 };
 
 const fetcher = async (url: string) => {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error('Failed to fetch');
-  return response.json();
+  try {
+    console.log('Fetching products from:', url);
+    const response = await fetch(url);
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => {
+        console.error('Failed to parse error response as JSON');
+        return {};
+      });
+      console.error('Error response:', error);
+      
+      if (response.status === 401) {
+        console.log('Unauthorized access, redirecting to login');
+        window.location.href = '/login';
+        return;
+      }
+      throw new Error(error.message || 'Failed to fetch products');
+    }
+    
+    const data = await response.json();
+    console.log('Successfully fetched products data:', data);
+    
+    // Validate response structure
+    if (!data || (!Array.isArray(data.products) && !Array.isArray(data))) {
+      console.error('Invalid response format:', data);
+      throw new Error('Invalid response format from API');
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in fetcher:', error);
+    throw error;
+  }
 };
 
 export default function ProductsPage() {
@@ -112,7 +125,16 @@ export default function ProductsPage() {
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isLoadingOperation, setIsLoadingOperation] = useState(false);
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+
+  // Add debouncing for filters
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 300); // 300ms debounce delay
+
+    return () => clearTimeout(timer);
+  }, [filters]);
 
   const resetFilters = useCallback(() => {
     setFilters(initialFilters);
@@ -128,22 +150,37 @@ export default function ProductsPage() {
       sortOrder,
     });
 
-    if (filters.search) params.append('search', filters.search);
-    
-    if ((filters.categories as string[])?.length) {
-      params.append('categories', (filters.categories as string[]).join(','));
+    if (debouncedFilters.search) {
+      const searchTerm = String(debouncedFilters.search).trim();
+      if (searchTerm) {
+        params.append('search', searchTerm);
+        console.log(`Adding search parameter: "${searchTerm}"`);
+      }
     }
     
-    if ((filters.statuses as string[])?.length) {
-      params.append('statuses', (filters.statuses as string[]).join(','));
+    if ((debouncedFilters.categories as string[])?.length) {
+      params.append('categories', (debouncedFilters.categories as string[]).join(','));
+      console.log(`Adding categories filter: ${(debouncedFilters.categories as string[]).join(',')}`);
     }
     
-    const valueRange = filters.valueRange as { min: string; max: string };
-    if (valueRange?.min) params.append('priceMin', valueRange.min);
-    if (valueRange?.max) params.append('priceMax', valueRange.max);
+    if ((debouncedFilters.statuses as string[])?.length) {
+      params.append('statuses', (debouncedFilters.statuses as string[]).join(','));
+      console.log(`Adding statuses filter: ${(debouncedFilters.statuses as string[]).join(',')}`);
+    }
+    
+    const valueRange = debouncedFilters.valueRange as { min: string; max: string };
+    if (valueRange?.min) {
+      params.append('priceMin', valueRange.min);
+      console.log(`Adding price min: ${valueRange.min}`);
+    }
+    if (valueRange?.max) {
+      params.append('priceMax', valueRange.max);
+      console.log(`Adding price max: ${valueRange.max}`);
+    }
 
+    console.log(`Full request URL: /api/products?${params.toString()}`);
     return `/api/products?${params.toString()}`;
-  }, [page, pageSize, filters, sortBy, sortOrder]);
+  }, [page, pageSize, debouncedFilters, sortBy, sortOrder]);
 
   const { data, error, isLoading, mutate } = useSWR<ProductsResponse>(
     getApiUrl(),
@@ -157,20 +194,24 @@ export default function ProductsPage() {
       setSortBy(column);
       setSortOrder('asc');
     }
+    setPage(1); // Reset to first page when sorting changes
   };
 
   const handleApiOperation = async (operation: () => Promise<Response>, successMessage: string) => {
     try {
       setIsLoadingOperation(true);
       const response = await operation();
-      if (!response.ok) throw new Error(`Failed to ${successMessage.toLowerCase()}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to ${successMessage.toLowerCase()}`);
+      }
       
       toast.success(successMessage);
       mutate();
       return true;
     } catch (error) {
       console.error(`Error: ${successMessage.toLowerCase()}:`, error);
-      toast.error(`Failed to ${successMessage.toLowerCase()}`);
+      toast.error(`Failed to ${successMessage.toLowerCase()}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return false;
     } finally {
       setIsLoadingOperation(false);
@@ -261,13 +302,15 @@ export default function ProductsPage() {
     );
 
   const handlePageChange = (newPage: number) => {
+    console.log(`Changing page from ${page} to ${newPage}`);
     setPage(newPage);
     setSelectedProducts([]);
   };
 
   const handlePageSizeChange = (newSize: number) => {
+    console.log(`Changing page size from ${pageSize} to ${newSize}`);
     setPageSize(newSize);
-    setPage(1);
+    setPage(1); // Reset to first page when changing page size
     setSelectedProducts([]);
   };
 
@@ -335,6 +378,32 @@ export default function ProductsPage() {
     {
       header: () => (
         <button
+          onClick={() => handleSort('slug')}
+          className="flex items-center gap-1 hover:text-blue-600"
+        >
+          Slug
+          <span className="inline-flex">
+            {sortBy === 'slug' ? (
+              sortOrder === 'asc' ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
+        </button>
+      ),
+      cell: ({ row }: { row: Product }) => (
+        <span className="text-sm text-gray-600">
+          {row.slug}
+        </span>
+      ),
+    },
+    {
+      header: () => (
+        <button
           onClick={() => handleSort('category')}
           className="flex items-center gap-1 hover:text-blue-600"
         >
@@ -354,55 +423,21 @@ export default function ProductsPage() {
       ),
       cell: ({ row }: { row: Product }) => (
         <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800">
-          {row.category}
+          {typeof row.category === 'object' ? 
+            (row.category as any)?.name || 'Unknown' : 
+            row.category}
         </span>
       ),
     },
     {
       header: () => (
         <button
-          onClick={() => handleSort('stock')}
+          onClick={() => handleSort('isFeatured')}
           className="flex items-center gap-1 hover:text-blue-600"
         >
-          Quantity
+          Featured
           <span className="inline-flex">
-            {sortBy === 'stock' ? (
-              sortOrder === 'asc' ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )
-            ) : (
-              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
-            )}
-          </span>
-        </button>
-      ),
-      cell: ({ row }: { row: Product }) => (
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{row.stock}</span>
-          <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
-            ${row.stock > 20 
-              ? 'bg-green-100 text-green-700' 
-              : row.stock > 0
-              ? 'bg-yellow-100 text-yellow-700'
-              : 'bg-red-100 text-red-700'
-            }`}
-          >
-            {row.stock > 20 ? 'High' : row.stock > 0 ? 'Low' : 'None'}
-          </span>
-        </div>
-      ),
-    },
-    {
-      header: () => (
-        <button
-          onClick={() => handleSort('status')}
-          className="flex items-center gap-1 hover:text-blue-600"
-        >
-          Inventory Status
-          <span className="inline-flex">
-            {sortBy === 'status' ? (
+            {sortBy === 'isFeatured' ? (
               sortOrder === 'asc' ? (
                 <ChevronUp className="h-4 w-4" />
               ) : (
@@ -416,18 +451,43 @@ export default function ProductsPage() {
       ),
       cell: ({ row }: { row: Product }) => (
         <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
-          ${row.status === 'in_stock'
-            ? 'bg-green-100 text-green-700'
-            : row.status === 'low_stock'
-            ? 'bg-yellow-100 text-yellow-700'
-            : 'bg-red-100 text-red-700'
+          ${row.isFeatured
+            ? 'bg-purple-100 text-purple-700'
+            : 'bg-gray-100 text-gray-700'
           }`}
         >
-          {row.status === 'in_stock' 
-            ? 'Available' 
-            : row.status === 'low_stock' 
-            ? 'Limited' 
-            : 'Unavailable'}
+          {row.isFeatured ? 'Featured' : 'Not Featured'}
+        </span>
+      ),
+    },
+    {
+      header: () => (
+        <button
+          onClick={() => handleSort('isPublished')}
+          className="flex items-center gap-1 hover:text-blue-600"
+        >
+          Published
+          <span className="inline-flex">
+            {sortBy === 'isPublished' ? (
+              sortOrder === 'asc' ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
+        </button>
+      ),
+      cell: ({ row }: { row: Product }) => (
+        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
+          ${row.isPublished
+            ? 'bg-green-100 text-green-700'
+            : 'bg-yellow-100 text-yellow-700'
+          }`}
+        >
+          {row.isPublished ? 'Published' : 'Draft'}
         </span>
       ),
     },
@@ -453,7 +513,7 @@ export default function ProductsPage() {
       ),
       cell: ({ row }: { row: Product }) => (
         <span className="text-sm text-gray-500">
-          {formatDate(new Date(row.createdAt))}
+          {formatDate(row.createdAt)}
         </span>
       ),
     },
@@ -483,9 +543,22 @@ export default function ProductsPage() {
   ];
 
   if (error) {
+    console.error('Rendering error state:', error);
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-        <p className="text-red-600">Failed to load products</p>
+        <p className="text-red-600 font-medium">Failed to load products</p>
+        <p className="text-red-500 text-sm mt-1">
+          {error instanceof Error ? error.message : 'An unexpected error occurred'}
+        </p>
+        <button
+          onClick={() => {
+            console.log('Retrying products fetch...');
+            mutate();
+          }}
+          className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -516,7 +589,7 @@ export default function ProductsPage() {
         config={filterConfig}
         filters={filters}
         onChange={setFilters}
-        onReset={() => setFilters(initialFilters)}
+        onReset={resetFilters}
       />
 
       {/* Bulk Actions */}
@@ -557,7 +630,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200">
+      <div className="rounded-lg border border-gray-200 bg-white">
         <Table
           data={data?.products ?? []}
           columns={columns}
@@ -574,16 +647,16 @@ export default function ProductsPage() {
             <p className="text-sm text-gray-700">
               Showing{' '}
               <span className="font-medium">
-                {data ? (page - 1) * pageSize + 1 : 0}
+                {data?.pagination?.total ? (page - 1) * pageSize + 1 : 0}
               </span>{' '}
               to{' '}
               <span className="font-medium">
-                {data
+                {data?.pagination?.total
                   ? Math.min(page * pageSize, data.pagination.total)
                   : 0}
               </span>{' '}
               of{' '}
-              <span className="font-medium">{data?.pagination.total || 0}</span>{' '}
+              <span className="font-medium">{data?.pagination?.total || 0}</span>{' '}
               results
             </p>
 
@@ -602,7 +675,7 @@ export default function ProductsPage() {
           <Pagination
             currentPage={page}
             pageSize={pageSize}
-            totalItems={data?.pagination.total || 0}
+            totalItems={data?.pagination?.total || 0}
             onPageChange={handlePageChange}
           />
         </div>

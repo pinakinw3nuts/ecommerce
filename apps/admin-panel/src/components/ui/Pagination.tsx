@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './Button';
 
@@ -11,6 +11,23 @@ interface PaginationProps {
 
 export function Pagination({ currentPage, pageSize, totalItems, onPageChange }: PaginationProps) {
   const totalPages = Math.ceil(totalItems / pageSize);
+  
+  // Debug logging for pagination props
+  useEffect(() => {
+    console.log('Pagination component props:', {
+      currentPage,
+      pageSize,
+      totalItems,
+      calculatedTotalPages: totalPages
+    });
+  }, [currentPage, pageSize, totalItems, totalPages]);
+  
+  const handlePageChange = (page: number) => {
+    console.log(`Pagination: changing from page ${currentPage} to ${page}`);
+    if (page !== currentPage) {
+      onPageChange(page);
+    }
+  };
 
   const getPageNumbers = () => {
     const pages = [];
@@ -54,7 +71,7 @@ export function Pagination({ currentPage, pageSize, totalItems, onPageChange }: 
       <Button
         variant="outline"
         size="sm"
-        onClick={() => onPageChange(1)}
+        onClick={() => handlePageChange(1)}
         disabled={currentPage === 1}
         className="px-3 py-2 text-sm"
       >
@@ -64,7 +81,7 @@ export function Pagination({ currentPage, pageSize, totalItems, onPageChange }: 
       <Button
         variant="outline"
         size="sm"
-        onClick={() => onPageChange(currentPage - 1)}
+        onClick={() => handlePageChange(currentPage - 1)}
         disabled={currentPage === 1}
         className="px-3 py-2 text-sm"
       >
@@ -78,7 +95,7 @@ export function Pagination({ currentPage, pageSize, totalItems, onPageChange }: 
         ) : (
           <button
             key={pageNumber}
-            onClick={() => onPageChange(pageNumber as number)}
+            onClick={() => handlePageChange(pageNumber as number)}
             disabled={pageNumber === currentPage}
             className={`min-w-[32px] rounded px-2 py-1 text-sm ${
               pageNumber === currentPage
@@ -94,8 +111,8 @@ export function Pagination({ currentPage, pageSize, totalItems, onPageChange }: 
       <Button
         variant="outline"
         size="sm"
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={currentPage === totalPages}
+        onClick={() => handlePageChange(currentPage + 1)}
+        disabled={currentPage === totalPages || totalPages === 0}
         className="px-3 py-2 text-sm"
       >
         Next
@@ -105,8 +122,8 @@ export function Pagination({ currentPage, pageSize, totalItems, onPageChange }: 
       <Button
         variant="outline"
         size="sm"
-        onClick={() => onPageChange(totalPages)}
-        disabled={currentPage === totalPages}
+        onClick={() => handlePageChange(totalPages)}
+        disabled={currentPage === totalPages || totalPages === 0}
         className="px-3 py-2 text-sm"
       >
         Last

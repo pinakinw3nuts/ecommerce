@@ -16,6 +16,7 @@ The Product Service is a microservice responsible for managing product-related o
 - Product bundles and related products
 - Attribute management
 - Offers and coupons integration
+- Advanced searching, filtering, sorting, and pagination
 
 ## Getting Started
 
@@ -61,97 +62,106 @@ docker-compose up -d product-service
 
 ## API Endpoints
 
-### Products
+### Public Endpoints
 
-#### GET /api/products
-Get all products with pagination and filters
-- Query params:
-  - `page`: Page number (default: 1)
-  - `limit`: Items per page (default: 10)
-  - `category`: Filter by category ID
-  - `brand`: Filter by brand ID
-  - `search`: Search in name and description
-  - `isPublished`: Filter by publication status
-  - `isFeatured`: Filter featured products
-  - `minPrice`: Minimum price filter
-  - `maxPrice`: Maximum price filter
-  - `inStock`: Filter by stock availability
+#### GET /api/v1/products
 
-#### GET /api/products/:id
-Get a single product by ID with all related data
+List all products with support for filtering, sorting, and pagination.
 
-#### POST /api/products
-Create a new product
-- Requires authentication
-- Request body:
+**Query Parameters:**
+
+| Parameter    | Type    | Description                                     |
+|-------------|---------|-------------------------------------------------|
+| page        | integer | Page number (starts from 1)                     |
+| limit       | integer | Number of items per page                        |
+| sortBy      | string  | Field to sort by (name, price, createdAt)       |
+| sortOrder   | string  | Sort direction (ASC, DESC)                      |
+| search      | string  | Search term for product name, description, slug |
+| categoryId  | string  | Filter by category ID                           |
+| minPrice    | number  | Minimum price filter                            |
+| maxPrice    | number  | Maximum price filter                            |
+| tagIds      | string  | Comma-separated list of tag IDs                 |
+| isFeatured  | boolean | Filter by featured status                       |
+| isPublished | boolean | Filter by published status                      |
+
+**Example Request:**
+
+```
+GET /api/v1/products?page=1&limit=10&sortBy=price&sortOrder=ASC&search=laptop&minPrice=500&maxPrice=1500&categoryId=123&isFeatured=true
+```
+
+**Example Response:**
+
 ```json
 {
-  "name": "string",
-  "description": "string",
-  "price": "number",
-  "slug": "string",
-  "stockQuantity": "number",
-  "categoryId": "string",
-  "brandId": "string",
-  "specifications": "string",
-  "keywords": "string[]",
-  "seoMetadata": {
-    "title": "string",
-    "description": "string",
-    "keywords": "string[]",
-    "ogImage": "string"
+  "data": [
+    {
+      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "name": "Dell XPS 13",
+      "description": "Powerful laptop with great features",
+      "price": 1299.99,
+      "slug": "dell-xps-13",
+      "mediaUrl": "https://example.com/images/dell-xps-13.jpg",
+      "isFeatured": true,
+      "isPublished": true,
+      "category": {
+        "id": "123",
+        "name": "Laptops",
+        "description": "Portable computers"
+      },
+      "variants": [
+        {
+          "id": "456",
+          "name": "16GB RAM, 512GB SSD",
+          "sku": "XPS-16-512",
+          "price": 1299.99,
+          "stock": 10
+        }
+      ],
+      "tags": [
+        {
+          "id": "789",
+          "name": "Dell"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "total": 100,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 10,
+    "hasNextPage": true,
+    "hasPrevPage": false
   }
 }
 ```
 
-#### PUT /api/products/:id
-Update an existing product
-- Requires authentication
-- Same body structure as POST
+#### GET /api/v1/products/:identifier
 
-#### DELETE /api/products/:id
-Delete a product and all associated data
-- Requires authentication
+Get a product by ID or slug.
 
-### Product Images
+### Protected Endpoints (Requires Authentication)
 
-#### POST /api/products/:id/images
-Upload product images
-- Requires authentication
-- Multipart form data
-- Supports multiple images
-- Maximum file size: 5MB per image
-- Supported formats: jpg, jpeg, png, webp
+#### GET /api/v1/admin/products
 
-#### DELETE /api/products/:id/images/:imageId
-Delete a product image
-- Requires authentication
+Same as public endpoint but with authentication, accessible through the admin API.
 
-### Product Variants
+#### POST /api/v1/admin/products
 
-#### GET /api/products/:id/variants
-Get all variants of a product
+Create a new product.
 
-#### POST /api/products/:id/variants
-Create a new product variant
-- Requires authentication
+#### PUT /api/v1/admin/products/:identifier
 
-#### PUT /api/products/:id/variants/:variantId
-Update a product variant
-- Requires authentication
+Update an existing product.
 
-#### DELETE /api/products/:id/variants/:variantId
-Delete a product variant
-- Requires authentication
+#### DELETE /api/v1/admin/products/:identifier
 
-### Reviews
+Delete a product.
 
-#### GET /api/products/:id/reviews
-Get all reviews for a product
+#### POST /api/v1/admin/products/:identifier/image
 
-#### POST /api/products/:id/reviews
-Create a new product review
-- Requires authentication
+Upload a product image.
 
 ## File Storage
 
@@ -205,3 +215,47 @@ The service uses PostgreSQL with TypeORM for:
 
 ## License
 MIT License 
+
+## Implementation Details
+
+### Searching
+
+The search functionality allows searching across multiple fields:
+- Product name
+- Product description
+- Product slug
+
+### Filtering
+
+Products can be filtered by:
+- Category
+- Price range (min/max)
+- Tags
+- Featured status
+- Published status
+
+### Sorting
+
+Products can be sorted by:
+- Name (alphabetically)
+- Price (low to high or high to low)
+- Creation date (newest first or oldest first)
+
+### Pagination
+
+Results are paginated with metadata including:
+- Total number of products
+- Current page
+- Items per page
+- Total pages
+- Next/previous page indicators
+
+## Database Indexes
+
+The following indexes have been added to optimize query performance:
+- Full-text index on name and description
+- Index on price for range queries
+- Index on createdAt for sorting
+- Composite index on isPublished and isFeatured
+- Index on name for searching
+- Unique index on slug for lookups 

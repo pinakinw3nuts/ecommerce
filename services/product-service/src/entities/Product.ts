@@ -8,6 +8,7 @@ import {
   ManyToMany,
   JoinTable,
   ManyToOne,
+  Index,
 } from 'typeorm';
 import { ProductVariant } from './ProductVariant';
 import { Tag } from './Tag';
@@ -21,14 +22,20 @@ import { AttributeValue } from './AttributeValue';
 import { ProductBundle } from './ProductBundle';
 
 @Entity()
+@Index(['name', 'description'], { fulltext: true })
+@Index(['price'])
+@Index(['createdAt'])
+@Index(['isPublished', 'isFeatured'])
 export class Product {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()
+  @Index()
   name: string;
 
   @Column()
+  @Index({ unique: true })
   slug: string;
 
   @Column('text')

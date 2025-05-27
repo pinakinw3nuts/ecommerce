@@ -117,13 +117,17 @@ export default function ProductDetailsPage({ params }: { params: { id: string } 
           Back
         </Button>
         <h1 className="text-2xl font-semibold text-gray-900">
-          {isNewProduct ? 'Add New Product' : isLoading ? 'Loading...' : `Edit Product: ${product.name}`}
+          {isNewProduct ? 'Add New Product' : isLoading ? 'Loading...' : (product ? `Edit Product: ${product.name}` : 'Product Not Found')}
         </h1>
       </div>
 
       {isLoading && !isNewProduct ? (
         <div className="flex items-center justify-center p-8">
           <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      ) : !product && !isNewProduct ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-red-600">Product not found</p>
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-2xl">

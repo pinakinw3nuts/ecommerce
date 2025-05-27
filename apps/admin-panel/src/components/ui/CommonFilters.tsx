@@ -38,22 +38,13 @@ export interface CommonFiltersProps {
 
 export function CommonFilters({ config, filters, onChange, onReset }: CommonFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
+  const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('top');
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Always position the dropdown at the top
   useEffect(() => {
-    if (isOpen && filterButtonRef.current && dropdownRef.current) {
-      const buttonRect = filterButtonRef.current.getBoundingClientRect();
-      const dropdownRect = dropdownRef.current.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      
-      // Check if there's enough space below
-      const spaceBelow = windowHeight - buttonRect.bottom;
-      const spaceNeeded = dropdownRect.height + 8; // 8px for margin
-      
-      setDropdownPosition(spaceBelow >= spaceNeeded ? 'bottom' : 'top');
-    }
+    setDropdownPosition('top');
   }, [isOpen]);
 
   const handleChange = (key: string, value: string | string[] | DateRangeFilter | RangeFilter) => {
@@ -99,8 +90,13 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
     const active: { group: string; value: string; label: string }[] = [];
     
     Object.entries(config).forEach(([key, field]) => {
-      const values = filters[key] as string[];
-      if (values?.length) {
+      if (field.type === 'text') {
+        // Skip text type filters (search)
+        return;
+      }
+      
+      const values = filters[key];
+      if (Array.isArray(values) && values.length > 0) {
         values.forEach(value => {
           const option = field.options?.find(opt => opt.value === value);
           if (option) {
@@ -165,77 +161,89 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
           {isOpen && (
             <div
               ref={dropdownRef}
-              className={`absolute ${
-                dropdownPosition === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'
-              } right-0 w-[320px] rounded-lg border border-gray-200 bg-white p-4 shadow-lg z-50`}
+              className="absolute top-full mt-2 right-0 w-[360px] max-h-[80vh] overflow-y-auto rounded-lg border border-gray-200 bg-white p-5 shadow-lg z-50"
             >
-              <div className="space-y-6">
+              <div className="space-y-5">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-medium text-gray-900">Filter Options</h3>
+                  <button 
+                    onClick={() => setIsOpen(false)}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
                 {/* Filter Groups */}
-                {Object.entries(config).map(([key, field]) => (
-                  <div key={key} className="space-y-3">
-                    <h3 className="text-sm font-medium text-gray-900">{field.placeholder}</h3>
-                    {field.type === 'text' && (
-                      <input
-                        type="text"
-                        value={filters[key] as string || ''}
-                        onChange={(e) => handleChange(key, e.target.value)}
-                        placeholder={field.placeholder}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      />
-                    )}
-                    {field.type === 'select' && field.options && (
-                      <select
-                        value={(filters[key] as string[]) || []}
-                        onChange={(e) => handleChange(key, Array.from(e.target.selectedOptions, option => option.value))}
-                        multiple
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      >
-                        {field.options.map(option => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    {field.type === 'daterange' && (
-                      <div className="flex gap-4">
-                        <input
-                          type="date"
-                          value={(filters[key] as DateRangeFilter)?.from || ''}
-                          onChange={(e) => handleChange(key, {
-                            ...(filters[key] as DateRangeFilter || { to: '' }),
-                            from: e.target.value
+                {Object.entries(config).map(([key, field]) => {
+                  // Skip text type (search) in the dropdown
+                  if (field.type === 'text') return null;
+                  
+                  return (
+                    <div key={key} className="space-y-2 border-t border-gray-100 pt-4">
+                      <h4 className="text-sm font-medium text-gray-700">{field.placeholder}</h4>
+                      {field.type === 'select' && field.options && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {field.options.map(option => {
+                            const isSelected = Array.isArray(filters[key]) && 
+                              (filters[key] as string[]).includes(option.value);
+                            
+                            return (
+                              <button
+                                key={option.value}
+                                onClick={() => handleOptionToggle(key, option.value)}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                                  isSelected 
+                                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                              >
+                                {option.label}
+                              </button>
+                            );
                           })}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        />
-                        <input
-                          type="date"
-                          value={(filters[key] as DateRangeFilter)?.to || ''}
-                          onChange={(e) => handleChange(key, {
-                            ...(filters[key] as DateRangeFilter || { from: '' }),
-                            to: e.target.value
-                          })}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                        </div>
+                      )}
+                      {field.type === 'daterange' && (
+                        <div className="flex gap-3 mt-2">
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-500 mb-1 block">From</label>
+                            <input
+                              type="date"
+                              value={(filters[key] as DateRangeFilter)?.from || ''}
+                              onChange={(e) => handleDateRangeChange('from', e.target.value)}
+                              className="w-full rounded-md border border-gray-200 py-1.5 px-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-500 mb-1 block">To</label>
+                            <input
+                              type="date"
+                              value={(filters[key] as DateRangeFilter)?.to || ''}
+                              onChange={(e) => handleDateRangeChange('to', e.target.value)}
+                              className="w-full rounded-md border border-gray-200 py-1.5 px-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {/* Value Range Filter */}
                 {Object.entries(config).find(([_, field]) => field.type === 'valueRange') && (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium text-gray-900">
-                      {Object.entries(config).find(([_, field]) => field.type === 'valueRange')?.[1]?.placeholder || 'Value Range'}
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2 border-t border-gray-100 pt-4">
+                    <h4 className="text-sm font-medium text-gray-700">
+                      {Object.entries(config).find(([_, field]) => field.type === 'valueRange')?.[1]?.placeholder || 'Price Range'}
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3 mt-2">
                       <div className="relative">
                         <input
                           type="number"
                           placeholder="Min"
                           value={(filters.valueRange as RangeFilter)?.min || ''}
                           onChange={(e) => handleValueRangeChange('min', e.target.value)}
-                          className="w-full rounded-lg border border-gray-200 bg-white py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="w-full rounded-md border border-gray-200 py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
                       <div className="relative">
@@ -244,30 +252,34 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                           placeholder="Max"
                           value={(filters.valueRange as RangeFilter)?.max || ''}
                           onChange={(e) => handleValueRangeChange('max', e.target.value)}
-                          className="w-full rounded-lg border border-gray-200 bg-white py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="w-full rounded-md border border-gray-200 py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Reset Button */}
-                {activeFilterCount > 0 && (
-                  <div className="border-t border-gray-200 pt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        onReset();
-                        setIsOpen(false);
-                      }}
-                      className="w-full flex items-center justify-center gap-2"
-                    >
-                      <X className="h-4 w-4" />
-                      Reset Filters
-                    </Button>
-                  </div>
-                )}
+                {/* Action Buttons */}
+                <div className="flex justify-between gap-3 pt-4 border-t border-gray-100">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      onReset();
+                      setIsOpen(false);
+                    }}
+                    disabled={activeFilterCount === 0}
+                    className={`${activeFilterCount === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    Reset All
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Apply Filters
+                  </Button>
+                </div>
               </div>
             </div>
           )}

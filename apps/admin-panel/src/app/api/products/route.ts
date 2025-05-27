@@ -1,103 +1,108 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { getProducts } from '@/services/products';
 
-// Mock products data
-const mockProducts = Array.from({ length: 100 }, (_, i) => ({
-  id: `product-${i + 1}`,
-  name: `Product ${i + 1}`,
-  category: ['electronics', 'clothing', 'books', 'home'][Math.floor(Math.random() * 4)],
-  price: Math.floor(Math.random() * 1000) + 0.99,
-  stock: Math.floor(Math.random() * 100),
-  status: ['in_stock', 'low_stock', 'out_of_stock'][Math.floor(Math.random() * 3)] as 'in_stock' | 'low_stock' | 'out_of_stock',
-  createdAt: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toISOString(),
-}));
+// Use IPv4 explicitly to avoid IPv6 issues
+const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace('localhost', '127.0.0.1') || 'http://127.0.0.1:3003';
+
+async function makeRequest(url: string, options: RequestInit = {}) {
+  console.log('Making request to:', url);
+  try {
+    // Ensure URL is properly formatted
+    const parsedUrl = new URL(url);
+    
+    // Log the exact URL components being sent
+    console.log('URL details:', {
+      href: parsedUrl.href,
+      origin: parsedUrl.origin,
+      pathname: parsedUrl.pathname,
+      search: parsedUrl.search,
+      searchParams: Object.fromEntries(parsedUrl.searchParams.entries())
+    });
+    
+    const response = await fetch(parsedUrl.toString(), {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+    console.log('Response status:', response.status);
+    return response;
+  } catch (error) {
+    console.error('Request failed:', error);
+    throw error;
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const cookieStore = cookies();
+    const token = cookieStore.get('admin_token');
 
-    // Get query params
-    const { searchParams } = new URL(request.url);
-    const page = Number(searchParams.get('page')) || 1;
-    const pageSize = Number(searchParams.get('pageSize')) || 10;
-    const search = searchParams.get('search') || '';
-    const categories = searchParams.get('categories')?.split(',').filter(Boolean) || [];
-    const statuses = searchParams.get('statuses')?.split(',').filter(Boolean) || [];
-    const priceMin = searchParams.get('priceMin') ? Number(searchParams.get('priceMin')) : null;
-    const priceMax = searchParams.get('priceMax') ? Number(searchParams.get('priceMax')) : null;
-    const sortBy = searchParams.get('sortBy') || 'createdAt';
-    const sortOrder = searchParams.get('sortOrder') || 'desc';
-
-    // Filter products
-    let filteredProducts = [...mockProducts];
-
-    // Apply search filter
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredProducts = filteredProducts.filter(product => 
-        product.name.toLowerCase().includes(searchLower) ||
-        product.category.toLowerCase().includes(searchLower)
+    if (!token) {
+      return NextResponse.json(
+        { message: 'Unauthorized', code: 'TOKEN_MISSING' },
+        { status: 401 }
       );
     }
 
-    // Apply category filter
-    if (categories.length > 0) {
-      filteredProducts = filteredProducts.filter(product => categories.includes(product.category));
-    }
-
-    // Apply status filter
-    if (statuses.length > 0) {
-      filteredProducts = filteredProducts.filter(product => statuses.includes(product.status));
-    }
-
-    // Apply price range filter
-    if (priceMin !== null) {
-      filteredProducts = filteredProducts.filter(product => product.price >= priceMin);
-    }
-    if (priceMax !== null) {
-      filteredProducts = filteredProducts.filter(product => product.price <= priceMax);
-    }
-
-    // Apply sorting
-    filteredProducts.sort((a, b) => {
-      const aValue = a[sortBy as keyof typeof a];
-      const bValue = b[sortBy as keyof typeof b];
-      
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortOrder === 'asc'
-          ? aValue.localeCompare(bValue)
-          : bValue.localeCompare(aValue);
-      }
-      
-      if (typeof aValue === 'number' && typeof bValue === 'number') {
-        return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
-      }
-      
-      return 0;
+    const { searchParams } = new URL(request.url);
+    
+    // Debug logging
+    console.log('Products API Request - Search Params:', Object.fromEntries(searchParams.entries()));
+    
+    // Parse pagination parameters
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const pageSize = parseInt(searchParams.get('pageSize') || '10', 10);
+    
+    // Parse sorting parameters
+    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
+    
+    // Parse filtering parameters
+    const search = searchParams.get('search') || '';
+    const categories = searchParams.get('categories')?.split(',') || [];
+    const statuses = searchParams.get('statuses')?.split(',') || [];
+    const priceMin = searchParams.get('priceMin') ? parseFloat(searchParams.get('priceMin')!) : undefined;
+    const priceMax = searchParams.get('priceMax') ? parseFloat(searchParams.get('priceMax')!) : undefined;
+    
+    // Log the parsed parameters
+    console.log('Products API - Parsed parameters:', {
+      page,
+      pageSize,
+      sortBy,
+      sortOrder,
+      search,
+      categories,
+      statuses,
+      priceMin,
+      priceMax
     });
-
-    // Calculate pagination
-    const total = filteredProducts.length;
-    const totalPages = Math.ceil(total / pageSize);
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    const paginatedProducts = filteredProducts.slice(start, end);
-
-    return NextResponse.json({
-      products: paginatedProducts,
-      pagination: {
-        total,
-        totalPages,
-        currentPage: page,
-        pageSize,
-        hasMore: page < totalPages,
-        hasPrevious: page > 1,
-      },
+    
+    const data = await getProducts({
+      page,
+      pageSize,
+      search,
+      categories,
+      statuses,
+      priceMin,
+      priceMax,
+      sortBy,
+      sortOrder
     });
+    
+    // Log the response data structure
+    console.log('Products API Response - Structure:', {
+      productsCount: data.products?.length,
+      pagination: data.pagination,
+    });
+    
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Error fetching products:', error);
+    console.error('Error in products API route:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch products' },
+      { error: 'Failed to fetch products', details: (error as Error).message },
       { status: 500 }
     );
   }
@@ -105,45 +110,346 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const cookieStore = cookies();
+    const token = cookieStore.get('admin_token');
+
+    if (!token) {
+      return NextResponse.json(
+        { message: 'Unauthorized', code: 'TOKEN_MISSING' },
+        { status: 401 }
+      );
+    }
+
     const productData = await request.json();
     
-    // In a real app, you would:
-    // 1. Validate the product data
-    // 2. Create the product in your database
-    // 3. Return the created product
-    
-    // For now, we'll just return a mock response
-    const newProduct = {
-      id: `product-${mockProducts.length + 1}`,
-      ...productData,
-      createdAt: new Date().toISOString(),
-    };
+    // Validate required fields
+    if (!productData.name || !productData.price) {
+      return NextResponse.json(
+        { message: 'Name and price are required', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      );
+    }
 
-    return NextResponse.json(newProduct);
-  } catch (error) {
+    // Handle categoryId as required by the backend
+    if (productData.categoryId) {
+      // Check if we're using the fallback category
+      if (productData.categoryId === 'default-category') {
+        console.log('Using fallback category ID');
+        
+        // Try to create a default category if needed
+        try {
+          const createCategoryResponse = await makeRequest(
+            `${PRODUCT_SERVICE_URL}/api/v1/admin/categories`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token.value}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                name: 'Default Category',
+                description: 'Automatically created default category'
+              }),
+            }
+          );
+          
+          if (createCategoryResponse.ok) {
+            const categoryData = await createCategoryResponse.json();
+            productData.categoryId = categoryData.id;
+            console.log('Created default category with ID:', categoryData.id);
+          }
+        } catch (error) {
+          console.error('Failed to create default category:', error);
+          // Continue with the fallback ID
+        }
+      } else {
+        console.log('Using provided categoryId:', productData.categoryId);
+      }
+    } else {
+      return NextResponse.json(
+        { message: 'Category is required', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      );
+    }
+    
+    // Handle variants for SKU and stock
+    if (productData.sku || productData.stock !== undefined) {
+      // Create a variant from SKU and stock
+      const variant = {
+        name: 'Default',
+        sku: productData.sku || `SKU-${Date.now()}`,
+        price: productData.price || 0,
+        stock: productData.stock || 0
+      };
+      
+      // Add variant to the product data
+      productData.variants = [variant];
+      console.log('Created variant from SKU and stock:', variant);
+    }
+    
+    // Ensure boolean fields are properly included
+    if (productData.isFeatured !== undefined) {
+      console.log('Setting isFeatured to:', productData.isFeatured);
+    }
+    
+    if (productData.isPublished !== undefined) {
+      console.log('Setting isPublished to:', productData.isPublished);
+    }
+
+    // Use the admin endpoint for creating products
+    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products`;
+    console.log('Creating product with URL:', url);
+    console.log('Product data:', productData);
+    
+    const response = await makeRequest(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token.value}`,
+      },
+      body: JSON.stringify(productData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      // Handle token expiration
+      if (response.status === 401 && (
+        errorData?.code === 'TOKEN_EXPIRED' ||
+        errorData?.message?.toLowerCase().includes('expired') ||
+        errorData?.message?.toLowerCase().includes('invalid token')
+      )) {
+        return NextResponse.json(
+          { message: 'Token has expired', code: 'TOKEN_EXPIRED' },
+          { status: 401 }
+        );
+      }
+
+      return NextResponse.json(
+        { 
+          message: errorData?.message || 'Failed to create product',
+          code: errorData?.code || 'API_ERROR'
+        },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data, { status: 201 });
+  } catch (error: any) {
     console.error('Error creating product:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
+      { 
+        message: error.message || 'Internal Server Error',
+        code: error.code || 'INTERNAL_ERROR'
+      },
+      { status: error.status || 500 }
     );
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
+    const cookieStore = cookies();
+    const token = cookieStore.get('admin_token');
+
+    if (!token) {
+      return NextResponse.json(
+        { message: 'Unauthorized', code: 'TOKEN_MISSING' },
+        { status: 401 }
+      );
+    }
+
     const { id, status } = await request.json();
     
-    // In a real app, you would:
-    // 1. Validate the data
-    // 2. Update the product in your database
-    // 3. Return the updated product
+    if (!id || !status) {
+      return NextResponse.json(
+        { message: 'Product ID and status are required', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      );
+    }
+
+    // Use the admin endpoint for updating product status
+    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${id}/status`;
+    console.log(`Updating product ${id} status to ${status} with URL:`, url);
     
+    const response = await makeRequest(url, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token.value}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      // Handle token expiration
+      if (response.status === 401 && (
+        errorData?.code === 'TOKEN_EXPIRED' ||
+        errorData?.message?.toLowerCase().includes('expired') ||
+        errorData?.message?.toLowerCase().includes('invalid token')
+      )) {
+        return NextResponse.json(
+          { message: 'Token has expired', code: 'TOKEN_EXPIRED' },
+          { status: 401 }
+        );
+      }
+
+      if (response.status === 404) {
+        return NextResponse.json(
+          { message: 'Product not found', code: 'NOT_FOUND' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json(
+        { 
+          message: errorData?.message || 'Failed to update product status',
+          code: errorData?.code || 'API_ERROR'
+        },
+        { status: response.status }
+      );
+    }
+
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Error updating product status:', error);
+    return NextResponse.json(
+      { 
+        message: error.message || 'Internal Server Error',
+        code: error.code || 'INTERNAL_ERROR'
+      },
+      { status: error.status || 500 }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const cookieStore = cookies();
+    const token = cookieStore.get('admin_token');
+
+    if (!token) {
+      return NextResponse.json(
+        { message: 'Unauthorized', code: 'TOKEN_MISSING' },
+        { status: 401 }
+      );
+    }
+
+    // Get the product ID from the URL
+    const { searchParams } = new URL(request.url);
+    const productId = searchParams.get('id');
+
+    if (!productId) {
+      return NextResponse.json(
+        { message: 'Product ID is required', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      );
+    }
+
+    const productData = await request.json();
+    
+    // Validate required fields
+    if (!productData.name) {
+      return NextResponse.json(
+        { message: 'Name is required', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      );
+    }
+
+    // Handle categoryId as required by the backend
+    if (productData.categoryId) {
+      // Check if we're using the fallback category
+      if (productData.categoryId === 'default-category') {
+        console.log('Using fallback category ID for update');
+        
+        // Try to create a default category if needed
+        try {
+          const createCategoryResponse = await makeRequest(
+            `${PRODUCT_SERVICE_URL}/api/v1/admin/categories`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token.value}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                name: 'Default Category',
+                description: 'Automatically created default category'
+              }),
+            }
+          );
+          
+          if (createCategoryResponse.ok) {
+            const categoryData = await createCategoryResponse.json();
+            productData.categoryId = categoryData.id;
+            console.log('Created default category with ID:', categoryData.id);
+          }
+        } catch (error) {
+          console.error('Failed to create default category:', error);
+          // Continue with the fallback ID
+        }
+      } else {
+        console.log('Using provided categoryId for update:', productData.categoryId);
+      }
+    } else {
+      console.log('No categoryId provided for update');
+    }
+
+    // Use the admin endpoint for updating products
+    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${productId}`;
+    console.log('Updating product with URL:', url);
+    console.log('Product data:', productData);
+    
+    const response = await makeRequest(url, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token.value}`,
+      },
+      body: JSON.stringify(productData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      // Handle token expiration
+      if (response.status === 401 && (
+        errorData?.code === 'TOKEN_EXPIRED' ||
+        errorData?.message?.toLowerCase().includes('expired') ||
+        errorData?.message?.toLowerCase().includes('invalid token')
+      )) {
+        return NextResponse.json(
+          { message: 'Token has expired', code: 'TOKEN_EXPIRED' },
+          { status: 401 }
+        );
+      }
+
+      if (response.status === 404) {
+        return NextResponse.json(
+          { message: 'Product not found', code: 'NOT_FOUND' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json(
+        { 
+          message: errorData?.message || 'Failed to update product',
+          code: errorData?.code || 'API_ERROR'
+        },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error: any) {
     console.error('Error updating product:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
+      { 
+        message: error.message || 'Internal Server Error',
+        code: error.code || 'INTERNAL_ERROR'
+      },
+      { status: error.status || 500 }
     );
   }
 } 

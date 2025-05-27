@@ -12,8 +12,13 @@ export function useToast() {
     showToast(message, 'error');
   }, [showToast]);
 
+  const info = useCallback((message: string) => {
+    showToast(message, 'info');
+  }, [showToast]);
+
   return {
     success,
     error,
+    info,
   };
 } 

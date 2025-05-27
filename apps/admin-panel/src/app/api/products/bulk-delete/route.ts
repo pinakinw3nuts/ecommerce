@@ -1,22 +1,5 @@
 import { NextResponse } from 'next/server';
-
-// Mock data - will be replaced with database calls
-const mockProducts = [
-  {
-    id: 'prod_1',
-    name: 'Classic White T-Shirt',
-    description: 'A comfortable white t-shirt made from 100% cotton.',
-    price: 29.99,
-    stock: 100,
-    image: '/images/products/tshirt.jpg',
-    isPublished: true,
-    category: 'Clothing',
-    sku: 'WT-CLS-M',
-    createdAt: '2024-02-20T10:00:00Z',
-    updatedAt: '2024-02-20T10:00:00Z',
-  },
-  // Add more mock products as needed
-];
+import { bulkDeleteProducts } from '@/services/products';
 
 export async function POST(request: Request) {
   try {
@@ -29,21 +12,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // In a real app, this would be a database transaction
-    const deletedIds = [];
-    for (const id of productIds) {
-      const index = mockProducts.findIndex(p => p.id === id);
-      if (index !== -1) {
-        mockProducts.splice(index, 1);
-        deletedIds.push(id);
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      deletedCount: deletedIds.length,
-      deletedIds,
-    });
+    await bulkDeleteProducts(productIds);
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error bulk deleting products:', error);
     return NextResponse.json(

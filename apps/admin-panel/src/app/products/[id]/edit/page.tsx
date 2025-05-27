@@ -26,7 +26,24 @@ export default function EditProductPage({ params }: EditProductPageProps) {
           throw new Error('Failed to fetch product');
         }
         const data = await response.json();
-        setProduct(data);
+        console.log('Product data received:', data);
+        
+        // Transform the product data to match the form's expected format
+        const transformedProduct = {
+          ...data,
+          // If variants exist, use the first variant's SKU and stock
+          sku: data.variants && data.variants.length > 0 ? data.variants[0].sku : data.sku || '',
+          stock: data.variants && data.variants.length > 0 ? data.variants[0].stock : data.stock || 0,
+          // Use categoryId directly or extract it from category object
+          categoryId: data.categoryId || (data.category ? data.category.id : ''),
+          // Ensure image is properly mapped
+          image: data.mediaUrl || data.image || '',
+          // Map featured status
+          isFeatured: data.isFeatured || false,
+        };
+        
+        console.log('Transformed product data:', transformedProduct);
+        setProduct(transformedProduct);
       } catch (error) {
         console.error('Error fetching product:', error);
         setError('Failed to load product details');
@@ -39,6 +56,8 @@ export default function EditProductPage({ params }: EditProductPageProps) {
   }, [params.id]);
 
   const handleUpdateProduct = async (data: any) => {
+    console.log('Submitting product update:', data);
+    
     const response = await fetch(`/api/products/${params.id}`, {
       method: 'PUT',
       headers: {
@@ -48,7 +67,9 @@ export default function EditProductPage({ params }: EditProductPageProps) {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to update product');
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Error updating product:', errorData);
+      throw new Error(errorData.message || 'Failed to update product');
     }
 
     router.push('/products');
