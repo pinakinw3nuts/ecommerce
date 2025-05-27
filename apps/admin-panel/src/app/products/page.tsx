@@ -21,6 +21,7 @@ import {
 import Table from '@/components/Table';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
+import { useCategories } from '@/hooks/useCategories';
 import { TableInstance } from '@/components/Table';
 import { formatDate } from '@/lib/utils';
 import { Pagination } from '@/components/ui/Pagination';
@@ -36,7 +37,7 @@ interface PaginationInfo {
   hasPrevious: boolean;
 }
 
-const filterConfig: FilterConfig = {
+const defaultFilterConfig: FilterConfig = {
   search: {
     type: 'text',
     placeholder: 'Search products by name or SKU...',
@@ -44,14 +45,7 @@ const filterConfig: FilterConfig = {
   categories: {
     type: 'select',
     placeholder: 'Filter by category',
-    options: [
-      { value: 'electronics', label: 'Electronics' },
-      { value: 'clothing', label: 'Clothing' },
-      { value: 'books', label: 'Books' },
-      { value: 'home', label: 'Home' },
-      { value: 'sports', label: 'Sports' },
-      { value: 'toys', label: 'Toys' },
-    ],
+    options: [],
   },
   statuses: {
     type: 'select',
@@ -126,6 +120,22 @@ export default function ProductsPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isLoadingOperation, setIsLoadingOperation] = useState(false);
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
+  const [filterConfig, setFilterConfig] = useState<FilterConfig>(defaultFilterConfig);
+  
+  // Fetch categories for the dropdown
+  const { categories, isLoading: loadingCategories } = useCategories();
+  
+  // Update filter config when categories are loaded
+  useEffect(() => {
+    setFilterConfig(prevConfig => ({
+      ...prevConfig,
+      categories: {
+        ...prevConfig.categories,
+        options: categories,
+        isLoading: loadingCategories
+      }
+    }));
+  }, [categories, loadingCategories]);
 
   // Add debouncing for filters
   useEffect(() => {
@@ -135,12 +145,6 @@ export default function ProductsPage() {
 
     return () => clearTimeout(timer);
   }, [filters]);
-
-  const resetFilters = useCallback(() => {
-    setFilters(initialFilters);
-    setPage(1);
-    setSelectedProducts([]);
-  }, []);
 
   const getApiUrl = useCallback(() => {
     const params = new URLSearchParams({
@@ -159,8 +163,18 @@ export default function ProductsPage() {
     }
     
     if ((debouncedFilters.categories as string[])?.length) {
-      params.append('categories', (debouncedFilters.categories as string[]).join(','));
-      console.log(`Adding categories filter: ${(debouncedFilters.categories as string[]).join(',')}`);
+      // Get the selected category IDs
+      const categoryIds = debouncedFilters.categories as string[];
+      
+      // For backward compatibility, use 'categoryId' for single selection
+      // and 'categories' for multiple selections
+      if (categoryIds.length === 1) {
+        params.append('categoryId', categoryIds[0]);
+        console.log(`Adding single category filter: ${categoryIds[0]}`);
+      } else {
+        params.append('categories', categoryIds.join(','));
+        console.log(`Adding multiple categories filter: ${categoryIds.join(',')}`);
+      }
     }
     
     if ((debouncedFilters.statuses as string[])?.length) {
@@ -187,8 +201,91 @@ export default function ProductsPage() {
     fetcher
   );
 
+  const resetFilters = useCallback(() => {
+    console.log('Resetting all filters');
+    setFilters(initialFilters);
+    setPage(1);
+    setSelectedProducts([]);
+    // Force a data refresh
+    mutate();
+  }, [mutate]);
+
+  // Add effect for client-side sorting
+  useEffect(() => {
+    // Only apply client-side sorting for special columns when data is available
+    if (data?.products && data.products.length > 0 && 
+        (sortBy === 'isFeatured' || sortBy === 'isPublished')) {
+      console.log(`Applying client-side sorting for ${sortBy}`);
+      
+      const sortedProducts = [...data.products].sort((a, b) => {
+        if (sortBy === 'isFeatured') {
+          // For boolean values, true comes before false in ascending order
+          const aValue = a.isFeatured ? 1 : 0;
+          const bValue = b.isFeatured ? 1 : 0;
+          return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+        } else if (sortBy === 'isPublished') {
+          const aValue = a.isPublished ? 1 : 0;
+          const bValue = b.isPublished ? 1 : 0;
+          return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+        return 0;
+      });
+      
+      // Update the data with sorted products without triggering a refetch
+      mutate({
+        products: sortedProducts,
+        pagination: data.pagination
+      }, false);
+    }
+  }, [data, sortBy, sortOrder]);
+
   const handleSort = (column: string) => {
-    if (sortBy === column) {
+    // Only allow sorting by fields supported by the backend API
+    const allowedSortFields = ['name', 'price', 'createdAt'];
+    
+    // Handle special case for client-side sorting
+    if (column === 'isFeatured' || column === 'isPublished') {
+      console.log(`Sorting by ${column} using client-side sorting`);
+      
+      // Toggle sort order if already sorting by this column
+      if (sortBy === column) {
+        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortBy(column);
+        setSortOrder('asc');
+      }
+      
+      // Apply client-side sorting if we have data
+      if (data?.products && data.products.length > 0) {
+        const sortedProducts = [...data.products].sort((a, b) => {
+          if (column === 'isFeatured') {
+            // For boolean values, true comes before false in ascending order
+            const aValue = a.isFeatured ? 1 : 0;
+            const bValue = b.isFeatured ? 1 : 0;
+            return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+          } else if (column === 'isPublished') {
+            const aValue = a.isPublished ? 1 : 0;
+            const bValue = b.isPublished ? 1 : 0;
+            return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+          }
+          return 0;
+        });
+        
+        // Update the data with sorted products
+        mutate({
+          products: sortedProducts,
+          pagination: data.pagination
+        }, false); // false means don't revalidate with the server
+      }
+    } else if (!allowedSortFields.includes(column)) {
+      console.log(`Sorting by ${column} is not supported by the API. Using createdAt instead.`);
+      if (sortBy === 'createdAt') {
+        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortBy('createdAt');
+        setSortOrder('asc');
+      }
+    } else if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
       setSortBy(column);

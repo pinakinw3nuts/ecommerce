@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Filter as FilterIcon, Calendar, X } from 'lucide-react';
+import { Search, Filter as FilterIcon, Calendar, X, Check, ChevronDown } from 'lucide-react';
 import { Button } from './Button';
 
 export interface FilterOption {
@@ -22,6 +22,7 @@ export interface FilterConfig {
     type: 'text' | 'select' | 'daterange' | 'valueRange';
     placeholder: string;
     options?: Array<{ value: string; label: string }>;
+    isLoading?: boolean;
   };
 }
 
@@ -39,13 +40,39 @@ export interface CommonFiltersProps {
 export function CommonFilters({ config, filters, onChange, onReset }: CommonFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('top');
+  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
+  const [dropdownSearches, setDropdownSearches] = useState<Record<string, string>>({});
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const selectDropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Always position the dropdown at the top
   useEffect(() => {
     setDropdownPosition('top');
   }, [isOpen]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      Object.entries(selectDropdownRefs.current).forEach(([key, ref]) => {
+        if (ref && !ref.contains(event.target as Node)) {
+          setOpenDropdowns(prev => ({...prev, [key]: false}));
+        }
+      });
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const toggleDropdown = (key: string) => {
+    setOpenDropdowns(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   const handleChange = (key: string, value: string | string[] | DateRangeFilter | RangeFilter) => {
     onChange({
@@ -64,6 +91,19 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
       ? currentValues.filter(v => v !== value)
       : [...currentValues, value];
     handleChange(groupKey, newValues);
+  };
+
+  const handleSelectAll = (groupKey: string, options: FilterOption[]) => {
+    const allValues = options.map(option => option.value);
+    const currentValues = filters[groupKey] as string[];
+    
+    // If all are already selected, deselect all
+    if (currentValues && currentValues.length === allValues.length) {
+      handleChange(groupKey, []);
+    } else {
+      // Otherwise select all
+      handleChange(groupKey, allValues);
+    }
   };
 
   const handleRemoveFilter = (groupKey: string, value: string) => {
@@ -85,6 +125,23 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
     });
   };
 
+  const handleDropdownSearch = (key: string, value: string) => {
+    setDropdownSearches(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  // Filter options based on search
+  const getFilteredOptions = (key: string, options: FilterOption[]) => {
+    const searchTerm = dropdownSearches[key]?.toLowerCase() || '';
+    if (!searchTerm) return options;
+    
+    return options.filter(option => 
+      option.label.toLowerCase().includes(searchTerm)
+    );
+  };
+
   // Get active filters for display
   const getActiveFilters = () => {
     const active: { group: string; value: string; label: string }[] = [];
@@ -100,8 +157,10 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
         values.forEach(value => {
           const option = field.options?.find(opt => opt.value === value);
           if (option) {
+            // Use a more user-friendly group name
+            const groupName = field.placeholder || key;
             active.push({
-              group: key,
+              group: groupName,
               value: value,
               label: option.label
             });
@@ -125,6 +184,11 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
   }, 0);
 
   const activeFilters = getActiveFilters();
+
+  // Function to set dropdown ref
+  const setDropdownRef = (key: string) => (el: HTMLDivElement | null) => {
+    selectDropdownRefs.current[key] = el;
+  };
 
   return (
     <div className="space-y-4">
@@ -182,26 +246,108 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                   return (
                     <div key={key} className="space-y-2 border-t border-gray-100 pt-4">
                       <h4 className="text-sm font-medium text-gray-700">{field.placeholder}</h4>
-                      {field.type === 'select' && field.options && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {field.options.map(option => {
-                            const isSelected = Array.isArray(filters[key]) && 
-                              (filters[key] as string[]).includes(option.value);
-                            
-                            return (
+                      {field.type === 'select' && (
+                        <div className="relative mt-2" ref={setDropdownRef(key)}>
+                          {field.isLoading ? (
+                            <div className="flex items-center justify-center w-full py-2 text-sm text-gray-500">
+                              Loading options...
+                            </div>
+                          ) : (
+                            <>
                               <button
-                                key={option.value}
-                                onClick={() => handleOptionToggle(key, option.value)}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                                  isSelected 
-                                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
+                                onClick={() => toggleDropdown(key)}
+                                className="w-full flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
-                                {option.label}
+                                <span>
+                                  {Array.isArray(filters[key]) && (filters[key] as string[]).length > 0
+                                    ? `${(filters[key] as string[]).length} selected`
+                                    : `Select ${field.placeholder}`}
+                                </span>
+                                <ChevronDown className="h-4 w-4 text-gray-500" />
                               </button>
-                            );
-                          })}
+                              
+                              {openDropdowns[key] && (
+                                <div className="absolute z-10 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg max-h-60 overflow-auto">
+                                  {field.options && field.options.length > 0 ? (
+                                    <div>
+                                      {/* Search input */}
+                                      <div className="sticky top-0 bg-white border-b border-gray-100 p-2">
+                                        <div className="relative">
+                                          <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" />
+                                          <input
+                                            type="text"
+                                            value={dropdownSearches[key] || ''}
+                                            onChange={(e) => handleDropdownSearch(key, e.target.value)}
+                                            placeholder="Search..."
+                                            className="w-full rounded-md border border-gray-200 bg-white pl-7 pr-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Select All option */}
+                                      <div
+                                        className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
+                                        onClick={() => handleSelectAll(key, field.options || [])}
+                                      >
+                                        <div className={`flex h-4 w-4 items-center justify-center rounded border ${
+                                          Array.isArray(filters[key]) && 
+                                          field.options && 
+                                          (filters[key] as string[]).length === field.options.length
+                                            ? 'bg-blue-500 border-blue-500' 
+                                            : 'border-gray-300'
+                                        } mr-2`}>
+                                          {Array.isArray(filters[key]) && 
+                                           field.options && 
+                                           (filters[key] as string[]).length === field.options.length && 
+                                            <Check className="h-3 w-3 text-white" />
+                                          }
+                                        </div>
+                                        <span className="text-sm font-medium text-gray-700">Select All</span>
+                                      </div>
+                                      
+                                      {/* Individual options */}
+                                      <div className="py-1">
+                                        {getFilteredOptions(key, field.options).map(option => {
+                                          const isSelected = Array.isArray(filters[key]) && 
+                                            (filters[key] as string[]).includes(option.value);
+                                          
+                                          return (
+                                            <div
+                                              key={option.value}
+                                              className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                                              onClick={() => {
+                                                handleOptionToggle(key, option.value);
+                                                // Keep dropdown open for multi-select
+                                              }}
+                                            >
+                                              <div className={`flex h-4 w-4 items-center justify-center rounded border ${
+                                                isSelected 
+                                                  ? 'bg-blue-500 border-blue-500' 
+                                                  : 'border-gray-300'
+                                              } mr-2`}>
+                                                {isSelected && <Check className="h-3 w-3 text-white" />}
+                                              </div>
+                                              <span className="text-sm text-gray-700">{option.label}</span>
+                                            </div>
+                                          );
+                                        })}
+                                        
+                                        {/* No results message */}
+                                        {dropdownSearches[key] && getFilteredOptions(key, field.options).length === 0 && (
+                                          <div className="px-3 py-2 text-sm text-gray-500">
+                                            No results match "{dropdownSearches[key]}"
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="px-3 py-2 text-sm text-gray-500">No options available</div>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       )}
                       {field.type === 'daterange' && (
@@ -296,7 +442,7 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
             >
               <span className="text-blue-600">{group}: {label}</span>
               <button
-                onClick={() => handleRemoveFilter(group.toLowerCase().replace('s', ''), value)}
+                onClick={() => handleRemoveFilter(group.toLowerCase().replace(/filter by |s$/g, ''), value)}
                 className="rounded-sm hover:bg-blue-100 -mr-1"
               >
                 <X className="h-4 w-4" />

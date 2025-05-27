@@ -56,13 +56,36 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const pageSize = parseInt(searchParams.get('pageSize') || '10', 10);
     
-    // Parse sorting parameters
-    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    // Parse and validate sorting parameters
+    const requestedSortBy = searchParams.get('sortBy') || 'createdAt';
+    const allowedSortFields = ['name', 'price', 'createdAt'];
+    const sortBy = allowedSortFields.includes(requestedSortBy) ? requestedSortBy : 'createdAt';
+    
+    if (sortBy !== requestedSortBy) {
+      console.warn(`Requested sort field '${requestedSortBy}' is not supported. Using '${sortBy}' instead.`);
+    }
+    
     const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
     
     // Parse filtering parameters
     const search = searchParams.get('search') || '';
-    const categories = searchParams.get('categories')?.split(',') || [];
+    
+    // Handle both single and multiple category selections
+    let categories: string[] = [];
+    const categoryId = searchParams.get('categoryId');
+    const categoryIds = searchParams.get('categoryIds')?.split(',');
+    
+    if (categoryId) {
+      // Single category selection
+      categories = [categoryId];
+    } else if (categoryIds && categoryIds.length > 0) {
+      // Multiple category selection
+      categories = categoryIds;
+    } else {
+      // Check for legacy 'categories' parameter
+      categories = searchParams.get('categories')?.split(',') || [];
+    }
+    
     const statuses = searchParams.get('statuses')?.split(',') || [];
     const priceMin = searchParams.get('priceMin') ? parseFloat(searchParams.get('priceMin')!) : undefined;
     const priceMax = searchParams.get('priceMax') ? parseFloat(searchParams.get('priceMax')!) : undefined;

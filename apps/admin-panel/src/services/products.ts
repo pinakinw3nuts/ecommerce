@@ -212,11 +212,19 @@ export async function getProducts(params: ProductQueryParams = {}): Promise<Prod
     statuses = [],
     priceMin,
     priceMax,
-    sortBy = 'createdAt',
+    sortBy: requestedSortBy = 'createdAt',
     sortOrder = 'desc',
   } = params;
 
   try {
+    // Validate sortBy parameter - only allow fields supported by the backend
+    const allowedSortFields = ['name', 'price', 'createdAt'];
+    const sortBy = allowedSortFields.includes(requestedSortBy) ? requestedSortBy : 'createdAt';
+    
+    if (sortBy !== requestedSortBy) {
+      console.warn(`Requested sort field '${requestedSortBy}' is not supported. Using '${sortBy}' instead.`);
+    }
+    
     // Debug logging for input parameters
     console.log('[API] GET /api/products - Query params:', {
       page,
@@ -260,10 +268,15 @@ export async function getProducts(params: ProductQueryParams = {}): Promise<Prod
     }
     
     if (categories && Array.isArray(categories) && categories.length > 0) {
-      console.log('Adding categories filter:', categories[0]);
-      
-      // Send the category ID or name as is - the backend will handle both formats
-      url.searchParams.append('categoryId', categories[0]);
+      // Handle both single and multiple category selections
+      if (categories.length === 1) {
+        console.log('Adding single category filter:', categories[0]);
+        url.searchParams.append('categoryId', categories[0]);
+      } else {
+        console.log('Adding multiple categories filter:', categories);
+        // Join all category IDs with commas for the backend
+        url.searchParams.append('categoryIds', categories.join(','));
+      }
     } else {
       console.log('No categories filter provided');
     }
