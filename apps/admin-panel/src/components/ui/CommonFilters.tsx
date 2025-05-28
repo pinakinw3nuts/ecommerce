@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Filter as FilterIcon, Calendar, X, Check, ChevronDown } from 'lucide-react';
+import { Search, Filter as FilterIcon, Calendar, X, Check, ChevronDown, Star, StarOff, Eye, EyeOff } from 'lucide-react';
 import { Button } from './Button';
 
 export interface FilterOption {
@@ -19,7 +19,7 @@ export interface DateRangeFilter {
 
 export interface FilterConfig {
   [key: string]: {
-    type: 'text' | 'select' | 'daterange' | 'valueRange';
+    type: 'text' | 'select' | 'daterange' | 'valueRange' | 'boolean';
     placeholder: string;
     options?: Array<{ value: string; label: string }>;
     isLoading?: boolean;
@@ -27,7 +27,14 @@ export interface FilterConfig {
 }
 
 export interface FilterState {
-  [key: string]: string | string[] | DateRangeFilter | RangeFilter;
+  [key: string]: string | string[] | DateRangeFilter | RangeFilter | undefined;
+  search?: string;
+  categories?: string[];
+  statuses?: string[];
+  isFeatured?: string[];
+  isPublished?: string[];
+  valueRange?: RangeFilter;
+  dateRange?: DateRangeFilter;
 }
 
 export interface CommonFiltersProps {
@@ -106,21 +113,38 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
     }
   };
 
-  const handleRemoveFilter = (groupKey: string, value: string) => {
-    const currentValues = (filters[groupKey] as string[]) || [];
-    handleChange(groupKey, currentValues.filter(v => v !== value));
+  const handleRemoveFilter = (filterKey: string, value: string) => {
+    // If we already have the direct key, use it
+    if (config[filterKey]) {
+      const currentValues = (filters[filterKey] as string[]) || [];
+      handleChange(filterKey, currentValues.filter(v => v !== value));
+      return;
+    }
+    
+    // Otherwise try to find the key by matching the formatted name
+    const key = Object.keys(config).find(k => formatFilterName(k) === filterKey);
+    
+    if (key) {
+      const currentValues = (filters[key] as string[]) || [];
+      handleChange(key, currentValues.filter(v => v !== value));
+    } else {
+      // Fallback to try extracting the key from the displayed name
+      const fallbackKey = filterKey.toLowerCase().replace(/filter by |s$/g, '');
+      const currentValues = (filters[fallbackKey] as string[]) || [];
+      handleChange(fallbackKey, currentValues.filter(v => v !== value));
+    }
   };
 
-  const handleValueRangeChange = (field: 'min' | 'max', value: string) => {
-    handleChange('valueRange', {
-      ...(filters.valueRange as RangeFilter),
+  const handleValueRangeChange = (key: string, field: 'min' | 'max', value: string) => {
+    handleChange(key, {
+      ...(filters[key] as RangeFilter),
       [field]: value,
     });
   };
 
-  const handleDateRangeChange = (field: 'from' | 'to', value: string) => {
-    handleChange('dateRange', {
-      ...(filters.dateRange as DateRangeFilter),
+  const handleDateRangeChange = (key: string, field: 'from' | 'to', value: string) => {
+    handleChange(key, {
+      ...(filters[key] as DateRangeFilter),
       [field]: value,
     });
   };
@@ -142,46 +166,104 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
     );
   };
 
+  // Count active filters dynamically
+  const activeFilterCount = Object.entries(filters).reduce((count, [key, value]) => {
+    // Skip search as it's displayed separately in the search box
+    if (key === 'search') return count;
+    
+    // Count array filters with items
+    if (Array.isArray(value) && value.length > 0) {
+      return count + 1; // Count each filter type once, not each selected value
+    }
+    
+    // Count object filters (like range filters) that have at least one value
+    if (value && typeof value === 'object') {
+      const hasValues = Object.values(value as object).some(v => 
+        v !== null && v !== undefined && v !== ''
+      );
+      return count + (hasValues ? 1 : 0);
+    }
+    
+    // Count other non-empty values
+    return count + (value ? 1 : 0);
+  }, 0);
+
+  // Format user-friendly filter names for display
+  const formatFilterName = (key: string): string => {
+    // Get the name from the config if available, otherwise format the key name
+    return config[key]?.placeholder || key.split(/(?=[A-Z])/).join(' ').replace(/^\w/, c => c.toUpperCase());
+  };
+
   // Get active filters for display
   const getActiveFilters = () => {
-    const active: { group: string; value: string; label: string }[] = [];
+    const active: { group: string; value: string; label: string; key: string }[] = [];
     
-    Object.entries(config).forEach(([key, field]) => {
-      if (field.type === 'text') {
-        // Skip text type filters (search)
+    // Process all filter types
+    Object.entries(filters).forEach(([key, value]) => {
+      // Skip search field as it's displayed in the search box
+      if (key === 'search') {
         return;
       }
       
-      const values = filters[key];
-      if (Array.isArray(values) && values.length > 0) {
-        values.forEach(value => {
-          const option = field.options?.find(opt => opt.value === value);
+      const field = config[key];
+      if (!field) return; // Skip if not in config
+      
+      // Handle select/array type filters
+      if (Array.isArray(value) && value.length > 0) {
+        value.forEach(val => {
+          const option = field.options?.find(opt => opt.value === val);
           if (option) {
-            // Use a more user-friendly group name
-            const groupName = field.placeholder || key;
             active.push({
-              group: groupName,
-              value: value,
-              label: option.label
+              group: formatFilterName(key),
+              value: val,
+              label: option.label,
+              key
             });
           }
         });
+      }
+      
+      // Handle value range filters
+      else if (field.type === 'valueRange' && typeof value === 'object') {
+        const range = value as RangeFilter;
+        if (range.min || range.max) {
+          const label = [
+            range.min ? `$${range.min}` : '',
+            range.min && range.max ? ' - ' : '',
+            range.max ? `$${range.max}` : ''
+          ].join('');
+          
+          active.push({
+            group: field.placeholder || 'Price Range',
+            value: 'range',
+            label,
+            key
+          });
+        }
+      }
+      
+      // Handle date range filters
+      else if (field.type === 'daterange' && typeof value === 'object') {
+        const range = value as DateRangeFilter;
+        if (range.from || range.to) {
+          const label = [
+            range.from ? new Date(range.from).toLocaleDateString() : '',
+            range.from && range.to ? ' - ' : '',
+            range.to ? new Date(range.to).toLocaleDateString() : ''
+          ].join('');
+          
+          active.push({
+            group: field.placeholder || 'Date Range',
+            value: 'range',
+            label,
+            key
+          });
+        }
       }
     });
 
     return active;
   };
-
-  // Count active filters
-  const activeFilterCount = Object.entries(filters).reduce((count, [key, value]) => {
-    if (key === 'search') return count;
-    if (Array.isArray(value) && value.length > 0) return count + value.length;
-    if (typeof value === 'object') {
-      const rangeValues = Object.values(value as object).filter(v => v !== '');
-      return count + (rangeValues.length > 0 ? 1 : 0);
-    }
-    return count;
-  }, 0);
 
   const activeFilters = getActiveFilters();
 
@@ -246,6 +328,55 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                   return (
                     <div key={key} className="space-y-2 border-t border-gray-100 pt-4">
                       <h4 className="text-sm font-medium text-gray-700">{field.placeholder}</h4>
+                      
+                      {/* Boolean filter (buttons) */}
+                      {field.type === 'boolean' && field.options && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {field.options.map(option => {
+                            const isSelected = Array.isArray(filters[key]) && 
+                              (filters[key] as string[]).includes(option.value);
+                            
+                            // Determine appropriate icon based on option value and filter key
+                            let Icon;
+                            if (key === 'isFeatured') {
+                              Icon = option.value === 'true' ? Star : StarOff;
+                            } else if (key === 'isPublished') {
+                              Icon = option.value === 'true' ? Eye : EyeOff;
+                            } else {
+                              Icon = option.value === 'true' ? Check : X;
+                            }
+                            
+                            return (
+                              <button
+                                key={option.value}
+                                onClick={() => {
+                                  // For boolean filters, we want to make it behave like a radio button
+                                  // So we set it to the value or clear it if already selected
+                                  const currentValues = (filters[key] as string[]) || [];
+                                  if (currentValues.includes(option.value)) {
+                                    // If already selected, clear the filter
+                                    handleChange(key, []);
+                                  } else {
+                                    // Otherwise, set just this value (replace any existing)
+                                    handleChange(key, [option.value]);
+                                  }
+                                }}
+                                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-1.5
+                                  ${isSelected 
+                                    ? option.value === 'true' 
+                                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                                      : 'bg-gray-700 text-white hover:bg-gray-800'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  }`}
+                              >
+                                <Icon className="h-4 w-4" />
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      
                       {field.type === 'select' && (
                         <div className="relative mt-2" ref={setDropdownRef(key)}>
                           {field.isLoading ? (
@@ -357,7 +488,7 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                             <input
                               type="date"
                               value={(filters[key] as DateRangeFilter)?.from || ''}
-                              onChange={(e) => handleDateRangeChange('from', e.target.value)}
+                              onChange={(e) => handleDateRangeChange(key, 'from', e.target.value)}
                               className="w-full rounded-md border border-gray-200 py-1.5 px-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                           </div>
@@ -366,8 +497,30 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                             <input
                               type="date"
                               value={(filters[key] as DateRangeFilter)?.to || ''}
-                              onChange={(e) => handleDateRangeChange('to', e.target.value)}
+                              onChange={(e) => handleDateRangeChange(key, 'to', e.target.value)}
                               className="w-full rounded-md border border-gray-200 py-1.5 px-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {field.type === 'valueRange' && (
+                        <div className="grid grid-cols-2 gap-3 mt-2">
+                          <div className="relative">
+                            <input
+                              type="number"
+                              placeholder="Min"
+                              value={(filters[key] as RangeFilter)?.min || ''}
+                              onChange={(e) => handleValueRangeChange(key, 'min', e.target.value)}
+                              className="w-full rounded-md border border-gray-200 py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              placeholder="Max"
+                              value={(filters[key] as RangeFilter)?.max || ''}
+                              onChange={(e) => handleValueRangeChange(key, 'max', e.target.value)}
+                              className="w-full rounded-md border border-gray-200 py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                           </div>
                         </div>
@@ -375,35 +528,6 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                     </div>
                   );
                 })}
-
-                {/* Value Range Filter */}
-                {Object.entries(config).find(([_, field]) => field.type === 'valueRange') && (
-                  <div className="space-y-2 border-t border-gray-100 pt-4">
-                    <h4 className="text-sm font-medium text-gray-700">
-                      {Object.entries(config).find(([_, field]) => field.type === 'valueRange')?.[1]?.placeholder || 'Price Range'}
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3 mt-2">
-                      <div className="relative">
-                        <input
-                          type="number"
-                          placeholder="Min"
-                          value={(filters.valueRange as RangeFilter)?.min || ''}
-                          onChange={(e) => handleValueRangeChange('min', e.target.value)}
-                          className="w-full rounded-md border border-gray-200 py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          placeholder="Max"
-                          value={(filters.valueRange as RangeFilter)?.max || ''}
-                          onChange={(e) => handleValueRangeChange('max', e.target.value)}
-                          className="w-full rounded-md border border-gray-200 py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Action Buttons */}
                 <div className="flex justify-between gap-3 pt-4 border-t border-gray-100">
@@ -435,14 +559,23 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
       {/* Active Filter Tags */}
       {activeFilters.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          {activeFilters.map(({ group, value, label }) => (
+          {activeFilters.map(({ group, value, label, key }) => (
             <div
-              key={`${group}-${value}`}
+              key={`${key}-${value}-${label}`}
               className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600"
             >
               <span className="text-blue-600">{group}: {label}</span>
               <button
-                onClick={() => handleRemoveFilter(group.toLowerCase().replace(/filter by |s$/g, ''), value)}
+                onClick={() => {
+                  const field = config[key];
+                  if (field && (field.type === 'valueRange' || field.type === 'daterange')) {
+                    // For range types, clear the whole range
+                    handleChange(key, field.type === 'valueRange' ? { min: '', max: '' } : { from: '', to: '' });
+                  } else {
+                    // For array types, remove the specific value
+                    handleRemoveFilter(key, value);
+                  }
+                }}
                 className="rounded-sm hover:bg-blue-100 -mr-1"
               >
                 <X className="h-4 w-4" />

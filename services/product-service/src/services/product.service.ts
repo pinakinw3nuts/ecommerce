@@ -10,6 +10,7 @@ import { MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
 export interface ProductFilterOptions {
   search?: string;
   categoryId?: string;
+  categoryIds?: string;
   minPrice?: number;
   maxPrice?: number;
   tagIds?: string[];
@@ -211,19 +212,19 @@ export class ProductService {
       // Calculate skip value for pagination
       const skip = (page - 1) * limit;
       
-      // For advanced search functionality, we'll use QueryBuilder
-      // First create a query to get the distinct product IDs
-      const productIdsQuery = this.productRepo.createQueryBuilder('product')
-        .select('product.id', 'id')
-        .distinct(true);
+      // Use direct SQL query approach to avoid TypeORM's complex query generation
+      const conditions = [];
+      const params: any[] = [];
+      let paramIndex = 1;
       
-      // Apply filters to the IDs query
+      // Log filters for debugging
       if (options?.filters) {
-        const { search, categoryId, minPrice, maxPrice, tagIds, isFeatured, isPublished } = options.filters;
+        const { search, categoryId, categoryIds, minPrice, maxPrice, tagIds, isFeatured, isPublished } = options.filters;
         
         console.log('Filter options received:', {
           search: search ? `"${search}"` : undefined,
           categoryId,
+          categoryIds,
           minPrice,
           maxPrice,
           tagIds,
@@ -231,7 +232,88 @@ export class ProductService {
           isPublished
         });
         
-        // Handle text search across multiple fields
+        // Get the effective category ID (use categoryIds if provided, otherwise use categoryId)
+        const effectiveCategoryId = categoryIds || categoryId;
+        
+        // Handle category filtering
+        if (effectiveCategoryId) {
+          console.log('Filtering by category (raw value):', effectiveCategoryId, 'type:', typeof effectiveCategoryId);
+          
+          try {
+            // Convert to array - handle both string and array inputs
+            let categoryIdArray: string[] = [];
+            
+            if (Array.isArray(effectiveCategoryId)) {
+              // Already an array
+              categoryIdArray = effectiveCategoryId;
+              console.log('Category ID is already an array:', categoryIdArray);
+            } else if (typeof effectiveCategoryId === 'string') {
+              // Check if it's a comma-separated string
+              categoryIdArray = effectiveCategoryId.split(',').map(id => id.trim()).filter(id => id);
+              console.log('Parsed category IDs from string:', categoryIdArray);
+            }
+            
+            if (categoryIdArray.length > 1) {
+              console.log('Filtering by multiple categories:', categoryIdArray);
+              
+              // Handle each category ID
+              const categoryConditions = [];
+              for (const catId of categoryIdArray) {
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(catId);
+                
+                if (isUuid) {
+                  // It's a UUID, use it directly
+                  categoryConditions.push(`"categoryId" = $${paramIndex}`);
+                  params.push(catId);
+                  paramIndex++;
+                } else {
+                  // Try to find the category by name or slug
+                  const category = await this.getCategoryByNameOrSlug(catId);
+                  if (category) {
+                    categoryConditions.push(`"categoryId" = $${paramIndex}`);
+                    params.push(category.id);
+                    paramIndex++;
+                  }
+                }
+              }
+              
+              if (categoryConditions.length > 0) {
+                // Use OR to include products matching any of the specified categories
+                conditions.push(`(${categoryConditions.join(' OR ')})`);
+              }
+            } else {
+              // Single category - existing logic
+              const singleCategoryId = categoryIdArray[0];
+              const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(singleCategoryId);
+              
+              if (isUuid) {
+                // Filter by category ID directly on the foreign key
+                console.log('Filtering by category ID');
+                conditions.push(`"categoryId" = $${paramIndex}`);
+                params.push(singleCategoryId);
+                paramIndex++;
+              } else {
+                // First try to find the category by name or slug
+                console.log('Looking up category by name or slug');
+                const category = await this.getCategoryByNameOrSlug(singleCategoryId);
+                
+                if (category) {
+                  console.log('Found category:', category.id, category.name);
+                  conditions.push(`"categoryId" = $${paramIndex}`);
+                  params.push(category.id);
+                  paramIndex++;
+                } else {
+                  // If we can't find the category, don't apply the filter
+                  console.log('Category not found, skipping filter');
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error applying category filter:', error);
+          }
+        }
+        
+        // Handle text search
         if (search) {
           // Log the search term for debugging
           console.log('Searching with term:', search);
@@ -239,151 +321,138 @@ export class ProductService {
           console.log('Search term length:', search.length);
           
           try {
-            // Use PostgreSQL full-text search
-            const searchTerm = search.trim().split(/\s+/).join(' & ') + ':*';
-            productIdsQuery.andWhere(
-              `to_tsvector('english', product.name || ' ' || COALESCE(product.description, '')) @@ to_tsquery('english', :search)`,
-              { search: searchTerm }
-            );
-          } catch (error: any) {
-            console.log('Full-text search failed, falling back to LIKE search:', error.message);
-            
-            // Fall back to case-insensitive LIKE search
-            productIdsQuery.andWhere(
-              '(LOWER(product.name) LIKE LOWER(:likeSearch) OR LOWER(product.description) LIKE LOWER(:likeSearch) OR LOWER(product.slug) LIKE LOWER(:likeSearch))',
-              { likeSearch: `%${search}%` }
-            );
-            
-            // Also try to match individual words for better results
-            const words = search.split(/\s+/).filter(word => word.length > 2);
-            if (words.length > 1) {
-              console.log('Searching with individual words:', words);
-              
-              words.forEach((word, index) => {
-                productIdsQuery.orWhere(
-                  `(LOWER(product.name) LIKE LOWER(:word${index}) OR LOWER(product.description) LIKE LOWER(:word${index}))`,
-                  { [`word${index}`]: `%${word}%` }
-                );
-              });
-            }
-          }
-        }
-        
-        // Join with category for filtering
-        if (categoryId) {
-          productIdsQuery.leftJoin('product.category', 'category');
-          console.log('Filtering by category:', categoryId);
-          
-          try {
-            // Log all categories for debugging
-            const allCategories = await this.categoryRepo.find();
-            console.log('All available categories:', allCategories.map(c => ({ id: c.id, name: c.name, slug: c.slug })));
-            
-            // Check if categoryId is a UUID (ID) or a string (name/slug)
-            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId);
-            
-            if (isUuid) {
-              // Filter by category ID
-              console.log('Filtering by category ID');
-              productIdsQuery.andWhere('category.id = :categoryId', { categoryId });
-            } else {
-              // First try to find the category by name or slug
-              console.log('Looking up category by name or slug');
-              const category = await this.getCategoryByNameOrSlug(categoryId);
-              
-              if (category) {
-                console.log('Found category:', category.id, category.name);
-                // Use the category ID for more accurate filtering
-                productIdsQuery.andWhere('category.id = :foundCategoryId', { foundCategoryId: category.id });
-              } else {
-                // Fallback to LIKE search if category not found
-                console.log('Category not found, using LIKE search');
-                try {
-                  productIdsQuery.andWhere('(LOWER(category.name) LIKE LOWER(:categoryName) OR LOWER(category.slug) LIKE LOWER(:categorySlug))', 
-                    { categoryName: `%${categoryId}%`, categorySlug: `%${categoryId}%` });
-                } catch (error) {
-                  console.error('Error applying LIKE filter:', error);
-                  // If all else fails, don't apply any category filter
-                  console.log('Skipping category filter due to error');
-                }
-              }
-            }
+            // Simple LIKE search for PostgreSQL
+            const searchTerm = `%${search}%`;
+            conditions.push(`(
+              LOWER("name") LIKE LOWER($${paramIndex}) OR 
+              LOWER("description") LIKE LOWER($${paramIndex}) OR 
+              LOWER("slug") LIKE LOWER($${paramIndex})
+            )`);
+            params.push(searchTerm);
+            paramIndex++;
           } catch (error) {
-            console.error('Error applying category filter:', error);
-            // Continue with execution even if category filter fails
+            console.error('Error applying search filter:', error);
           }
         }
         
         // Filter by price range
         if (minPrice !== undefined && maxPrice !== undefined) {
-          productIdsQuery.andWhere('product.price BETWEEN :minPrice AND :maxPrice', { minPrice, maxPrice });
+          conditions.push(`"price" BETWEEN $${paramIndex} AND $${paramIndex + 1}`);
+          params.push(minPrice, maxPrice);
+          paramIndex += 2;
         } else if (minPrice !== undefined) {
-          productIdsQuery.andWhere('product.price >= :minPrice', { minPrice });
+          conditions.push(`"price" >= $${paramIndex}`);
+          params.push(minPrice);
+          paramIndex++;
         } else if (maxPrice !== undefined) {
-          productIdsQuery.andWhere('product.price <= :maxPrice', { maxPrice });
+          conditions.push(`"price" <= $${paramIndex}`);
+          params.push(maxPrice);
+          paramIndex++;
         }
         
         // Filter by featured status
         if (isFeatured !== undefined) {
-          productIdsQuery.andWhere('product.isFeatured = :isFeatured', { isFeatured });
+          conditions.push(`"isFeatured" = $${paramIndex}`);
+          params.push(isFeatured);
+          paramIndex++;
         }
         
         // Filter by published status
         if (isPublished !== undefined) {
-          productIdsQuery.andWhere('product.isPublished = :isPublished', { isPublished });
+          conditions.push(`"isPublished" = $${paramIndex}`);
+          params.push(isPublished);
+          paramIndex++;
         }
         
         // Filter by tags
         if (tagIds && tagIds.length > 0) {
-          productIdsQuery.leftJoin('product.tags', 'tag')
-                         .andWhere('tag.id IN (:...tagIds)', { tagIds });
+          // For each tag, we'll add a parameter
+          const tagParams = tagIds.map((_, idx) => `$${paramIndex + idx}`).join(',');
+          conditions.push(`"id" IN (
+            SELECT "productId" FROM product_tags_tag WHERE "tagId" IN (${tagParams})
+          )`);
+          
+          // Add all tag IDs as parameters
+          params.push(...tagIds);
+          paramIndex += tagIds.length;
         }
       }
       
-      // Apply sorting to the IDs query
-      if (options?.sort?.sortBy) {
-        const sortOrder = options.sort.sortOrder || 'ASC';
-        productIdsQuery.orderBy(`product.${options.sort.sortBy}`, sortOrder);
-        productIdsQuery.addOrderBy('product.id', 'ASC');
-      } else {
-        productIdsQuery.orderBy('product.createdAt', 'DESC');
-        productIdsQuery.addOrderBy('product.id', 'ASC');
-      }
+      // Build the WHERE clause
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
       
-      // Get total count before pagination
-      const totalCount = await productIdsQuery.getCount();
+      // Build order by clause
+      const sortField = options?.sort?.sortBy || 'createdAt';
+      const sortDirection = options?.sort?.sortOrder || 'DESC';
+      const orderByClause = `ORDER BY "${sortField}" ${sortDirection}, "id" ASC`;
       
-      // Apply pagination to the IDs query
-      productIdsQuery.offset(skip).limit(limit);
+      // Count query - do not use joins
+      const countQuery = `
+        SELECT COUNT(*) as count 
+        FROM product
+        ${whereClause}
+      `;
       
-      // Get the filtered product IDs
-      const productIds = await productIdsQuery.getRawMany();
+      console.log('Executing count query:', countQuery, 'with params:', params);
       
-      // If no products found, return empty result
-      if (!productIds.length) {
+      const countResult = await this.productRepo.query(countQuery, params);
+      const totalCount = parseInt(countResult[0].count);
+      
+      // If no products, return empty result
+      if (totalCount === 0) {
         return {
           data: [],
           meta: {
-            total: 0,
+            total: totalCount,
             page,
             limit,
-            totalPages: 0,
-            hasNextPage: false,
+            totalPages: Math.ceil(totalCount / limit) || 0,
+            hasNextPage: page < Math.ceil(totalCount / limit),
             hasPrevPage: page > 1
           }
         };
       }
       
-      // Now fetch the complete product data with all relations for these IDs
-      const products = await this.productRepo.createQueryBuilder('product')
-        .leftJoinAndSelect('product.category', 'category')
-        .leftJoinAndSelect('product.tags', 'tags')
-        .leftJoinAndSelect('product.variants', 'variants')
-        .whereInIds(productIds.map(p => p.id))
-        .orderBy(options?.sort?.sortBy ? `product.${options.sort.sortBy}` : 'product.createdAt', 
-                 options?.sort?.sortOrder || 'DESC')
-        .addOrderBy('product.id', 'ASC')
-        .getMany();
+      // Main query to get product IDs with pagination - do not use joins
+      const idsQuery = `
+        SELECT id
+        FROM product
+        ${whereClause}
+        ${orderByClause}
+        LIMIT ${limit} OFFSET ${skip}
+      `;
+      
+      console.log('Executing IDs query:', idsQuery, 'with params:', params);
+      
+      const productIdsResult = await this.productRepo.query(idsQuery, params);
+      
+      // If no products found after pagination, return empty result
+      if (productIdsResult.length === 0) {
+        return {
+          data: [],
+          meta: {
+            total: totalCount,
+            page,
+            limit,
+            totalPages: Math.ceil(totalCount / limit) || 0,
+            hasNextPage: page < Math.ceil(totalCount / limit),
+            hasPrevPage: page > 1
+          }
+        };
+      }
+      
+      // Extract the IDs
+      const productIds = productIdsResult.map((row: {id: string}) => row.id);
+      
+      // Then use TypeORM's repository to fetch complete data with relations
+      const products = await this.productRepo.find({
+        where: { id: In(productIds) },
+        relations: ['category', 'tags', 'variants'],
+        order: {
+          ...(options?.sort?.sortBy ? { [options.sort.sortBy]: options.sort.sortOrder || 'ASC' } : { createdAt: 'DESC' }),
+          id: 'ASC'
+        }
+      });
       
       return {
         data: products,

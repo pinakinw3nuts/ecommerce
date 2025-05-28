@@ -7,6 +7,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { offerService } from '@/services/offers';
+import { useToast } from '@/hooks/useToast';
 
 // Validation schema
 const couponSchema = z.object({
@@ -14,29 +16,50 @@ const couponSchema = z.object({
     .min(3, 'Code must be at least 3 characters')
     .max(20, 'Code must be less than 20 characters')
     .regex(/^[A-Z0-9_-]+$/, 'Code must contain only uppercase letters, numbers, underscores, and hyphens'),
-  type: z.enum(['flat', 'percent'], {
-    required_error: 'Please select a discount type',
-  }),
-  value: z.number()
-    .min(0, 'Value must be positive')
-    .max(100, 'Percentage cannot exceed 100%')
-    .refine((val) => val > 0, 'Value must be greater than 0'),
-  expiryDate: z.string()
-    .refine((date) => new Date(date) > new Date(), 'Expiry date must be in the future'),
-  maxUsage: z.number()
-    .int('Must be a whole number')
-    .min(1, 'Must allow at least one use')
-    .max(10000, 'Maximum usage limit is 10,000'),
+  name: z.string()
+    .min(3, 'Name must be at least 3 characters')
+    .max(50, 'Name must be less than 50 characters'),
   description: z.string()
     .min(10, 'Description must be at least 10 characters')
     .max(200, 'Description must be less than 200 characters')
     .optional(),
+  discountType: z.enum(['PERCENTAGE', 'FIXED'], {
+    required_error: 'Please select a discount type',
+  }),
+  discountAmount: z.number()
+    .min(0, 'Value must be positive')
+    .refine((val) => val > 0, 'Value must be greater than 0')
+    .refine((val, ctx) => {
+      if (ctx.data.discountType === 'PERCENTAGE' && val > 100) {
+        return false;
+      }
+      return true;
+    }, 'Percentage discount cannot exceed 100%'),
+  startDate: z.string()
+    .refine((date) => new Date(date) >= new Date(new Date().setHours(0, 0, 0, 0)), 'Start date must not be in the past'),
+  endDate: z.string()
+    .refine((date) => new Date(date) > new Date(), 'End date must be in the future'),
+  usageLimit: z.number()
+    .int('Must be a whole number')
+    .min(1, 'Must allow at least one use')
+    .max(10000, 'Maximum usage limit is 10,000')
+    .optional(),
+  minimumPurchaseAmount: z.number()
+    .min(0, 'Minimum purchase amount must be positive')
+    .optional(),
+  isFirstPurchaseOnly: z.boolean().default(false),
+}).refine((data) => {
+  return new Date(data.endDate) > new Date(data.startDate);
+}, {
+  message: 'End date must be after start date',
+  path: ['endDate'],
 });
 
 type CouponFormData = z.infer<typeof couponSchema>;
 
 export default function NewCouponPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const {
@@ -47,31 +70,32 @@ export default function NewCouponPage() {
   } = useForm<CouponFormData>({
     resolver: zodResolver(couponSchema),
     defaultValues: {
-      type: 'flat',
-      maxUsage: 100,
+      discountType: 'FIXED',
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0],
+      isFirstPurchaseOnly: false,
     },
   });
 
-  const discountType = watch('type');
+  const discountType = watch('discountType');
 
   const onSubmit = async (data: CouponFormData) => {
     try {
       setIsSubmitting(true);
-      const response = await fetch('/api/coupons', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+      await offerService.createCoupon(data);
+      toast({
+        title: 'Success',
+        description: 'Coupon created successfully',
+        variant: 'success',
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to create coupon');
-      }
-
       router.push('/offers');
-      router.refresh();
     } catch (error) {
       console.error('Error creating coupon:', error);
-      alert('Failed to create coupon. Please try again.');
+      toast({
+        title: 'Error',
+        description: 'Failed to create coupon. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -112,73 +136,135 @@ export default function NewCouponPage() {
             </p>
           </div>
 
+          {/* Coupon Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Coupon Name
+            </label>
+            <input
+              type="text"
+              {...register('name')}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Summer Sale 2024"
+            />
+            {errors.name && (
+              <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+            )}
+          </div>
+
           {/* Discount Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Discount Type
             </label>
             <select
-              {...register('type')}
+              {...register('discountType')}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="flat">Flat Amount ($)</option>
-              <option value="percent">Percentage (%)</option>
+              <option value="FIXED">Flat Amount ($)</option>
+              <option value="PERCENTAGE">Percentage (%)</option>
             </select>
-            {errors.type && (
-              <p className="mt-1 text-sm text-red-600">{errors.type.message}</p>
+            {errors.discountType && (
+              <p className="mt-1 text-sm text-red-600">{errors.discountType.message}</p>
             )}
           </div>
 
-          {/* Value */}
+          {/* Discount Amount */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              {discountType === 'flat' ? 'Discount Amount ($)' : 'Discount Percentage (%)'}
+              {discountType === 'FIXED' ? 'Discount Amount ($)' : 'Discount Percentage (%)'}
             </label>
             <input
               type="number"
-              step={discountType === 'flat' ? '0.01' : '1'}
-              {...register('value', { valueAsNumber: true })}
+              step={discountType === 'FIXED' ? '0.01' : '1'}
+              {...register('discountAmount', { valueAsNumber: true })}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder={discountType === 'flat' ? '10.00' : '20'}
+              placeholder={discountType === 'FIXED' ? '10.00' : '20'}
             />
-            {errors.value && (
-              <p className="mt-1 text-sm text-red-600">{errors.value.message}</p>
+            {errors.discountAmount && (
+              <p className="mt-1 text-sm text-red-600">{errors.discountAmount.message}</p>
             )}
           </div>
 
-          {/* Expiry Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Expiry Date
-            </label>
-            <input
-              type="date"
-              {...register('expiryDate')}
-              min={new Date().toISOString().split('T')[0]}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            {errors.expiryDate && (
-              <p className="mt-1 text-sm text-red-600">{errors.expiryDate.message}</p>
-            )}
+          {/* Date Range */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Start Date
+              </label>
+              <input
+                type="date"
+                {...register('startDate')}
+                min={new Date().toISOString().split('T')[0]}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              {errors.startDate && (
+                <p className="mt-1 text-sm text-red-600">{errors.startDate.message}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                End Date
+              </label>
+              <input
+                type="date"
+                {...register('endDate')}
+                min={new Date().toISOString().split('T')[0]}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              {errors.endDate && (
+                <p className="mt-1 text-sm text-red-600">{errors.endDate.message}</p>
+              )}
+            </div>
           </div>
 
-          {/* Max Usage */}
+          {/* Usage Limit */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Maximum Usage Limit
+              Maximum Usage Limit (Optional)
             </label>
             <input
               type="number"
-              {...register('maxUsage', { valueAsNumber: true })}
+              {...register('usageLimit', { valueAsNumber: true })}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               placeholder="100"
             />
-            {errors.maxUsage && (
-              <p className="mt-1 text-sm text-red-600">{errors.maxUsage.message}</p>
+            {errors.usageLimit && (
+              <p className="mt-1 text-sm text-red-600">{errors.usageLimit.message}</p>
             )}
             <p className="mt-1 text-sm text-gray-500">
               Maximum number of times this coupon can be used
             </p>
+          </div>
+
+          {/* Minimum Purchase Amount */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Minimum Purchase Amount (Optional)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              {...register('minimumPurchaseAmount', { valueAsNumber: true })}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="50.00"
+            />
+            {errors.minimumPurchaseAmount && (
+              <p className="mt-1 text-sm text-red-600">{errors.minimumPurchaseAmount.message}</p>
+            )}
+          </div>
+
+          {/* First Purchase Only */}
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="isFirstPurchaseOnly"
+              {...register('isFirstPurchaseOnly')}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="isFirstPurchaseOnly" className="ml-2 block text-sm text-gray-700">
+              First Purchase Only
+            </label>
           </div>
 
           {/* Description */}
@@ -198,11 +284,12 @@ export default function NewCouponPage() {
           </div>
 
           {/* Form Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex justify-end space-x-3 pt-5">
             <Button
               type="button"
               variant="outline"
               onClick={() => router.back()}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>

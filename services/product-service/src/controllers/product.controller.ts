@@ -43,6 +43,7 @@ const productQuerySchema = z.object({
   // Filtering
   search: z.string().optional(),
   categoryId: z.string().optional(),
+  categoryIds: z.string().optional(),
   minPrice: z.union([
     z.string().transform(val => val ? parseFloat(val) : undefined),
     z.number().optional()
@@ -94,6 +95,7 @@ interface ProductQueryParams {
   // Filtering
   search?: string;
   categoryId?: string;
+  categoryIds?: string;
   minPrice?: number;
   maxPrice?: number;
   tagIds?: string[];
@@ -118,6 +120,7 @@ export const productController = {
             sortOrder: { type: 'string', enum: ['ASC', 'DESC'], description: 'Sort direction' },
             search: { type: 'string', description: 'Search term for product name' },
             categoryId: { type: 'string', description: 'Filter by category ID' },
+            categoryIds: { type: 'string', description: 'Filter by comma-separated list of category IDs' },
             minPrice: { type: 'number', description: 'Minimum price filter' },
             maxPrice: { type: 'number', description: 'Maximum price filter' },
             tagIds: { type: 'string', description: 'Comma-separated list of tag IDs' },
@@ -220,9 +223,20 @@ export const productController = {
             },
             categoryId: {
               value: query.categoryId,
-              type: typeof query.categoryId
+              type: typeof query.categoryId,
+              hasComma: query.categoryId ? query.categoryId.includes(',') : false,
+              splitResult: query.categoryId ? query.categoryId.split(',').map(id => id.trim()).filter(id => id) : []
+            },
+            categoryIds: {
+              value: query.categoryIds,
+              type: typeof query.categoryIds,
+              hasComma: query.categoryIds ? query.categoryIds.includes(',') : false,
+              splitResult: query.categoryIds ? query.categoryIds.split(',').map(id => id.trim()).filter(id => id) : []
             }
           });
+          
+          // Get the effective category ID (use categoryIds if provided, otherwise use categoryId)
+          const effectiveCategoryId = query.categoryIds || query.categoryId;
           
           // Build options for the service
           const options = {
@@ -236,7 +250,7 @@ export const productController = {
             } as ProductSortOptions,
             filters: {
               search: query.search,
-              categoryId: query.categoryId,
+              categoryId: effectiveCategoryId,
               minPrice: query.minPrice,
               maxPrice: query.maxPrice,
               tagIds: query.tagIds,
@@ -544,6 +558,7 @@ export const productController = {
             sortOrder: { type: 'string', enum: ['ASC', 'DESC'], description: 'Sort direction' },
             search: { type: 'string', description: 'Search term for product name' },
             categoryId: { type: 'string', description: 'Filter by category ID' },
+            categoryIds: { type: 'string', description: 'Filter by comma-separated list of category IDs' },
             minPrice: { type: 'number', description: 'Minimum price filter' },
             maxPrice: { type: 'number', description: 'Maximum price filter' },
             tagIds: { type: 'string', description: 'Comma-separated list of tag IDs' },
@@ -646,9 +661,20 @@ export const productController = {
             },
             categoryId: {
               value: query.categoryId,
-              type: typeof query.categoryId
+              type: typeof query.categoryId,
+              hasComma: query.categoryId ? query.categoryId.includes(',') : false,
+              splitResult: query.categoryId ? query.categoryId.split(',').map(id => id.trim()).filter(id => id) : []
+            },
+            categoryIds: {
+              value: query.categoryIds,
+              type: typeof query.categoryIds,
+              hasComma: query.categoryIds ? query.categoryIds.includes(',') : false,
+              splitResult: query.categoryIds ? query.categoryIds.split(',').map(id => id.trim()).filter(id => id) : []
             }
           });
+          
+          // Get the effective category ID (use categoryIds if provided, otherwise use categoryId)
+          const effectiveCategoryId = query.categoryIds || query.categoryId;
           
           // Build options for the service
           const options = {
@@ -662,7 +688,7 @@ export const productController = {
             } as ProductSortOptions,
             filters: {
               search: query.search,
-              categoryId: query.categoryId,
+              categoryId: effectiveCategoryId,
               minPrice: query.minPrice,
               maxPrice: query.maxPrice,
               tagIds: query.tagIds,

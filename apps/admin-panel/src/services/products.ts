@@ -71,6 +71,7 @@ interface ApiProductsResponse {
 }
 
 export interface ProductQueryParams {
+  [key: string]: any; // Allow dynamic properties
   page?: number;
   pageSize?: number;
   search?: string;
@@ -80,6 +81,12 @@ export interface ProductQueryParams {
   priceMax?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  isFeatured?: string[];
+  isPublished?: string[];
+  dateRange?: {
+    from?: string;
+    to?: string;
+  };
 }
 
 // Client-side function to get auth token from cookies
@@ -214,6 +221,8 @@ export async function getProducts(params: ProductQueryParams = {}): Promise<Prod
     priceMax,
     sortBy: requestedSortBy = 'createdAt',
     sortOrder = 'desc',
+    isFeatured = [],
+    isPublished = [],
   } = params;
 
   try {
@@ -283,13 +292,27 @@ export async function getProducts(params: ProductQueryParams = {}): Promise<Prod
     
     if (statuses && Array.isArray(statuses) && statuses.length > 0) {
       console.log('Adding statuses filter:', statuses);
-      if (statuses.includes('in_stock')) {
-        url.searchParams.append('isPublished', 'true');
-      } else if (statuses.includes('out_of_stock')) {
-        url.searchParams.append('isPublished', 'false');
-      }
+      url.searchParams.append('statuses', statuses.join(','));
     } else {
       console.log('No statuses filter provided');
+    }
+    
+    // Handle isFeatured filter
+    if (isFeatured && Array.isArray(isFeatured) && isFeatured.length > 0) {
+      const featuredValue = isFeatured[0].toLowerCase() === 'true';
+      console.log('Adding isFeatured filter:', featuredValue);
+      url.searchParams.append('isFeatured', String(featuredValue));
+    } else {
+      console.log('No isFeatured filter provided');
+    }
+    
+    // Handle isPublished filter
+    if (isPublished && Array.isArray(isPublished) && isPublished.length > 0) {
+      const publishedValue = isPublished[0].toLowerCase() === 'true';
+      console.log('Adding isPublished filter:', publishedValue);
+      url.searchParams.append('isPublished', String(publishedValue));
+    } else {
+      console.log('No isPublished filter provided');
     }
     
     if (priceMin !== undefined && priceMin !== null) {
@@ -370,24 +393,42 @@ export async function getProductById(id: string): Promise<Product> {
   }
 }
 
-export async function createProduct(productData: Partial<ApiProduct>): Promise<Product> {
+export async function createProduct(productData: Partial<ApiProduct> & { 
+  sku?: string; 
+  stock?: number;
+  categoryId?: string;
+}): Promise<Product> {
   try {
     console.log('Creating product with data:', productData);
+    
+    // Format the data for the API - ensure all required fields are present
+    const formattedData: any = {
+      name: productData.name || 'New Product',
+      description: productData.description || '',
+      price: typeof productData.price === 'number' ? productData.price : 0,
+      categoryId: productData.categoryId || '',
+      isPublished: typeof productData.isPublished === 'boolean' ? productData.isPublished : false,
+      isFeatured: typeof productData.isFeatured === 'boolean' ? productData.isFeatured : false,
+    };
+    
+    // Add variants if SKU or stock is provided
+    if (productData.sku || typeof productData.stock === 'number') {
+      formattedData.variants = [{
+        name: 'Default',
+        sku: productData.sku || `SKU-${Date.now()}`,
+        price: typeof productData.price === 'number' ? productData.price : 0,
+        stock: typeof productData.stock === 'number' ? productData.stock : 0
+      }];
+    }
     
     // Use the admin endpoint for creating products
     const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products`;
     console.log('Making request to:', url);
-    console.log('URL details:', {
-      href: url,
-      origin: new URL(url).origin,
-      pathname: new URL(url).pathname,
-      search: new URL(url).search,
-      searchParams: Object.fromEntries(new URL(url).searchParams.entries())
-    });
+    console.log('Formatted product data for API:', formattedData);
     
     const response = await makeRequest(url, {
       method: 'POST',
-      body: JSON.stringify(productData),
+      body: JSON.stringify(formattedData),
     });
     
     console.log('Response status:', response.status);
@@ -497,6 +538,26 @@ export async function exportProducts(filters?: ProductQueryParams): Promise<Blob
       if (filters.statuses?.length) queryParams.append('statuses', filters.statuses.join(','));
       if (filters.priceMin !== undefined) queryParams.append('priceMin', filters.priceMin.toString());
       if (filters.priceMax !== undefined) queryParams.append('priceMax', filters.priceMax.toString());
+      
+      // Add isFeatured filter
+      if (filters.isFeatured?.length) {
+        const featuredValue = filters.isFeatured[0].toLowerCase() === 'true';
+        queryParams.append('isFeatured', String(featuredValue));
+      }
+      
+      // Add isPublished filter
+      if (filters.isPublished?.length) {
+        const publishedValue = filters.isPublished[0].toLowerCase() === 'true';
+        queryParams.append('isPublished', String(publishedValue));
+      }
+      
+      // Add date range filters
+      if (filters.dateRange?.from) {
+        queryParams.append('fromDate', filters.dateRange.from);
+      }
+      if (filters.dateRange?.to) {
+        queryParams.append('toDate', filters.dateRange.to);
+      }
     }
 
     const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/export?${queryParams}`;

@@ -66,7 +66,55 @@ export async function GET(
     }
 
     const data = await response.json();
-    return NextResponse.json(data);
+    
+    // Log raw data for debugging
+    console.log('Raw product data from API:', data);
+    
+    // Check for variant data
+    if (data.variants && data.variants.length > 0) {
+      console.log('First variant from API:', data.variants[0]);
+    } else {
+      console.log('No variants found in API response');
+    }
+    
+    // Process the data to ensure all necessary fields are present
+    const processedData = {
+      ...data,
+      // Provide default values for all required fields
+      id: data.id,
+      name: data.name || 'Unnamed Product',
+      description: data.description || '',
+      price: typeof data.price === 'number' ? data.price : 0,
+      slug: data.slug || '',
+      mediaUrl: data.mediaUrl || null,
+      image: data.mediaUrl || data.image || null,
+      
+      // Extract variant information if available, or use defaults
+      sku: data.variants && data.variants.length > 0 
+        ? data.variants[0].sku 
+        : (data.sku || `SKU-${Date.now()}`),
+      
+      stock: data.variants && data.variants.length > 0 
+        ? (typeof data.variants[0].stock === 'number' ? data.variants[0].stock : 0)
+        : (typeof data.stock === 'number' ? data.stock : 0),
+      
+      // Add category information, either from object or ID
+      categoryId: data.categoryId || 
+        (data.category && typeof data.category === 'object' ? data.category.id : ''),
+      
+      // Set default values for booleans
+      isFeatured: typeof data.isFeatured === 'boolean' ? data.isFeatured : false,
+      isPublished: typeof data.isPublished === 'boolean' ? data.isPublished : false,
+      
+      // Ensure variants array exists
+      variants: Array.isArray(data.variants) ? data.variants : [],
+      
+      // Ensure we have category data
+      category: data.category || { id: '', name: 'Uncategorized' }
+    };
+    
+    console.log('Processed product data:', processedData);
+    return NextResponse.json(processedData);
   } catch (error: any) {
     console.error('Error fetching product:', error);
     return NextResponse.json(
@@ -146,40 +194,72 @@ export async function PUT(
     }
 
     // Handle variants for SKU and stock
-    if (productData.sku || productData.stock !== undefined) {
-      // Create a variant from SKU and stock
+    if (productData.sku !== undefined || productData.stock !== undefined) {
+      // Determine if we need to create a new variant or update existing ones
+      let variants = [];
+      
+      // If the product already has variants, try to update the first one
+      if (Array.isArray(productData.variants) && productData.variants.length > 0) {
+        // Update existing variant with new data
+        variants = productData.variants.map((variant: any, index: number) => {
+          if (index === 0) {
+            return {
+              ...variant,
+              sku: productData.sku !== undefined ? productData.sku : variant.sku,
+              stock: productData.stock !== undefined ? productData.stock : variant.stock,
+              price: productData.price !== undefined ? productData.price : variant.price,
+            };
+          }
+          return variant;
+        });
+      } else {
+        // Create a new variant
+        const variant = {
+          name: 'Default',
+          sku: productData.sku || `SKU-${Date.now()}`,
+          price: productData.price || 0,
+          stock: productData.stock !== undefined ? productData.stock : 0
+        };
+        variants = [variant];
+      }
+      
+      // Add variants to the product data
+      productData.variants = variants;
+      console.log('Updated variants:', variants);
+    } else if (!Array.isArray(productData.variants) || productData.variants.length === 0) {
+      // If no SKU/stock provided and no variants exist, create a default variant
       const variant = {
         name: 'Default',
-        sku: productData.sku || `SKU-${Date.now()}`,
+        sku: `SKU-${Date.now()}`,
         price: productData.price || 0,
-        stock: productData.stock || 0
+        stock: 0
       };
-      
-      // Add variant to the product data
       productData.variants = [variant];
-      console.log('Created variant from SKU and stock:', variant);
+      console.log('Created default variant:', variant);
     }
 
-    // Ensure boolean fields are properly included
-    if (productData.isFeatured !== undefined) {
-      console.log('Setting isFeatured to:', productData.isFeatured);
-    }
-    
-    if (productData.isPublished !== undefined) {
-      console.log('Setting isPublished to:', productData.isPublished);
-    }
+    // Format data for API - remove fields that the API doesn't expect
+    const apiProductData = {
+      name: productData.name,
+      description: productData.description || '',
+      price: productData.price || 0,
+      categoryId: productData.categoryId || '',
+      variants: productData.variants || [],
+      isFeatured: productData.isFeatured || false,
+      isPublished: productData.isPublished || false,
+    };
 
     // Use the admin endpoint for updating products
     const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${productId}`;
     console.log('Updating product with URL:', url);
-    console.log('Product data:', productData);
+    console.log('Product data for API:', apiProductData);
     
     const response = await makeRequest(url, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token.value}`,
       },
-      body: JSON.stringify(productData),
+      body: JSON.stringify(apiProductData),
     });
 
     if (!response.ok) {

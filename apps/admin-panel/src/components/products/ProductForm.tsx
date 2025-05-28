@@ -178,8 +178,8 @@ export function ProductForm({ initialData, onSubmit, isEditing = false }: Produc
     defaultValues: {
       name: initialData?.name || '',
       description: initialData?.description || '',
-      price: initialData?.price || 0,
-      stock: initialData?.stock || 0,
+      price: initialData?.price !== undefined ? initialData.price : 0,
+      stock: initialData?.stock !== undefined ? initialData.stock : 0,
       sku: initialData?.sku || '',
       categoryId: initialData?.categoryId || '',
       isPublished: initialData?.isPublished !== undefined ? initialData.isPublished : false,
@@ -190,16 +190,54 @@ export function ProductForm({ initialData, onSubmit, isEditing = false }: Produc
   // Debug form values
   const formValues = watch();
   useEffect(() => {
+    console.log('Initial form data:', {
+      name: initialData?.name || 'not set',
+      description: initialData?.description || 'not set',
+      price: initialData?.price !== undefined ? initialData.price : 'not set',
+      stock: initialData?.stock !== undefined ? initialData.stock : 'not set',
+      sku: initialData?.sku || 'not set',
+      categoryId: initialData?.categoryId || 'not set',
+      isPublished: initialData?.isPublished !== undefined ? initialData.isPublished : 'not set',
+      isFeatured: initialData?.isFeatured !== undefined ? initialData.isFeatured : 'not set',
+    });
+    
     if (isEditing) {
       console.log('Current form values:', formValues);
     }
-  }, [formValues, isEditing]);
+  }, [formValues, isEditing, initialData]);
 
   // Update the useEffect to set the categoryId when component mounts
   useEffect(() => {
-    // Set initial categoryId if available from initialData
-    if (initialData?.categoryId) {
-      setValue('categoryId', initialData.categoryId);
+    if (initialData) {
+      // Set initial categoryId if available
+      if (initialData.categoryId) {
+        setValue('categoryId', initialData.categoryId);
+      }
+      
+      // Explicitly set SKU value
+      if (initialData.sku) {
+        console.log('Setting SKU to:', initialData.sku);
+        setValue('sku', initialData.sku);
+      }
+      
+      // Explicitly set stock value
+      if (initialData.stock !== undefined) {
+        console.log('Setting stock to:', initialData.stock);
+        setValue('stock', initialData.stock);
+      }
+      
+      // Set other important values
+      if (initialData.price !== undefined) {
+        setValue('price', initialData.price);
+      }
+      
+      if (initialData.isPublished !== undefined) {
+        setValue('isPublished', initialData.isPublished);
+      }
+      
+      if (initialData.isFeatured !== undefined) {
+        setValue('isFeatured', initialData.isFeatured);
+      }
     }
   }, [initialData, setValue]);
 
@@ -308,6 +346,7 @@ export function ProductForm({ initialData, onSubmit, isEditing = false }: Produc
           </label>
           <input
             type="text"
+            defaultValue={initialData?.sku || ''}
             {...register('sku')}
             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
@@ -327,7 +366,12 @@ export function ProductForm({ initialData, onSubmit, isEditing = false }: Produc
             <input
               type="number"
               step="0.01"
-              {...register('price', { valueAsNumber: true })}
+              min="0"
+              defaultValue={initialData?.price !== undefined ? initialData.price : 0}
+              {...register('price', { 
+                valueAsNumber: true,
+                setValueAs: v => v === '' || isNaN(parseFloat(v)) ? 0 : parseFloat(v)
+              })}
               className="block w-full rounded-md border border-gray-300 pl-7 pr-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
@@ -342,7 +386,12 @@ export function ProductForm({ initialData, onSubmit, isEditing = false }: Produc
           </label>
           <input
             type="number"
-            {...register('stock', { valueAsNumber: true })}
+            min="0"
+            defaultValue={initialData?.stock !== undefined ? initialData.stock : 0}
+            {...register('stock', { 
+              valueAsNumber: true,
+              setValueAs: v => v === '' || isNaN(parseInt(v)) ? 0 : parseInt(v)
+            })}
             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           {errors.stock && (

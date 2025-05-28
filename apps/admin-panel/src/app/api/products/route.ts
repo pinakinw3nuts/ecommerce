@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     
     // Parse pagination parameters
     const page = parseInt(searchParams.get('page') || '1', 10);
-    const pageSize = parseInt(searchParams.get('pageSize') || '10', 10);
+    const limit = parseInt(searchParams.get('limit') || searchParams.get('pageSize') || '10', 10);
     
     // Parse and validate sorting parameters
     const requestedSortBy = searchParams.get('sortBy') || 'createdAt';
@@ -65,7 +65,8 @@ export async function GET(request: NextRequest) {
       console.warn(`Requested sort field '${requestedSortBy}' is not supported. Using '${sortBy}' instead.`);
     }
     
-    const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
+    // Ensure sortOrder is uppercase for API compatibility
+    const sortOrder = (searchParams.get('sortOrder') || 'DESC').toUpperCase();
     
     // Parse filtering parameters
     const search = searchParams.get('search') || '';
@@ -87,33 +88,58 @@ export async function GET(request: NextRequest) {
     }
     
     const statuses = searchParams.get('statuses')?.split(',') || [];
-    const priceMin = searchParams.get('priceMin') ? parseFloat(searchParams.get('priceMin')!) : undefined;
-    const priceMax = searchParams.get('priceMax') ? parseFloat(searchParams.get('priceMax')!) : undefined;
     
-    // Log the parsed parameters
-    console.log('Products API - Parsed parameters:', {
-      page,
-      pageSize,
-      sortBy,
-      sortOrder,
-      search,
-      categories,
-      statuses,
-      priceMin,
-      priceMax
-    });
+    // Handle price range - note API expects minPrice/maxPrice
+    const minPrice = searchParams.get('minPrice') || searchParams.get('priceMin');
+    const maxPrice = searchParams.get('maxPrice') || searchParams.get('priceMax');
+    const priceMin = minPrice ? parseFloat(minPrice) : undefined;
+    const priceMax = maxPrice ? parseFloat(maxPrice) : undefined;
     
-    const data = await getProducts({
-      page,
-      pageSize,
+    // Create a dynamic filter object to store all filter values
+    const filterParams: Record<string, any> = {
       search,
       categories,
       statuses,
       priceMin,
       priceMax,
       sortBy,
-      sortOrder
-    });
+      sortOrder,
+      page,
+      pageSize: limit
+    };
+    
+    // Process date filters if present
+    const dateFrom = searchParams.get('dateFrom');
+    const dateTo = searchParams.get('dateTo');
+    if (dateFrom || dateTo) {
+      filterParams.dateRange = {};
+      if (dateFrom) filterParams.dateRange.from = dateFrom;
+      if (dateTo) filterParams.dateRange.to = dateTo;
+    }
+    
+    // Process boolean filters (isFeatured, isPublished)
+    // Handle isFeatured filter
+    const isFeaturedValue = searchParams.get('isFeatured');
+    if (isFeaturedValue !== null) {
+      // Convert 'true'/'false' string to actual boolean for API
+      const boolValue = isFeaturedValue.toLowerCase() === 'true';
+      filterParams.isFeatured = [isFeaturedValue]; // Keep original format for getProducts
+      filterParams.isFeaturedBool = boolValue; // Add boolean version for debugging
+    }
+    
+    // Handle isPublished filter
+    const isPublishedValue = searchParams.get('isPublished');
+    if (isPublishedValue !== null) {
+      // Convert 'true'/'false' string to actual boolean for API
+      const boolValue = isPublishedValue.toLowerCase() === 'true';
+      filterParams.isPublished = [isPublishedValue]; // Keep original format for getProducts
+      filterParams.isPublishedBool = boolValue; // Add boolean version for debugging
+    }
+    
+    // Log the parsed parameters
+    console.log('Products API - Parsed parameters:', filterParams);
+    
+    const data = await getProducts(filterParams);
     
     // Log the response data structure
     console.log('Products API Response - Structure:', {

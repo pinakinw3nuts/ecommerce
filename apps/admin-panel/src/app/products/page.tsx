@@ -56,6 +56,22 @@ const defaultFilterConfig: FilterConfig = {
       { value: 'out_of_stock', label: 'Out of Stock' },
     ],
   },
+  isFeatured: {
+    type: 'boolean',
+    placeholder: 'Featured Products',
+    options: [
+      { value: 'true', label: 'Featured' },
+      { value: 'false', label: 'Not Featured' },
+    ],
+  },
+  isPublished: {
+    type: 'boolean',
+    placeholder: 'Published Status',
+    options: [
+      { value: 'true', label: 'Published' },
+      { value: 'false', label: 'Draft' },
+    ],
+  },
   valueRange: {
     type: 'valueRange',
     placeholder: 'Price Range',
@@ -66,6 +82,8 @@ const initialFilters: FilterState = {
   search: '',
   categories: [],
   statuses: [],
+  isFeatured: [],
+  isPublished: [],
   valueRange: {
     min: '',
     max: '',
@@ -74,7 +92,9 @@ const initialFilters: FilterState = {
 
 const fetcher = async (url: string) => {
   try {
-    console.log('Fetching products from:', url);
+    console.log(`Fetching products from: ${url}`);
+    console.log(`Current page: ${new URL(url, window.location.origin).searchParams.get('page')}`);
+    
     const response = await fetch(url);
     console.log('Response status:', response.status);
     
@@ -94,7 +114,12 @@ const fetcher = async (url: string) => {
     }
     
     const data = await response.json();
-    console.log('Successfully fetched products data:', data);
+    console.log('Successfully fetched products data:', {
+      productsCount: data.products?.length,
+      pagination: data.pagination,
+      firstProduct: data.products?.[0]?.name,
+      lastProduct: data.products?.[data.products?.length - 1]?.name
+    });
     
     // Validate response structure
     if (!data || (!Array.isArray(data.products) && !Array.isArray(data))) {
@@ -149,11 +174,12 @@ export default function ProductsPage() {
   const getApiUrl = useCallback(() => {
     const params = new URLSearchParams({
       page: page.toString(),
-      pageSize: pageSize.toString(),
+      limit: pageSize.toString(),
       sortBy,
-      sortOrder,
+      sortOrder: sortOrder.toUpperCase(),
     });
 
+    // Process text search
     if (debouncedFilters.search) {
       const searchTerm = String(debouncedFilters.search).trim();
       if (searchTerm) {
@@ -162,43 +188,80 @@ export default function ProductsPage() {
       }
     }
     
-    if ((debouncedFilters.categories as string[])?.length) {
-      // Get the selected category IDs
-      const categoryIds = debouncedFilters.categories as string[];
-      
-      // For backward compatibility, use 'categoryId' for single selection
-      // and 'categories' for multiple selections
-      if (categoryIds.length === 1) {
-        params.append('categoryId', categoryIds[0]);
-        console.log(`Adding single category filter: ${categoryIds[0]}`);
-      } else {
-        params.append('categories', categoryIds.join(','));
-        console.log(`Adding multiple categories filter: ${categoryIds.join(',')}`);
+    // Process all array-type filters dynamically
+    Object.entries(debouncedFilters).forEach(([key, value]) => {
+      // Skip search and range filters (handled separately)
+      if (key === 'search' || key === 'valueRange' || key === 'dateRange') {
+        return;
       }
-    }
+      
+      // Handle array filters
+      if (Array.isArray(value) && value.length > 0) {
+        // Special case for categories (for backward compatibility)
+        if (key === 'categories') {
+          if (value.length === 1) {
+            params.append('categoryId', value[0]);
+            console.log(`Adding single category filter: ${value[0]}`);
+          } else {
+            params.append('categoryIds', value.join(','));
+            console.log(`Adding multiple categories filter: ${value.join(',')}`);
+          }
+        } 
+        // Handle boolean filters (isFeatured, isPublished) - take only first value and convert to boolean
+        else if (key === 'isFeatured' || key === 'isPublished') {
+          params.append(key, value[0]);
+          console.log(`Adding ${key} filter: ${value[0]}`);
+        }
+        // Handle other array filters (statuses, etc.)
+        else {
+          params.append(key, value.join(','));
+          console.log(`Adding ${key} filter: ${value.join(',')}`);
+        }
+      }
+    });
     
-    if ((debouncedFilters.statuses as string[])?.length) {
-      params.append('statuses', (debouncedFilters.statuses as string[]).join(','));
-      console.log(`Adding statuses filter: ${(debouncedFilters.statuses as string[]).join(',')}`);
-    }
-    
-    const valueRange = debouncedFilters.valueRange as { min: string; max: string };
+    // Process range filters - note that API expects minPrice/maxPrice (not priceMin/priceMax)
+    const valueRange = debouncedFilters.valueRange as { min: string; max: string } | undefined;
     if (valueRange?.min) {
-      params.append('priceMin', valueRange.min);
+      params.append('minPrice', valueRange.min);
       console.log(`Adding price min: ${valueRange.min}`);
     }
     if (valueRange?.max) {
-      params.append('priceMax', valueRange.max);
+      params.append('maxPrice', valueRange.max);
       console.log(`Adding price max: ${valueRange.max}`);
+    }
+
+    // Process date range filters if needed
+    const dateRange = debouncedFilters.dateRange as { from: string; to: string } | undefined;
+    if (dateRange?.from) {
+      params.append('dateFrom', dateRange.from);
+      console.log(`Adding date from: ${dateRange.from}`);
+    }
+    if (dateRange?.to) {
+      params.append('dateTo', dateRange.to);
+      console.log(`Adding date to: ${dateRange.to}`);
     }
 
     console.log(`Full request URL: /api/products?${params.toString()}`);
     return `/api/products?${params.toString()}`;
   }, [page, pageSize, debouncedFilters, sortBy, sortOrder]);
 
+  // Create a key for SWR that changes when pagination, sorting, or filters change
+  const swr_key = `products?${new URLSearchParams({
+    page: page.toString(),
+    pageSize: pageSize.toString(),
+    sortBy,
+    sortOrder,
+    filters: JSON.stringify(debouncedFilters),
+  }).toString()}`;
+
   const { data, error, isLoading, mutate } = useSWR<ProductsResponse>(
-    getApiUrl(),
-    fetcher
+    swr_key,
+    () => fetcher(getApiUrl()),
+    {
+      keepPreviousData: false,
+      revalidateOnFocus: false,
+    }
   );
 
   const resetFilters = useCallback(() => {
@@ -400,8 +463,24 @@ export default function ProductsPage() {
 
   const handlePageChange = (newPage: number) => {
     console.log(`Changing page from ${page} to ${newPage}`);
-    setPage(newPage);
-    setSelectedProducts([]);
+    
+    // Only change if it's actually a different page
+    if (newPage !== page) {
+      // Clear selections when changing pages
+      setSelectedProducts([]);
+      
+      // Update the page state
+      setPage(newPage);
+      
+      // Force a refresh of the data
+      const newUrl = getApiUrl();
+      console.log(`New API URL after page change: ${newUrl}`);
+      
+      // Force a data refresh when changing pages
+      setTimeout(() => {
+        mutate();
+      }, 0);
+    }
   };
 
   const handlePageSizeChange = (newSize: number) => {

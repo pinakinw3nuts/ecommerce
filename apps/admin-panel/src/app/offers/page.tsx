@@ -1,315 +1,168 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { format } from 'date-fns';
+import { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { 
-  Loader2, 
   Plus, 
-  Trash2,
-  Search,
-  Filter,
+  Download,
+  Trash2, 
+  Pencil,
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
   Tag,
-  CheckSquare,
   Ban,
-  Download,
-  X,
-  Pencil,
 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Pagination } from '@/components/ui/Pagination';
-import { Input } from '@/components/ui/Input';
-import { OfferFilters } from '@/components/offers/OfferFilters';
 import Table from '@/components/Table';
+import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
-import { Column, TableInstance } from '@/components/Table';
-import { CommonFilters, FilterConfig, FilterState } from '@/components/ui/CommonFilters';
-import { useRouter } from 'next/navigation';
-
-// Mock data for demonstration
-const mockCoupons = Array.from({ length: 100 }, (_, i) => ({
-  id: `coupon_${String(i + 1).padStart(3, '0')}`,
-  code: [
-    'SUMMER', 'WINTER', 'SPRING', 'FALL', 
-    'WELCOME', 'SPECIAL', 'HOLIDAY', 'FLASH',
-    'SAVE', 'DISCOUNT'
-  ][Math.floor(Math.random() * 10)] + Math.floor(Math.random() * 90 + 10),
-  type: ['flat', 'percent'][Math.floor(Math.random() * 2)] as 'flat' | 'percent',
-  value: Math.floor(Math.random() * (
-    // For percentage, max 70%. For flat amount, max $100
-    ['flat', 'percent'][Math.floor(Math.random() * 2)] === 'percent' ? 70 : 100
-  )) + 1,
-  expiryDate: new Date(
-    Date.now() + Math.floor(Math.random() * 31536000000) // Random date within next year
-  ).toISOString().split('T')[0],
-  usageCount: Math.floor(Math.random() * 200),
-  isActive: Math.random() > 0.2, // 80% chance of being active
-  createdAt: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toISOString(),
-  updatedAt: new Date(Date.now() - Math.floor(Math.random() * 5000000000)).toISOString(),
-}));
-
-interface Coupon {
-  id: string;
-  code: string;
-  type: 'flat' | 'percent';
-  value: number;
-  expiryDate: string;
-  usageCount: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface CouponsResponse {
-  coupons: Coupon[];
-  pagination: {
-    total: number;
-    totalPages: number;
-    currentPage: number;
-    pageSize: number;
-    hasMore: boolean;
-    hasPrevious: boolean;
-  };
-}
-
-const couponSchema = z.object({
-  code: z.string().min(3, 'Code must be at least 3 characters'),
-  type: z.enum(['flat', 'percent']),
-  value: z.number().min(0, 'Value must be positive'),
-  expiryDate: z.string(),
-});
-
-type CouponFormData = z.infer<typeof couponSchema>;
-
-// Mock data fetcher that returns our mock data
-const fetcher = async (url: string): Promise<CouponsResponse> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-
-  // Parse URL parameters
-  const params = new URLSearchParams(url.split('?')[1]);
-  const page = parseInt(params.get('page') || '1');
-  const pageSize = parseInt(params.get('pageSize') || '10');
-  const search = params.get('search') || '';
-  const types = params.get('types')?.split(',') || [];
-  const statuses = params.get('statuses')?.split(',') || [];
-  const sortBy = params.get('sortBy') || 'createdAt';
-  const sortOrder = params.get('sortOrder') || 'desc';
-  const dateFrom = params.get('dateFrom');
-  const dateTo = params.get('dateTo');
-  const valueMin = params.get('valueMin');
-  const valueMax = params.get('valueMax');
-
-  // Filter coupons
-  let filteredCoupons = [...mockCoupons];
-
-  // Apply search filter
-  if (search) {
-    filteredCoupons = filteredCoupons.filter(coupon =>
-      coupon.code.toLowerCase().includes(search.toLowerCase())
-    );
-  }
-
-  // Apply type filter
-  if (types.length > 0) {
-    filteredCoupons = filteredCoupons.filter(coupon =>
-      types.includes(coupon.type)
-    );
-  }
-
-  // Apply status filter
-  if (statuses.length > 0) {
-    filteredCoupons = filteredCoupons.filter(coupon =>
-      statuses.includes(coupon.isActive ? 'active' : 'inactive')
-    );
-  }
-
-  // Apply date filter
-  if (dateFrom) {
-    filteredCoupons = filteredCoupons.filter(coupon =>
-      new Date(coupon.expiryDate) >= new Date(dateFrom)
-    );
-  }
-  if (dateTo) {
-    filteredCoupons = filteredCoupons.filter(coupon =>
-      new Date(coupon.expiryDate) <= new Date(dateTo)
-    );
-  }
-
-  // Apply value filter
-  if (valueMin) {
-    filteredCoupons = filteredCoupons.filter(coupon =>
-      coupon.value >= Number(valueMin)
-    );
-  }
-  if (valueMax) {
-    filteredCoupons = filteredCoupons.filter(coupon =>
-      coupon.value <= Number(valueMax)
-    );
-  }
-
-  // Apply sorting
-  filteredCoupons.sort((a, b) => {
-    let comparison = 0;
-    switch (sortBy) {
-      case 'code':
-        comparison = a.code.localeCompare(b.code);
-        break;
-      case 'type':
-        comparison = a.type.localeCompare(b.type);
-        break;
-      case 'value':
-        comparison = a.value - b.value;
-        break;
-      case 'expiryDate':
-        comparison = new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
-        break;
-      case 'usageCount':
-        comparison = a.usageCount - b.usageCount;
-        break;
-      default:
-        comparison = a.id.localeCompare(b.id);
-    }
-    return sortOrder === 'asc' ? comparison : -comparison;
-  });
-
-  // Apply pagination
-  const start = (page - 1) * pageSize;
-  const end = start + pageSize;
-  const paginatedCoupons = filteredCoupons.slice(start, end);
-
-  return {
-    coupons: paginatedCoupons,
-    pagination: {
-      total: filteredCoupons.length,
-      totalPages: Math.ceil(filteredCoupons.length / pageSize),
-      currentPage: page,
-      pageSize: pageSize,
-      hasMore: end < filteredCoupons.length,
-      hasPrevious: page > 1
-    }
-  };
-};
-
-type TableRow = {
-  original: Coupon;
-  table: TableInstance & {
-    getRowProps: (row: Coupon) => {
-      getIsSelected: () => boolean;
-      getToggleSelectedHandler: () => () => void;
-    };
-  };
-};
-
-type CellProps = {
-  row: Coupon;
-  table: TableInstance & {
-    getRowProps: (row: Coupon) => {
-      getIsSelected: () => boolean;
-      getToggleSelectedHandler: () => () => void;
-    };
-  };
-};
-
-interface OfferFilterState extends FilterState {
-  status: string[];
-  type: string[];
-  dateRange: {
-    from: string;
-    to: string;
-  };
-  valueRange: {
-    min: string;
-    max: string;
-  };
-}
+import { TableInstance } from '@/components/Table';
+import { formatDate } from '@/lib/utils';
+import { Pagination } from '@/components/ui/Pagination';
+import { CommonFilters, type FilterState, type FilterConfig, type DateRangeFilter, type RangeFilter } from '@/components/ui/CommonFilters';
+import { Coupon, CouponListParams, CouponListingResponse } from '@/types/coupon';
+import { offerApi } from '@/lib/offer-api-client';
 
 const filterConfig: FilterConfig = {
   search: {
-    placeholder: 'Search offers by code or description...',
+    type: 'text',
+    placeholder: 'Search coupons...',
   },
-  filterGroups: [
-    {
-      name: 'Status',
-      key: 'status',
-      options: [
-        { value: 'active', label: 'Active' },
-        { value: 'scheduled', label: 'Scheduled' },
-        { value: 'expired', label: 'Expired' },
-        { value: 'paused', label: 'Paused' },
-      ],
-    },
-    {
-      name: 'Type',
-      key: 'type',
-      options: [
-        { value: 'percentage', label: 'Percentage' },
-        { value: 'fixed', label: 'Fixed Amount' },
-        { value: 'bogo', label: 'Buy One Get One' },
-        { value: 'shipping', label: 'Free Shipping' },
-      ],
-    },
-  ],
-  hasDateRange: true,
-  dateRangeLabel: 'Valid Period',
-  hasValueRange: true,
-  valueRangeLabel: 'Discount Value',
-  valueRangeType: 'currency',
+  status: {
+    type: 'select',
+    placeholder: 'Filter by status',
+    options: [
+      { value: 'active', label: 'Active' },
+      { value: 'inactive', label: 'Inactive' },
+    ],
+  },
+  type: {
+    type: 'select',
+    placeholder: 'Filter by type',
+    options: [
+      { value: 'flat', label: 'Fixed Amount' },
+      { value: 'percent', label: 'Percentage' },
+    ],
+  },
+  dateRange: {
+    type: 'daterange',
+    placeholder: 'Filter by expiry date',
+  },
+  valueRange: {
+    type: 'valueRange',
+    placeholder: 'Filter by value',
+  },
 };
 
-const initialFilters: OfferFilterState = {
+const initialFilters: FilterState = {
   search: '',
   status: [],
   type: [],
-  dateRange: { from: '', to: '' },
-  valueRange: { min: '', max: '' },
+  dateRange: { from: '', to: '' } as DateRangeFilter,
+  valueRange: { min: '', max: '' } as RangeFilter,
+};
+
+// Fetcher function for SWR
+const fetcher = async (url: string) => {
+  try {
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      
+      if (response.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      throw new Error(error.message || 'Failed to fetch coupons');
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error in fetcher:', error);
+    throw error;
+  }
 };
 
 export default function OffersPage() {
-  const toast = useToast();
   const router = useRouter();
-  const [isCreating, setIsCreating] = useState(false);
+  const toast = useToast();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [sortBy, setSortBy] = useState('code');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedCoupons, setSelectedCoupons] = useState<string[]>([]);
+  const [filters, setFilters] = useState<FilterState>(initialFilters);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isLoadingOperation, setIsLoadingOperation] = useState(false);
-  const [filters, setFilters] = useState<OfferFilterState>(initialFilters);
-  
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+
+  // Add debouncing for filters
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 300); // 300ms debounce delay
+
+    return () => clearTimeout(timer);
+  }, [filters]);
+
+  const resetFilters = useCallback(() => {
+    setFilters(initialFilters);
+    setPage(1);
+    setSelectedCoupons([]);
+  }, []);
+
   const getApiUrl = useCallback(() => {
     const params = new URLSearchParams({
       page: page.toString(),
       pageSize: pageSize.toString(),
       sortBy,
       sortOrder,
+      skip: ((page - 1) * pageSize).toString(),
+      take: pageSize.toString()
     });
 
-    if (filters.search) params.append('search', filters.search);
-    if (filters.status.length) params.append('status', filters.status.join(','));
-    if (filters.type.length) params.append('type', filters.type.join(','));
-    if (filters.dateRange.from) params.append('dateFrom', filters.dateRange.from);
-    if (filters.dateRange.to) params.append('dateTo', filters.dateRange.to);
-    if (filters.valueRange.min) params.append('valueMin', filters.valueRange.min);
-    if (filters.valueRange.max) params.append('valueMax', filters.valueRange.max);
+    if (debouncedFilters.search) {
+      const searchTerm = (debouncedFilters.search as string).trim();
+      if (searchTerm) {
+        params.append('search', searchTerm);
+      }
+    }
+    
+    if ((debouncedFilters.status as string[])?.length) {
+      params.append('status', (debouncedFilters.status as string[]).join(','));
+    }
+
+    if ((debouncedFilters.type as string[])?.length) {
+      params.append('type', (debouncedFilters.type as string[]).join(','));
+    }
+
+    const dateRange = debouncedFilters.dateRange as DateRangeFilter;
+    if (dateRange?.from) {
+      params.append('dateFrom', dateRange.from);
+    }
+
+    if (dateRange?.to) {
+      params.append('dateTo', dateRange.to);
+    }
+
+    const valueRange = debouncedFilters.valueRange as RangeFilter;
+    if (valueRange?.min) {
+      params.append('valueMin', valueRange.min);
+    }
+
+    if (valueRange?.max) {
+      params.append('valueMax', valueRange.max);
+    }
 
     return `/api/coupons?${params.toString()}`;
-  }, [page, pageSize, filters, sortBy, sortOrder]);
+  }, [page, pageSize, debouncedFilters, sortBy, sortOrder]);
 
-  const { data, error, mutate, isLoading } = useSWR<CouponsResponse>(
+  const { data, error, isLoading, mutate } = useSWR<CouponListingResponse>(
     getApiUrl(),
     fetcher
   );
-
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<CouponFormData>({
-    resolver: zodResolver(couponSchema),
-  });
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -320,134 +173,109 @@ export default function OffersPage() {
     }
   };
 
-  const getSortIcon = (column: string) => {
-    if (sortBy !== column) return <ChevronsUpDown className="h-4 w-4" />;
-    return sortOrder === 'asc' ? (
-      <ChevronUp className="h-4 w-4" />
-    ) : (
-      <ChevronDown className="h-4 w-4" />
-    );
-  };
-
-  const handleCreateCoupon = async (formData: CouponFormData) => {
+  const handleApiOperation = async (operation: () => Promise<any>, successMessage: string) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Add new coupon to mock data
-      const newCoupon: Coupon = {
-        id: `coupon_${mockCoupons.length + 1}`.padStart(3, '0'),
-        ...formData,
-        usageCount: 0,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      mockCoupons.unshift(newCoupon);
-      
-      await mutate();
-      setIsCreating(false);
-      reset();
+      setIsLoadingOperation(true);
+      await operation();
+      toast.success(successMessage);
+      mutate();
+      return true;
     } catch (error) {
-      console.error('Error creating coupon:', error);
-      alert('Failed to create coupon. Please try again.');
+      console.error(`Error: ${successMessage.toLowerCase()}:`, error);
+      toast.error(`Failed to ${successMessage.toLowerCase()}`);
+      return false;
+    } finally {
+      setIsLoadingOperation(false);
     }
   };
 
   const handleDeactivate = async (couponId: string) => {
     if (!confirm('Are you sure you want to deactivate this coupon?')) return;
+    
+    await handleApiOperation(
+      async () => {
+        await offerApi.updateCoupon(couponId, { isActive: false });
+        return true;
+      },
+      'Coupon deactivated successfully'
+    );
+  };
 
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Update mock data
-      const couponIndex = mockCoupons.findIndex(c => c.id === couponId);
-      if (couponIndex !== -1) {
-        mockCoupons[couponIndex].isActive = false;
-      }
-      
-      await mutate();
-    } catch (error) {
-      console.error('Error deactivating coupon:', error);
-      alert('Failed to deactivate coupon. Please try again.');
+  const handleDelete = async (couponId: string) => {
+    if (!confirm('Are you sure you want to delete this coupon?')) return;
+    
+    const success = await handleApiOperation(
+      async () => {
+        await offerApi.deleteCoupon(couponId);
+        return true;
+      },
+      'Coupon deleted successfully'
+    );
+    
+    if (success) {
+      setSelectedCoupons(prev => prev.filter(id => id !== couponId));
     }
   };
 
   const handleBulkDeactivate = async () => {
+    if (!selectedCoupons.length) return;
     if (!confirm(`Are you sure you want to deactivate ${selectedCoupons.length} coupons?`)) return;
-
-    try {
-      setIsLoadingOperation(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Update mock data
-      selectedCoupons.forEach(couponId => {
-        const couponIndex = mockCoupons.findIndex(c => c.id === couponId);
-        if (couponIndex !== -1) {
-          mockCoupons[couponIndex].isActive = false;
-        }
-      });
-      
-      await mutate();
+    
+    const success = await handleApiOperation(
+      async () => {
+        await offerApi.bulkDeactivateCoupons(selectedCoupons);
+        return true;
+      },
+      `${selectedCoupons.length} coupons deactivated successfully`
+    );
+    
+    if (success) {
       setSelectedCoupons([]);
-      toast.success(`Successfully deactivated ${selectedCoupons.length} coupons`);
-    } catch (error) {
-      console.error('Error deactivating coupons:', error);
-      toast.error('Failed to deactivate coupons');
-    } finally {
-      setIsLoadingOperation(false);
     }
   };
 
   const handleBulkDelete = async () => {
-    if (!confirm(`Are you sure you want to delete ${selectedCoupons.length} coupons? This action cannot be undone.`)) return;
-
-    try {
-      setIsLoadingOperation(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Update mock data
-      selectedCoupons.forEach(couponId => {
-        const couponIndex = mockCoupons.findIndex(c => c.id === couponId);
-        if (couponIndex !== -1) {
-          mockCoupons.splice(couponIndex, 1);
-        }
-      });
-      
-      await mutate();
+    if (!selectedCoupons.length) return;
+    if (!confirm(`Are you sure you want to delete ${selectedCoupons.length} coupons?`)) return;
+    
+    const success = await handleApiOperation(
+      async () => {
+        await offerApi.bulkDeleteCoupons(selectedCoupons);
+        return true;
+      },
+      `${selectedCoupons.length} coupons deleted successfully`
+    );
+    
+    if (success) {
       setSelectedCoupons([]);
-      toast.success(`Successfully deleted ${selectedCoupons.length} coupons`);
-    } catch (error) {
-      console.error('Error deleting coupons:', error);
-      toast.error('Failed to delete coupons');
-    } finally {
-      setIsLoadingOperation(false);
     }
   };
 
-  const handleFiltersChange = (newFilters: FilterState) => {
-    setFilters(newFilters as OfferFilterState);
+  const handleExport = () => {
+    // This would be implemented with actual export functionality
+    toast.success('Export feature not implemented yet');
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    setSelectedCoupons([]);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
     setPage(1);
     setSelectedCoupons([]);
   };
 
-  const handleFiltersReset = () => {
-    setFilters({
-      search: '',
-      status: [],
-      type: [],
-      dateRange: { from: '', to: '' },
-      valueRange: { min: '', max: '' },
-    });
-    setPage(1);
-    setSelectedCoupons([]);
+  const formatDiscountValue = (coupon: Coupon) => {
+    if (coupon.discountType === 'PERCENTAGE') {
+      return `${coupon.discountAmount}%`;
+    } else {
+      return `$${coupon.discountAmount.toFixed(2)}`;
+    }
   };
 
-  const columns: Column<Coupon>[] = [
+  const columns = [
     {
       header: ({ table }: { table: TableInstance }) => (
         <input
@@ -476,61 +304,95 @@ export default function OffersPage() {
           className="flex items-center gap-1 hover:text-blue-600"
         >
           Code
-          <span className="inline-flex">{getSortIcon('code')}</span>
+          <span className="inline-flex">
+            {sortBy === 'code' ? (
+              sortOrder === 'asc' ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
         </button>
       ),
-      accessorKey: 'code',
       cell: ({ row }: { row: Coupon }) => (
-        <div className="font-medium text-gray-900">{row.code}</div>
+        <div className="font-medium">{row.code}</div>
       ),
     },
     {
       header: () => (
         <button
-          onClick={() => handleSort('type')}
+          onClick={() => handleSort('name')}
           className="flex items-center gap-1 hover:text-blue-600"
         >
-          Type
-          <span className="inline-flex">{getSortIcon('type')}</span>
+          Name
+          <span className="inline-flex">
+            {sortBy === 'name' ? (
+              sortOrder === 'asc' ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
         </button>
       ),
-      accessorKey: 'type',
       cell: ({ row }: { row: Coupon }) => (
-        <div className="capitalize">{row.type}</div>
+        <span>{row.name}</span>
       ),
     },
     {
       header: () => (
         <button
-          onClick={() => handleSort('value')}
+          onClick={() => handleSort('discountAmount')}
           className="flex items-center gap-1 hover:text-blue-600"
         >
-          Value
-          <span className="inline-flex">{getSortIcon('value')}</span>
+          Discount
+          <span className="inline-flex">
+            {sortBy === 'discountAmount' ? (
+              sortOrder === 'asc' ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
         </button>
       ),
-      accessorKey: 'value',
       cell: ({ row }: { row: Coupon }) => (
-        <div>
-          {row.type === 'percent' 
-            ? `${row.value}%` 
-            : `$${row.value.toFixed(2)}`}
-        </div>
+        <span>{formatDiscountValue(row)}</span>
       ),
     },
     {
       header: () => (
         <button
-          onClick={() => handleSort('expiryDate')}
+          onClick={() => handleSort('endDate')}
           className="flex items-center gap-1 hover:text-blue-600"
         >
-          Expiry
-          <span className="inline-flex">{getSortIcon('expiryDate')}</span>
+          Expiry Date
+          <span className="inline-flex">
+            {sortBy === 'endDate' ? (
+              sortOrder === 'asc' ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
         </button>
       ),
-      accessorKey: 'expiryDate',
       cell: ({ row }: { row: Coupon }) => (
-        <div>{format(new Date(row.expiryDate), 'PP')}</div>
+        <span className="text-sm text-gray-500">
+          {formatDate(row.endDate)}
+        </span>
       ),
     },
     {
@@ -539,11 +401,26 @@ export default function OffersPage() {
           onClick={() => handleSort('usageCount')}
           className="flex items-center gap-1 hover:text-blue-600"
         >
-          Usage Count
-          <span className="inline-flex">{getSortIcon('usageCount')}</span>
+          Usage
+          <span className="inline-flex">
+            {sortBy === 'usageCount' ? (
+              sortOrder === 'asc' ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
         </button>
       ),
-      accessorKey: 'usageCount',
+      cell: ({ row }: { row: Coupon }) => (
+        <span>
+          {row.usageCount}
+          {row.usageLimit ? ` / ${row.usageLimit}` : ''}
+        </span>
+      ),
     },
     {
       header: () => (
@@ -552,13 +429,26 @@ export default function OffersPage() {
           className="flex items-center gap-1 hover:text-blue-600"
         >
           Status
-          <span className="inline-flex">{getSortIcon('isActive')}</span>
+          <span className="inline-flex">
+            {sortBy === 'isActive' ? (
+              sortOrder === 'asc' ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
         </button>
       ),
-      accessorKey: 'isActive',
       cell: ({ row }: { row: Coupon }) => (
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-          ${row.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
+          ${row.isActive
+            ? 'bg-green-100 text-green-700'
+            : 'bg-gray-100 text-gray-700'
+          }`}
+        >
           {row.isActive ? 'Active' : 'Inactive'}
         </span>
       ),
@@ -566,74 +456,129 @@ export default function OffersPage() {
     {
       header: 'Actions',
       cell: ({ row }: { row: Coupon }) => (
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => handleDeactivate(row.id)}
-          disabled={!row.isActive || isLoadingOperation}
-        >
-          <Trash2 className="h-4 w-4 mr-2" />
-          Deactivate
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/offers/edit/${row.id}`)}
+            disabled={isLoadingOperation}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          {row.isActive && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDeactivate(row.id)}
+              disabled={isLoadingOperation}
+            >
+              <Ban className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => handleDelete(row.id)}
+            disabled={isLoadingOperation}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       ),
     },
   ];
 
-  const hasActiveFilters = 
-    filters.search ||
-    filters.status.length > 0 ||
-    filters.type.length > 0 ||
-    filters.dateRange.from ||
-    filters.dateRange.to ||
-    filters.valueRange.min ||
-    filters.valueRange.max;
-
-  // Build query string from filters
-  const queryString = new URLSearchParams({
-    page: page.toString(),
-    pageSize: pageSize.toString(),
-    ...(filters.search && { search: filters.search }),
-    ...(filters.status.length && { status: filters.status.join(',') }),
-    ...(filters.type.length && { type: filters.type.join(',') }),
-    ...(filters.dateRange.from && { fromDate: filters.dateRange.from }),
-    ...(filters.dateRange.to && { toDate: filters.dateRange.to }),
-    ...(filters.valueRange.min && { minValue: filters.valueRange.min }),
-    ...(filters.valueRange.max && { maxValue: filters.valueRange.max }),
-    sortBy,
-    sortOrder,
-  }).toString();
-
   if (error) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-        <p className="text-red-600">Failed to load coupons</p>
+        <p className="text-red-600 font-medium">Failed to load coupons</p>
+        <p className="text-red-500 text-sm mt-1">
+          {error instanceof Error ? error.message : 'An unexpected error occurred'}
+        </p>
+        <button
+          onClick={() => {
+            mutate();
+          }}
+          className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (isLoading || !data) {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Tag className="h-6 w-6 text-gray-600" />
+            <h1 className="text-2xl font-semibold">Promotional Offers</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={true}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button onClick={() => router.push('/offers/new')} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Offer
+            </Button>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-40">
+          <p className="text-gray-500">Loading coupons...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Add check for unexpected data structure
+  if (!data.coupons || !Array.isArray(data.coupons)) {
+    return (
+      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+        <p className="text-yellow-600 font-medium">Data format issue</p>
+        <p className="text-yellow-500 text-sm mt-1">
+          The API returned data in an unexpected format. 
+          {data ? ` Received: ${JSON.stringify(data).substring(0, 100)}...` : ' No data received.'}
+        </p>
+        <button
+          onClick={() => {
+            mutate();
+          }}
+          className="mt-2 text-sm text-yellow-600 hover:text-yellow-800 underline"
+        >
+          Retry
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 p-6">
+      <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Tag className="h-6 w-6 text-gray-600" />
-          <h1 className="text-2xl font-semibold text-gray-900">Promotional Offers</h1>
+          <h1 className="text-2xl font-semibold">Promotional Offers</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => router.push('/offers/new')}
-            disabled={isLoadingOperation}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Offer
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => router.push('/offers/export')}
+            size="sm"
+            onClick={handleExport}
             disabled={isLoadingOperation}
           >
             <Download className="h-4 w-4 mr-2" />
             Export
+          </Button>
+          <Button onClick={() => router.push('/offers/new')} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Offer
           </Button>
         </div>
       </div>
@@ -642,15 +587,15 @@ export default function OffersPage() {
       <CommonFilters
         config={filterConfig}
         filters={filters}
-        onChange={handleFiltersChange}
-        onReset={handleFiltersReset}
+        onChange={setFilters}
+        onReset={resetFilters}
       />
 
       {/* Bulk Actions */}
       {selectedCoupons.length > 0 && (
-        <div className="flex items-center gap-4 p-4 bg-blue-50 rounded-lg">
-          <span className="text-sm text-blue-700">
-            {selectedCoupons.length} {selectedCoupons.length === 1 ? 'coupon' : 'coupons'} selected
+        <div className="flex items-center gap-4 py-4">
+          <span className="text-sm text-gray-600">
+            {selectedCoupons.length} items selected
           </span>
           <div className="flex items-center gap-2">
             <Button
@@ -675,10 +620,9 @@ export default function OffersPage() {
         </div>
       )}
 
-      {/* Table */}
-      <div className="rounded-lg border border-gray-200">
+      <div className="rounded-lg border border-gray-200 bg-white">
         <Table
-          data={data?.coupons || []}
+          data={data.coupons}
           columns={columns}
           isLoading={isLoading}
           selection={{
@@ -693,25 +637,22 @@ export default function OffersPage() {
             <p className="text-sm text-gray-700">
               Showing{' '}
               <span className="font-medium">
-                {data ? (page - 1) * pageSize + 1 : 0}
+                {data.pagination?.total ? (page - 1) * pageSize + 1 : 0}
               </span>{' '}
               to{' '}
               <span className="font-medium">
-                {data
-                  ? Math.min(page * pageSize, data.pagination?.total || 0)
+                {data.pagination?.total
+                  ? Math.min(page * pageSize, data.pagination.total)
                   : 0}
               </span>{' '}
               of{' '}
-              <span className="font-medium">{data?.pagination?.total || 0}</span>{' '}
+              <span className="font-medium">{data.pagination?.total || 0}</span>{' '}
               results
             </p>
 
             <select
               value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
+              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
               className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value={10}>10 per page</option>
@@ -721,103 +662,14 @@ export default function OffersPage() {
             </select>
           </div>
 
-          {data?.pagination && (
-            <Pagination
-              currentPage={page}
-              pageSize={pageSize}
-              totalItems={data.pagination.total}
-              onPageChange={setPage}
-            />
-          )}
+          <Pagination
+            currentPage={page}
+            pageSize={pageSize}
+            totalItems={data.pagination?.total || 0}
+            onPageChange={handlePageChange}
+          />
         </div>
       </div>
-
-      {/* Create Coupon Modal */}
-      {isCreating && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
-            <h2 className="text-xl font-semibold">Create New Coupon</h2>
-            
-            <form onSubmit={handleSubmit(handleCreateCoupon)} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Coupon Code
-                </label>
-                <input
-                  type="text"
-                  {...register('code')}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="SUMMER2024"
-                />
-                {errors.code && (
-                  <p className="mt-1 text-sm text-red-600">{errors.code.message}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Type
-                </label>
-                <select
-                  {...register('type')}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="flat">Flat Amount</option>
-                  <option value="percent">Percentage</option>
-                </select>
-                {errors.type && (
-                  <p className="mt-1 text-sm text-red-600">{errors.type.message}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Value
-                </label>
-                <input
-                  type="number"
-                  {...register('value', { valueAsNumber: true })}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="10"
-                />
-                {errors.value && (
-                  <p className="mt-1 text-sm text-red-600">{errors.value.message}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Expiry Date
-                </label>
-                <input
-                  type="date"
-                  {...register('expiryDate')}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-                {errors.expiryDate && (
-                  <p className="mt-1 text-sm text-red-600">{errors.expiryDate.message}</p>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setIsCreating(false);
-                    reset();
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  Create Coupon
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 } 

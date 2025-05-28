@@ -28,19 +28,47 @@ export default function EditProductPage({ params }: EditProductPageProps) {
         const data = await response.json();
         console.log('Product data received:', data);
         
+        // Extract variant data for debugging
+        if (data.variants && data.variants.length > 0) {
+          console.log('First variant data:', data.variants[0]);
+        } else {
+          console.log('No variants found in product data');
+        }
+        
         // Transform the product data to match the form's expected format
         const transformedProduct = {
           ...data,
-          // If variants exist, use the first variant's SKU and stock
-          sku: data.variants && data.variants.length > 0 ? data.variants[0].sku : data.sku || '',
-          stock: data.variants && data.variants.length > 0 ? data.variants[0].stock : data.stock || 0,
+          // Extract SKU from variants or use root level sku
+          sku: data.variants && data.variants.length > 0 
+            ? data.variants[0].sku 
+            : (data.sku || ''),
+          
+          // Extract stock from variants or use root level stock
+          stock: data.variants && data.variants.length > 0 
+            ? data.variants[0].stock 
+            : (typeof data.stock === 'number' ? data.stock : 0),
+          
           // Use categoryId directly or extract it from category object
-          categoryId: data.categoryId || (data.category ? data.category.id : ''),
+          categoryId: data.categoryId || (data.category && typeof data.category === 'object' ? data.category.id : ''),
+          
           // Ensure image is properly mapped
           image: data.mediaUrl || data.image || '',
-          // Map featured status
-          isFeatured: data.isFeatured || false,
+          
+          // Map featured and published status
+          isFeatured: typeof data.isFeatured === 'boolean' ? data.isFeatured : false,
+          isPublished: typeof data.isPublished === 'boolean' ? data.isPublished : false,
         };
+        
+        // Validate required fields are present
+        if (!transformedProduct.sku) {
+          console.warn('SKU is missing or empty after transformation');
+        }
+        
+        if (transformedProduct.stock === undefined || transformedProduct.stock === null) {
+          console.warn('Stock is undefined or null after transformation');
+          // Provide a default value
+          transformedProduct.stock = 0;
+        }
         
         console.log('Transformed product data:', transformedProduct);
         setProduct(transformedProduct);
@@ -56,14 +84,29 @@ export default function EditProductPage({ params }: EditProductPageProps) {
   }, [params.id]);
 
   const handleUpdateProduct = async (data: any) => {
-    console.log('Submitting product update:', data);
+    console.log('Form data received:', data);
+    
+    // Format the data for the API
+    const formattedData = {
+      ...data,
+      // Ensure numeric values are sent as numbers
+      price: typeof data.price === 'number' ? data.price : parseFloat(data.price) || 0,
+      stock: typeof data.stock === 'number' ? data.stock : parseInt(data.stock) || 0,
+      // Ensure SKU exists
+      sku: data.sku || `SKU-${Date.now()}`,
+      // Ensure boolean values are correct
+      isFeatured: Boolean(data.isFeatured),
+      isPublished: Boolean(data.isPublished),
+    };
+    
+    console.log('Submitting product update:', formattedData);
     
     const response = await fetch(`/api/products/${params.id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify(formattedData),
     });
 
     if (!response.ok) {
