@@ -609,7 +609,7 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
         <div className="flex flex-wrap items-center gap-2">
           {activeFilters.map(({ group, value, label, key }) => {
             // Special styling for status filters
-            if (key === 'isActive') {
+            if (key === 'isActive' || key === 'status') {
               return (
                 <div
                   key={`${key}-${value}-${label}`}

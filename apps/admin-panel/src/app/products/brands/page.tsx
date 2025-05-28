@@ -52,7 +52,7 @@ const filterConfig: FilterConfig = {
     placeholder: 'Search brands by name...',
   },
   status: {
-    type: 'select',
+    type: 'boolean',
     placeholder: 'Filter by status',
     options: [
       { value: 'active', label: 'Active' },
