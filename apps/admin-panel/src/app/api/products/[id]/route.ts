@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { makeRequest } from '../../../../lib/make-request';
+import { makeRequest, prepareDateFields } from '../../../../lib/make-request';
 
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace('localhost', '127.0.0.1') || 'http://127.0.0.1:3003';
@@ -101,6 +101,14 @@ export async function GET(
       // Add category information, either from object or ID
       categoryId: data.categoryId || 
         (data.category && typeof data.category === 'object' ? data.category.id : ''),
+      
+      // Add brand ID
+      brandId: data.brandId || 
+        (data.brand && typeof data.brand === 'object' ? data.brand.id : ''),
+      
+      // Add tag IDs
+      tagIds: data.tagIds || 
+        (data.tags && Array.isArray(data.tags) ? data.tags.map((tag: any) => tag.id) : []),
       
       // Set default values for booleans
       isFeatured: typeof data.isFeatured === 'boolean' ? data.isFeatured : false,
@@ -238,7 +246,16 @@ export async function PUT(
       console.log('Created default variant:', variant);
     }
 
-    // Format data for API - remove fields that the API doesn't expect
+    // Validate brandId before sending to API
+    if (productData.brandId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productData.brandId)) {
+      console.log(`Invalid brandId format: "${productData.brandId}" - removing from request`);
+      delete productData.brandId;
+    }
+    
+    // Process date fields - remove them if they're null or invalid
+    prepareDateFields(productData);
+    
+    // Format data for API - include all fields that the API expects
     const apiProductData = {
       name: productData.name,
       description: productData.description || '',
@@ -247,7 +264,57 @@ export async function PUT(
       variants: productData.variants || [],
       isFeatured: productData.isFeatured || false,
       isPublished: productData.isPublished || false,
+      // Add all the missing fields with validation
+      salePrice: productData.salePrice,
+      stockQuantity: productData.stockQuantity,
+      isInStock: productData.isInStock,
+      specifications: productData.specifications,
+      keywords: productData.keywords,
+      // Ensure seoMetadata is always an object
+      seoMetadata: productData.seoMetadata || {
+        title: '',
+        description: '',
+        keywords: [],
+        ogImage: ''
+      },
+      // Clean up ogImage if it's not a valid image URL
+      ...(productData.seoMetadata && {
+        seoMetadata: {
+          ...productData.seoMetadata,
+          ogImage: (() => {
+            if (productData.seoMetadata.ogImage === null || productData.seoMetadata.ogImage === undefined || productData.seoMetadata.ogImage.trim() === '') return '';
+            
+            // Check if it's a valid image URL (should end with an image extension or be a valid image URL)
+            const isValidImageUrl = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(productData.seoMetadata.ogImage) || 
+                                   /^(https?:\/\/.*\.(jpg|jpeg|png|gif|webp|svg))/i.test(productData.seoMetadata.ogImage);
+            
+            if (!isValidImageUrl) {
+              console.log(`Invalid image URL detected: ${productData.seoMetadata.ogImage} - removing from request`);
+              return '';
+            }
+            
+            return productData.seoMetadata.ogImage;
+          })()
+        }
+      }),
+      // Only include brandId if it's a valid UUID
+      ...(productData.brandId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productData.brandId) 
+        ? { brandId: productData.brandId } 
+        : {}),
+      tagIds: productData.tagIds,
     };
+
+    // Only add date fields if they are valid dates
+    if (productData.saleStartDate) {
+      apiProductData.saleStartDate = productData.saleStartDate;
+    }
+    
+    if (productData.saleEndDate) {
+      apiProductData.saleEndDate = productData.saleEndDate;
+    }
+
+    // Log complete data being sent to API
+    console.log('Complete product data for API:', JSON.stringify(apiProductData, null, 2));
 
     // Use the admin endpoint for updating products
     const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${productId}`;

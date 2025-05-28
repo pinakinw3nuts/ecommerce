@@ -7,6 +7,55 @@ import { Product } from '../entities/Product';
 
 const productService = new ProductService();
 
+// Helper function to transform a product entity into a clean response object
+function formatProductResponse(product: Product) {
+  console.log('Formatting product response for:', product.id);
+  
+  return {
+    id: product.id,
+    name: product.name,
+    description: product.description,
+    price: product.price,
+    slug: product.slug,
+    mediaUrl: product.mediaUrl,
+    isFeatured: product.isFeatured,
+    isPublished: product.isPublished,
+    salePrice: product.salePrice,
+    saleStartDate: product.saleStartDate,
+    saleEndDate: product.saleEndDate,
+    stockQuantity: product.stockQuantity,
+    isInStock: product.isInStock,
+    specifications: product.specifications,
+    keywords: product.keywords,
+    seoMetadata: product.seoMetadata || null,
+    category: product.category ? {
+      id: product.category.id,
+      name: product.category.name,
+      description: product.category.description
+    } : null,
+    brand: product.brand ? {
+      id: product.brand.id,
+      name: product.brand.name
+    } : null,
+    variants: Array.isArray(product.variants) ? product.variants.map(v => ({
+      id: v.id,
+      name: v.name,
+      sku: v.sku, 
+      price: v.price,
+      stock: v.stock
+    })) : [],
+    tagIds: Array.isArray(product.tags) ? product.tags.map(t => t.id) : [],
+    tags: Array.isArray(product.tags) ? product.tags.map(t => ({
+      id: t.id,
+      name: t.name
+    })) : [],
+    images: Array.isArray(product.images) ? product.images : [],
+    attributes: Array.isArray(product.attributes) ? product.attributes : [],
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt
+  };
+}
+
 const productSchema = z.object({
   name: z.string(),
   description: z.string(),
@@ -22,6 +71,20 @@ const productSchema = z.object({
     price: z.number(),
     stock: z.number(),
   })).optional(),
+  salePrice: z.number().optional(),
+  saleStartDate: z.string().optional().transform(val => val ? new Date(val) : undefined),
+  saleEndDate: z.string().optional().transform(val => val ? new Date(val) : undefined),
+  stockQuantity: z.number().optional(),
+  isInStock: z.boolean().optional(),
+  specifications: z.string().optional(),
+  keywords: z.array(z.string()).optional(),
+  seoMetadata: z.object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    keywords: z.array(z.string()).optional(),
+    ogImage: z.string().optional(),
+  }).optional(),
+  brandId: z.string().optional(),
 });
 
 // Schema for query parameters
@@ -75,12 +138,27 @@ interface ProductBody {
   isFeatured?: boolean;
   isPublished?: boolean;
   categoryId: string;
+  tagIds?: string[];
   variants?: Array<{
     name: string;
     sku: string;
     price: number;
     stock: number;
   }>;
+  salePrice?: number;
+  saleStartDate?: Date;
+  saleEndDate?: Date;
+  stockQuantity?: number;
+  isInStock?: boolean;
+  specifications?: string;
+  keywords?: string[];
+  seoMetadata?: {
+    title?: string;
+    description?: string;
+    keywords?: string[];
+    ogImage?: string;
+  };
+  brandId?: string;
 }
 
 interface ProductQueryParams {
@@ -263,7 +341,16 @@ export const productController = {
           console.log('Options passed to service:', JSON.stringify(options, null, 2));
           
           const result = await productService.listProducts(options);
-          return reply.send(result);
+          
+          // Format each product in the result data array
+          const formattedResult = {
+            data: result.data.map(product => formatProductResponse(product)),
+            meta: result.meta
+          };
+          
+          console.log(`Returning ${formattedResult.data.length} formatted products`);
+          
+          return reply.send(formattedResult);
         } catch (error) {
           request.log.error('Error in admin product list handler:', error);
           console.error('Detailed error:', error);
@@ -293,7 +380,73 @@ export const productController = {
               description: { type: 'string' },
               price: { type: 'number' },
               slug: { type: 'string' },
-              mediaUrl: { type: 'string', nullable: true }
+              mediaUrl: { type: 'string', nullable: true },
+              isFeatured: { type: 'boolean' },
+              isPublished: { type: 'boolean' },
+              salePrice: { type: 'number', nullable: true },
+              saleStartDate: { type: 'string', format: 'date-time', nullable: true },
+              saleEndDate: { type: 'string', format: 'date-time', nullable: true },
+              stockQuantity: { type: 'number' },
+              isInStock: { type: 'boolean' },
+              specifications: { type: 'string', nullable: true },
+              keywords: { 
+                type: 'array',
+                items: { type: 'string' },
+                nullable: true
+              },
+              seoMetadata: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  title: { type: 'string', nullable: true },
+                  description: { type: 'string', nullable: true },
+                  keywords: { 
+                    type: 'array', 
+                    items: { type: 'string' },
+                    nullable: true
+                  },
+                  ogImage: { type: 'string', nullable: true }
+                }
+              },
+              category: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  description: { type: 'string', nullable: true }
+                }
+              },
+              brand: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' }
+                }
+              },
+              variants: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    sku: { type: 'string' },
+                    price: { type: 'number' },
+                    stock: { type: 'number' }
+                  }
+                }
+              },
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' }
+                  }
+                }
+              }
             }
           },
           404: {
@@ -307,28 +460,53 @@ export const productController = {
       handler: async (request: FastifyRequest<{ Params: ProductParams }>, reply) => {
         try {
           const { identifier } = request.params;
+          console.log(`Getting product with identifier: ${identifier}`);
+          
           let product: Product | null;
 
           // Try to find by ID first
           product = await productService.getProductById(identifier);
+          console.log(`Product retrieval result:`, {
+            found: !!product,
+            fields: product ? Object.keys(product) : [],
+            relations: product ? {
+              hasCategory: !!product.category,
+              hasTags: Array.isArray(product.tags) ? product.tags.length : 0,
+              hasVariants: Array.isArray(product.variants) ? product.variants.length : 0,
+              hasBrand: !!product.brand,
+              hasImages: Array.isArray(product.images) ? product.images.length : 0,
+              hasAttributes: Array.isArray(product.attributes) ? product.attributes.length : 0
+            } : null
+          });
 
           // If not found by ID, try to find by slug
           if (!product) {
+            console.log(`Product not found by ID, trying by slug...`);
             const result = await productService.listProducts({
               filters: { search: identifier },
               pagination: { page: 1, limit: 1 }
             });
             product = result.data.find((p: Product) => p.slug === identifier) || null;
+            console.log(`Search result:`, {
+              found: !!product,
+              totalResults: result.data.length
+            });
           }
 
           if (!product) {
+            console.log(`Product not found with identifier: ${identifier}`);
             return reply.code(404).send({ message: 'Product not found' });
           }
 
-          return reply.send(product);
+          // Format the product response using the helper function
+          const fullProduct = formatProductResponse(product);
+
+          console.log(`Sending full product response with fields:`, Object.keys(fullProduct));
+          return reply.send(fullProduct);
         } catch (error) {
+          console.error(`Error retrieving product:`, error);
           request.log.error(error);
-          return reply.code(500).send({ message: 'Internal server error' });
+          return reply.code(500).send({ message: 'Internal server error', error: error instanceof Error ? error.message : String(error) });
         }
       }
     });
@@ -352,6 +530,7 @@ export const productController = {
             isFeatured: { type: 'boolean' },
             isPublished: { type: 'boolean' },
             categoryId: { type: 'string' },
+            tagIds: { type: 'array', items: { type: 'string' } },
             variants: {
               type: 'array',
               items: {
@@ -363,7 +542,24 @@ export const productController = {
                   stock: { type: 'number' }
                 }
               }
-            }
+            },
+            salePrice: { type: 'number' },
+            saleStartDate: { type: 'string', format: 'date-time' },
+            saleEndDate: { type: 'string', format: 'date-time' },
+            stockQuantity: { type: 'number' },
+            isInStock: { type: 'boolean' },
+            specifications: { type: 'string' },
+            keywords: { type: 'array', items: { type: 'string' } },
+            seoMetadata: {
+              type: 'object',
+              properties: {
+                title: { type: 'string' },
+                description: { type: 'string' },
+                keywords: { type: 'array', items: { type: 'string' } },
+                ogImage: { type: 'string' }
+              }
+            },
+            brandId: { type: 'string' }
           }
         },
         response: {
@@ -373,7 +569,66 @@ export const productController = {
               id: { type: 'string' },
               name: { type: 'string' },
               description: { type: 'string' },
-              price: { type: 'number' }
+              price: { type: 'number' },
+              slug: { type: 'string' },
+              mediaUrl: { type: 'string', nullable: true },
+              isFeatured: { type: 'boolean' },
+              isPublished: { type: 'boolean' },
+              category: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' }
+                }
+              },
+              brand: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' }
+                }
+              },
+              salePrice: { type: 'number', nullable: true },
+              saleStartDate: { type: 'string', format: 'date-time', nullable: true },
+              saleEndDate: { type: 'string', format: 'date-time', nullable: true },
+              stockQuantity: { type: 'number' },
+              isInStock: { type: 'boolean' },
+              specifications: { type: 'string', nullable: true },
+              keywords: { type: 'array', items: { type: 'string' }, nullable: true },
+              seoMetadata: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  keywords: { type: 'array', items: { type: 'string' } },
+                  ogImage: { type: 'string' }
+                }
+              },
+              variants: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    sku: { type: 'string' },
+                    price: { type: 'number' },
+                    stock: { type: 'number' }
+                  }
+                }
+              },
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' }
+                  }
+                }
+              }
             }
           }
         }
@@ -381,10 +636,31 @@ export const productController = {
       preHandler: validateRequest(productSchema),
       handler: async (request: FastifyRequest<{ Body: ProductBody }>, reply: FastifyReply) => {
         try {
+          console.log('Creating product with data:', request.body);
+          
+          // Add detailed logging for date fields
+          if (request.body.saleStartDate) {
+            console.log('saleStartDate raw value:', request.body.saleStartDate);
+            console.log('saleStartDate type:', typeof request.body.saleStartDate);
+            console.log('saleStartDate instanceof Date:', request.body.saleStartDate instanceof Date);
+            console.log('saleStartDate after parsing:', new Date(request.body.saleStartDate));
+          }
+          
+          if (request.body.saleEndDate) {
+            console.log('saleEndDate raw value:', request.body.saleEndDate);
+            console.log('saleEndDate type:', typeof request.body.saleEndDate);
+            console.log('saleEndDate instanceof Date:', request.body.saleEndDate instanceof Date);
+            console.log('saleEndDate after parsing:', new Date(request.body.saleEndDate));
+          }
+          
           const product = await productService.createProduct(request.body);
-          return reply.code(201).send(product);
+          // Format the product response using the helper function
+          const formattedProduct = formatProductResponse(product);
+          console.log(`Created product, returning with fields:`, Object.keys(formattedProduct));
+          return reply.code(201).send(formattedProduct);
         } catch (error) {
-          return reply.code(500).send({ message: 'Internal server error' });
+          console.error('Error creating product:', error);
+          return reply.code(500).send({ message: 'Internal server error', error: error instanceof Error ? error.message : String(error) });
         }
       }
     });
@@ -411,6 +687,7 @@ export const productController = {
             isFeatured: { type: 'boolean' },
             isPublished: { type: 'boolean' },
             categoryId: { type: 'string' },
+            tagIds: { type: 'array', items: { type: 'string' } },
             variants: {
               type: 'array',
               items: {
@@ -422,7 +699,24 @@ export const productController = {
                   stock: { type: 'number' }
                 }
               }
-            }
+            },
+            salePrice: { type: 'number' },
+            saleStartDate: { type: 'string', format: 'date-time' },
+            saleEndDate: { type: 'string', format: 'date-time' },
+            stockQuantity: { type: 'number' },
+            isInStock: { type: 'boolean' },
+            specifications: { type: 'string' },
+            keywords: { type: 'array', items: { type: 'string' } },
+            seoMetadata: {
+              type: 'object',
+              properties: {
+                title: { type: 'string' },
+                description: { type: 'string' },
+                keywords: { type: 'array', items: { type: 'string' } },
+                ogImage: { type: 'string' }
+              }
+            },
+            brandId: { type: 'string' }
           }
         },
         response: {
@@ -432,7 +726,54 @@ export const productController = {
               id: { type: 'string' },
               name: { type: 'string' },
               description: { type: 'string' },
-              price: { type: 'number' }
+              price: { type: 'number' },
+              slug: { type: 'string' },
+              mediaUrl: { type: 'string', nullable: true },
+              isFeatured: { type: 'boolean' },
+              isPublished: { type: 'boolean' },
+              category: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' }
+                }
+              },
+              brand: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' }
+                }
+              },
+              salePrice: { type: 'number', nullable: true },
+              saleStartDate: { type: 'string', format: 'date-time', nullable: true },
+              saleEndDate: { type: 'string', format: 'date-time', nullable: true },
+              stockQuantity: { type: 'number' },
+              isInStock: { type: 'boolean' },
+              variants: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    sku: { type: 'string' },
+                    price: { type: 'number' },
+                    stock: { type: 'number' }
+                  }
+                }
+              },
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' }
+                  }
+                }
+              }
             }
           },
           404: {
@@ -446,13 +787,38 @@ export const productController = {
       preHandler: validateRequest(productSchema.partial()),
       handler: async (request: FastifyRequest<{ Params: ProductParams, Body: Partial<ProductBody> }>, reply) => {
         try {
+          console.log(`Updating product with identifier: ${request.params.identifier}`);
+          console.log(`Update data:`, request.body);
+          
+          // Add detailed logging for date fields
+          if (request.body.saleStartDate) {
+            console.log('saleStartDate raw value:', request.body.saleStartDate);
+            console.log('saleStartDate type:', typeof request.body.saleStartDate);
+            console.log('saleStartDate instanceof Date:', request.body.saleStartDate instanceof Date);
+            console.log('saleStartDate after parsing:', new Date(request.body.saleStartDate));
+          }
+          
+          if (request.body.saleEndDate) {
+            console.log('saleEndDate raw value:', request.body.saleEndDate);
+            console.log('saleEndDate type:', typeof request.body.saleEndDate);
+            console.log('saleEndDate instanceof Date:', request.body.saleEndDate instanceof Date);
+            console.log('saleEndDate after parsing:', new Date(request.body.saleEndDate));
+          }
+          
           const product = await productService.updateProduct(request.params.identifier, request.body);
           if (!product) {
+            console.log(`Product not found for update: ${request.params.identifier}`);
             return reply.code(404).send({ message: 'Product not found' });
           }
-          return reply.send(product);
+          
+          // Format the product response using the helper function
+          const formattedProduct = formatProductResponse(product);
+          console.log(`Updated product, returning with fields:`, Object.keys(formattedProduct));
+          
+          return reply.send(formattedProduct);
         } catch (error) {
-          return reply.code(500).send({ message: 'Internal server error' });
+          console.error(`Error updating product:`, error);
+          return reply.code(500).send({ message: 'Internal server error', error: error instanceof Error ? error.message : String(error) });
         }
       }
     });
@@ -701,7 +1067,16 @@ export const productController = {
           console.log('Options passed to service:', JSON.stringify(options, null, 2));
           
           const result = await productService.listProducts(options);
-          return reply.send(result);
+          
+          // Format each product in the result data array
+          const formattedResult = {
+            data: result.data.map(product => formatProductResponse(product)),
+            meta: result.meta
+          };
+          
+          console.log(`Returning ${formattedResult.data.length} formatted products`);
+          
+          return reply.send(formattedResult);
         } catch (error) {
           request.log.error('Error in admin product list handler:', error);
           console.error('Detailed error:', error);
@@ -710,7 +1085,7 @@ export const productController = {
       }
     });
 
-    // GET /products/:identifier - Get a product by ID or slug
+    // Protected GET /products/:identifier - Get a product by ID or slug
     fastify.get('/:identifier', {
       schema: {
         tags: ['products'],
@@ -731,7 +1106,73 @@ export const productController = {
               description: { type: 'string' },
               price: { type: 'number' },
               slug: { type: 'string' },
-              mediaUrl: { type: 'string', nullable: true }
+              mediaUrl: { type: 'string', nullable: true },
+              isFeatured: { type: 'boolean' },
+              isPublished: { type: 'boolean' },
+              salePrice: { type: 'number', nullable: true },
+              saleStartDate: { type: 'string', format: 'date-time', nullable: true },
+              saleEndDate: { type: 'string', format: 'date-time', nullable: true },
+              stockQuantity: { type: 'number' },
+              isInStock: { type: 'boolean' },
+              specifications: { type: 'string', nullable: true },
+              keywords: { 
+                type: 'array',
+                items: { type: 'string' },
+                nullable: true
+              },
+              seoMetadata: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  title: { type: 'string', nullable: true },
+                  description: { type: 'string', nullable: true },
+                  keywords: { 
+                    type: 'array', 
+                    items: { type: 'string' },
+                    nullable: true
+                  },
+                  ogImage: { type: 'string', nullable: true }
+                }
+              },
+              category: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  description: { type: 'string', nullable: true }
+                }
+              },
+              brand: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' }
+                }
+              },
+              variants: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    sku: { type: 'string' },
+                    price: { type: 'number' },
+                    stock: { type: 'number' }
+                  }
+                }
+              },
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' }
+                  }
+                }
+              }
             }
           },
           404: {
@@ -745,28 +1186,53 @@ export const productController = {
       handler: async (request: FastifyRequest<{ Params: ProductParams }>, reply) => {
         try {
           const { identifier } = request.params;
+          console.log(`Getting product with identifier: ${identifier}`);
+          
           let product: Product | null;
 
           // Try to find by ID first
           product = await productService.getProductById(identifier);
+          console.log(`Product retrieval result:`, {
+            found: !!product,
+            fields: product ? Object.keys(product) : [],
+            relations: product ? {
+              hasCategory: !!product.category,
+              hasTags: Array.isArray(product.tags) ? product.tags.length : 0,
+              hasVariants: Array.isArray(product.variants) ? product.variants.length : 0,
+              hasBrand: !!product.brand,
+              hasImages: Array.isArray(product.images) ? product.images.length : 0,
+              hasAttributes: Array.isArray(product.attributes) ? product.attributes.length : 0
+            } : null
+          });
 
           // If not found by ID, try to find by slug
           if (!product) {
+            console.log(`Product not found by ID, trying by slug...`);
             const result = await productService.listProducts({
               filters: { search: identifier },
               pagination: { page: 1, limit: 1 }
             });
             product = result.data.find((p: Product) => p.slug === identifier) || null;
+            console.log(`Search result:`, {
+              found: !!product,
+              totalResults: result.data.length
+            });
           }
 
           if (!product) {
+            console.log(`Product not found with identifier: ${identifier}`);
             return reply.code(404).send({ message: 'Product not found' });
           }
 
-          return reply.send(product);
+          // Format the product response using the helper function
+          const fullProduct = formatProductResponse(product);
+
+          console.log(`Sending full product response with fields:`, Object.keys(fullProduct));
+          return reply.send(fullProduct);
         } catch (error) {
+          console.error(`Error retrieving product:`, error);
           request.log.error(error);
-          return reply.code(500).send({ message: 'Internal server error' });
+          return reply.code(500).send({ message: 'Internal server error', error: error instanceof Error ? error.message : String(error) });
         }
       }
     });

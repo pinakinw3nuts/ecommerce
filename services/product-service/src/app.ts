@@ -9,10 +9,39 @@ import fastifySwaggerUi from '@fastify/swagger-ui';
 import { authMiddleware } from './middlewares/auth';
 import { brandController } from './controllers/brand.controller';
 import { couponController } from './controllers/coupon.controller';
+import { tagController } from './controllers/tag.controller';
 
 export async function buildApp() {
   const app = fastify({
     logger: true
+  });
+
+  // Configure JSON serialization to handle circular references
+  app.addHook('onSend', async (request, reply, payload) => {
+    if (typeof payload !== 'string') {
+      return payload;
+    }
+    
+    try {
+      // Parse the string payload to an object
+      const parsedPayload = JSON.parse(payload);
+      
+      // Handle circular references in response by converting to JSON with a custom replacer
+      const seen = new WeakSet();
+      return JSON.stringify(parsedPayload, (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) {
+            return '[Circular]';
+          }
+          seen.add(value);
+        }
+        return value;
+      });
+    } catch (error) {
+      // If parsing fails, return the original payload
+      console.error('Error processing JSON payload:', error);
+      return payload;
+    }
   });
 
   // Register Swagger
@@ -29,6 +58,7 @@ export async function buildApp() {
     await publicApp.register(attributeRoutes, { prefix: '/attributes' });
     await publicApp.register(brandController.registerPublicRoutes, { prefix: '/brands' });
     await publicApp.register(couponController.registerPublicRoutes, { prefix: '/coupons' });
+    await publicApp.register(tagController.registerPublicRoutes, { prefix: '/tags' });
     console.log('Public routes registered successfully');
   }, { prefix: '/api/v1' });
 
@@ -49,6 +79,7 @@ export async function buildApp() {
     await protectedApp.register(attributeRoutes, { prefix: '/attributes' });
     await protectedApp.register(brandController.registerProtectedRoutes, { prefix: '/brands' });
     await protectedApp.register(couponController.registerProtectedRoutes, { prefix: '/coupons' });
+    await protectedApp.register(tagController.registerProtectedRoutes, { prefix: '/tags' });
     console.log('Protected routes registered successfully');
   }, { prefix: '/api/v1/admin' });
 

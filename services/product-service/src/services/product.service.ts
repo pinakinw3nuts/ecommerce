@@ -6,6 +6,7 @@ import { ProductVariant } from '../entities/ProductVariant';
 import { generateSlug } from '../utils/slugify';
 import { In, Like, Between, FindOptionsOrder, FindOptionsWhere, ILike } from 'typeorm';
 import { MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
+import { Brand } from '../entities/Brand';
 
 export interface ProductFilterOptions {
   search?: string;
@@ -49,13 +50,35 @@ export class ProductService {
       price: number;
       stock: number;
     }>;
+    salePrice?: number;
+    saleStartDate?: Date;
+    saleEndDate?: Date;
+    stockQuantity?: number;
+    isInStock?: boolean;
+    specifications?: string;
+    keywords?: string[];
+    seoMetadata?: {
+      title?: string;
+      description?: string;
+      keywords?: string[];
+      ogImage?: string;
+    };
+    brandId?: string;
   }) {
+    console.log('Creating product with data:', JSON.stringify(data, null, 2));
+    
     const slug = generateSlug(data.name);
     const category = await this.categoryRepo.findOneByOrFail({ id: data.categoryId });
+    
+    // Fetch tags if provided
     let tags: Tag[] = [];
     if (data.tagIds && data.tagIds.length > 0) {
+      console.log(`Fetching ${data.tagIds.length} tags with IDs:`, data.tagIds);
       tags = await this.tagRepo.findBy({ id: In(data.tagIds) });
+      console.log(`Found ${tags.length} tags`);
     }
+    
+    // Create the product with basic fields
     const product = this.productRepo.create({
       name: data.name,
       slug,
@@ -66,18 +89,77 @@ export class ProductService {
       isPublished: data.isPublished ?? true,
       category,
       tags,
+      // Add the additional fields
+      salePrice: data.salePrice,
+      saleStartDate: data.saleStartDate,
+      saleEndDate: data.saleEndDate,
+      stockQuantity: data.stockQuantity ?? 0,
+      isInStock: data.isInStock ?? true,
+      specifications: data.specifications,
+      keywords: data.keywords,
+      seoMetadata: data.seoMetadata,
     });
+    
+    console.log('Created product entity with fields:', Object.keys(product));
+    
+    // Log SEO metadata if provided
+    if (data.seoMetadata) {
+      console.log('SEO Metadata:', JSON.stringify(data.seoMetadata, null, 2));
+    }
+    
+    // Set brand if brandId is provided
+    if (data.brandId) {
+      console.log(`Fetching brand with ID: ${data.brandId}`);
+      const brandRepo = AppDataSource.getRepository(Brand);
+      const brand = await brandRepo.findOneBy({ id: data.brandId });
+      if (brand) {
+        console.log(`Found brand: ${brand.name}`);
+        product.brand = brand;
+      } else {
+        console.log(`Brand with ID ${data.brandId} not found`);
+      }
+    }
+    
+    // Create variants if provided
     if (data.variants && data.variants.length > 0) {
+      console.log(`Creating ${data.variants.length} product variants`);
       product.variants = data.variants.map(v => this.variantRepo.create(v));
     }
-    return this.productRepo.save(product);
+    
+    // Save and return the product
+    console.log('Saving product to database...');
+    const savedProduct = await this.productRepo.save(product);
+    console.log(`Product saved with ID: ${savedProduct.id}`);
+    return savedProduct;
   }
 
   async getProductById(id: string) {
-    return this.productRepo.findOne({
-      where: { id },
-      relations: ['category', 'tags', 'variants'],
-    });
+    console.log(`Service: Getting product by id ${id}`);
+    try {
+      const product = await this.productRepo.findOne({
+        where: { id },
+        relations: ['category', 'tags', 'variants', 'brand', 'images', 'attributes'],
+      });
+      
+      console.log(`Service: Product found: ${!!product}, with fields:`, product ? Object.keys(product) : 'none');
+      
+      if (product) {
+        // Ensure all relations are properly loaded
+        console.log(`Service: Relations loaded:`, {
+          hasCategory: !!product.category,
+          hasTags: Array.isArray(product.tags) ? product.tags.length : 0,
+          hasVariants: Array.isArray(product.variants) ? product.variants.length : 0,
+          hasBrand: !!product.brand,
+          hasImages: Array.isArray(product.images) ? product.images.length : 0,
+          hasAttributes: Array.isArray(product.attributes) ? product.attributes.length : 0
+        });
+      }
+      
+      return product;
+    } catch (error) {
+      console.error(`Service: Error getting product by id:`, error);
+      throw error;
+    }
   }
 
   async updateProduct(id: string, data: Partial<{
@@ -96,29 +178,110 @@ export class ProductService {
       price: number;
       stock: number;
     }>;
+    salePrice?: number;
+    saleStartDate?: Date;
+    saleEndDate?: Date;
+    stockQuantity?: number;
+    isInStock?: boolean;
+    specifications?: string;
+    keywords?: string[];
+    seoMetadata?: {
+      title?: string;
+      description?: string;
+      keywords?: string[];
+      ogImage?: string;
+    };
+    brandId?: string;
   }>) {
-    const product = await this.productRepo.findOneOrFail({ where: { id }, relations: ['variants', 'tags', 'category'] });
+    console.log(`Updating product ${id} with data:`, JSON.stringify(data, null, 2));
+    
+    const product = await this.productRepo.findOneOrFail({ 
+      where: { id }, 
+      relations: ['variants', 'tags', 'category', 'brand', 'attributes', 'images'] 
+    });
+    
+    console.log(`Found product: ${product.name}, with original fields:`, Object.keys(product));
+    
     if (data.name) {
       product.name = data.name;
       product.slug = generateSlug(data.name);
     }
+    
+    // Update basic fields if provided
     if (data.description !== undefined) product.description = data.description;
     if (data.price !== undefined) product.price = data.price;
     if (data.mediaUrl !== undefined) product.mediaUrl = data.mediaUrl;
     if (data.isFeatured !== undefined) product.isFeatured = data.isFeatured;
     if (data.isPublished !== undefined) product.isPublished = data.isPublished;
+    
+    // Update additional fields if provided
+    if (data.salePrice !== undefined) {
+      console.log(`Updating salePrice to: ${data.salePrice}`);
+      product.salePrice = data.salePrice;
+    }
+    if (data.saleStartDate !== undefined) {
+      console.log(`Updating saleStartDate to: ${data.saleStartDate}`);
+      product.saleStartDate = data.saleStartDate;
+    }
+    if (data.saleEndDate !== undefined) {
+      console.log(`Updating saleEndDate to: ${data.saleEndDate}`);
+      product.saleEndDate = data.saleEndDate;
+    }
+    if (data.stockQuantity !== undefined) {
+      console.log(`Updating stockQuantity to: ${data.stockQuantity}`);
+      product.stockQuantity = data.stockQuantity;
+    }
+    if (data.isInStock !== undefined) {
+      console.log(`Updating isInStock to: ${data.isInStock}`);
+      product.isInStock = data.isInStock;
+    }
+    if (data.specifications !== undefined) {
+      console.log(`Updating specifications`);
+      product.specifications = data.specifications;
+    }
+    if (data.keywords !== undefined) {
+      console.log(`Updating keywords: ${data.keywords}`);
+      product.keywords = data.keywords;
+    }
+    if (data.seoMetadata !== undefined) {
+      console.log(`Updating seoMetadata:`, JSON.stringify(data.seoMetadata, null, 2));
+      product.seoMetadata = data.seoMetadata;
+    }
+    
+    // Update category if categoryId is provided
     if (data.categoryId) {
+      console.log(`Updating category to ID: ${data.categoryId}`);
       product.category = await this.categoryRepo.findOneByOrFail({ id: data.categoryId });
     }
+    
+    // Update brand if brandId is provided
+    if (data.brandId) {
+      console.log(`Updating brand to ID: ${data.brandId}`);
+      const brandRepo = AppDataSource.getRepository(Brand);
+      product.brand = await brandRepo.findOneByOrFail({ id: data.brandId });
+    }
+    
+    // Update tags if tagIds is provided
     if (data.tagIds) {
+      console.log(`Updating tags to IDs: ${data.tagIds}`);
       product.tags = await this.tagRepo.findBy({ id: In(data.tagIds) });
     }
+    
+    // Update variants if provided
     if (data.variants) {
+      console.log(`Updating ${data.variants.length} variants`);
       // Remove old variants and add new ones
       await this.variantRepo.delete({ product: { id: product.id } });
-      product.variants = data.variants.map(v => this.variantRepo.create(v));
+      product.variants = data.variants.map(v => this.variantRepo.create({
+        ...v,
+        product
+      }));
     }
-    return this.productRepo.save(product);
+    
+    console.log(`Saving updated product...`);
+    const savedProduct = await this.productRepo.save(product);
+    console.log(`Product updated successfully, with fields:`, Object.keys(savedProduct));
+    return savedProduct;
   }
 
   async deleteProduct(id: string) {
@@ -445,14 +608,31 @@ export class ProductService {
       const productIds = productIdsResult.map((row: {id: string}) => row.id);
       
       // Then use TypeORM's repository to fetch complete data with relations
+      console.log(`Service: Fetching products with IDs:`, productIds);
       const products = await this.productRepo.find({
         where: { id: In(productIds) },
-        relations: ['category', 'tags', 'variants'],
+        relations: ['category', 'tags', 'variants', 'brand', 'images', 'attributes'],
         order: {
           ...(options?.sort?.sortBy ? { [options.sort.sortBy]: options.sort.sortOrder || 'ASC' } : { createdAt: 'DESC' }),
           id: 'ASC'
         }
       });
+      
+      // Log the products retrieved and their relations
+      console.log(`Service: Retrieved ${products.length} products with relations`);
+      if (products.length > 0) {
+        // Log the first product's fields as a sample
+        const sample = products[0];
+        console.log(`Service: Sample product fields:`, Object.keys(sample));
+        console.log(`Service: Sample product relations:`, {
+          hasCategory: !!sample.category,
+          hasTags: Array.isArray(sample.tags) ? sample.tags.length : 0,
+          hasVariants: Array.isArray(sample.variants) ? sample.variants.length : 0,
+          hasBrand: !!sample.brand,
+          hasImages: Array.isArray(sample.images) ? sample.images.length : 0,
+          hasAttributes: Array.isArray(sample.attributes) ? sample.attributes.length : 0
+        });
+      }
       
       return {
         data: products,

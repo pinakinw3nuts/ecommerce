@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getProducts } from '@/services/products';
+import { prepareDateFields } from '@/lib/make-request';
 
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace('localhost', '127.0.0.1') || 'http://127.0.0.1:3003';
@@ -248,7 +249,41 @@ export async function POST(request: NextRequest) {
     // Use the admin endpoint for creating products
     const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products`;
     console.log('Creating product with URL:', url);
-    console.log('Product data:', productData);
+    
+    // Validate brandId before sending to API
+    if (productData.brandId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productData.brandId)) {
+      console.log(`Invalid brandId format: "${productData.brandId}" - removing from request`);
+      delete productData.brandId;
+    }
+    
+    // Process date fields - remove them if they're null or invalid
+    prepareDateFields(productData);
+    
+    // Ensure seoMetadata is always an object
+    if (!productData.seoMetadata || typeof productData.seoMetadata !== 'object') {
+      productData.seoMetadata = {
+        title: '',
+        description: '',
+        keywords: [],
+        ogImage: ''
+      };
+    } else {
+      // Clean up ogImage if it's not a valid image URL or if it's null
+      if (productData.seoMetadata.ogImage === null || productData.seoMetadata.ogImage === undefined || productData.seoMetadata.ogImage.trim() === '') {
+        productData.seoMetadata.ogImage = '';
+      } else if (productData.seoMetadata.ogImage) {
+        // Check if it's a valid image URL (should end with an image extension or be a valid image URL)
+        const isValidImageUrl = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(productData.seoMetadata.ogImage) || 
+                               /^(https?:\/\/.*\.(jpg|jpeg|png|gif|webp|svg))/i.test(productData.seoMetadata.ogImage);
+        
+        if (!isValidImageUrl) {
+          console.log(`Invalid image URL detected: ${productData.seoMetadata.ogImage} - removing from request`);
+          productData.seoMetadata.ogImage = '';
+        }
+      }
+    }
+    
+    console.log('Complete product data for API:', JSON.stringify(productData, null, 2));
     
     const response = await makeRequest(url, {
       method: 'POST',
@@ -448,6 +483,40 @@ export async function PUT(request: NextRequest) {
     // Use the admin endpoint for updating products
     const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${productId}`;
     console.log('Updating product with URL:', url);
+    
+    // Validate brandId before sending to API
+    if (productData.brandId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productData.brandId)) {
+      console.log(`Invalid brandId format: "${productData.brandId}" - removing from request`);
+      delete productData.brandId;
+    }
+    
+    // Process date fields - remove them if they're null or invalid
+    prepareDateFields(productData);
+    
+    // Ensure seoMetadata is always an object
+    if (!productData.seoMetadata || typeof productData.seoMetadata !== 'object') {
+      productData.seoMetadata = {
+        title: '',
+        description: '',
+        keywords: [],
+        ogImage: ''
+      };
+    } else {
+      // Clean up ogImage if it's not a valid image URL or if it's null
+      if (productData.seoMetadata.ogImage === null || productData.seoMetadata.ogImage === undefined || productData.seoMetadata.ogImage.trim() === '') {
+        productData.seoMetadata.ogImage = '';
+      } else if (productData.seoMetadata.ogImage) {
+        // Check if it's a valid image URL (should end with an image extension or be a valid image URL)
+        const isValidImageUrl = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(productData.seoMetadata.ogImage) || 
+                               /^(https?:\/\/.*\.(jpg|jpeg|png|gif|webp|svg))/i.test(productData.seoMetadata.ogImage);
+        
+        if (!isValidImageUrl) {
+          console.log(`Invalid image URL detected: ${productData.seoMetadata.ogImage} - removing from request`);
+          productData.seoMetadata.ogImage = '';
+        }
+      }
+    }
+    
     console.log('Product data:', productData);
     
     const response = await makeRequest(url, {
