@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Filter as FilterIcon, Calendar, X, Check, ChevronDown, Star, StarOff, CheckSquare, Ban } from 'lucide-react';
+import { Search, Filter as FilterIcon, Calendar, X, Check, ChevronDown, Star, StarOff, Eye, EyeOff, CheckSquare, Ban } from 'lucide-react';
 import { Button } from './Button';
 
 export interface FilterOption {
@@ -272,6 +272,58 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
     selectDropdownRefs.current[key] = el;
   };
 
+  // Function to render active filter tags
+  const renderActiveFilters = () => {
+    return activeFilters.map(({ group, value, label, key }) => {
+      if (key === 'isActive') {
+        return (
+          <div
+            key={`${key}-${value}-${label}`}
+            className="inline-flex items-center rounded-full bg-slate-800 text-white"
+          >
+            <span className="px-3 py-1 text-sm font-medium">
+              {group}: {label}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleRemoveFilter(key, value)}
+              className="ml-1 mr-1 hover:bg-slate-700 rounded-full p-0.5"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        );
+      }
+      
+      return (
+        <div
+          key={`${key}-${value}-${label}`}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-600"
+        >
+          <span>
+            {group}: {label}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              const field = config[key];
+              if (field && (field.type === 'valueRange' || field.type === 'daterange')) {
+                // For range types, clear the whole range
+                handleChange(key, field.type === 'valueRange' ? { min: '', max: '' } : { from: '', to: '' });
+              } else {
+                // For array types, remove the specific value
+                handleRemoveFilter(key, value);
+              }
+            }}
+            className="rounded-sm hover:bg-opacity-20 -mr-1 ml-1"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      );
+    });
+  };
+
   return (
     <div className="space-y-4">
       {/* Search Bar and Filter Button */}
@@ -330,10 +382,10 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                     <div key={key} className="space-y-2 border-t border-gray-100 pt-4 mt-4">
                       <h4 className="text-sm font-medium text-gray-700">{field.placeholder}</h4>
                       
-                      {/* Boolean filter (buttons) - Status with box style */}
-                      {field.type === 'boolean' && field.options && (key === 'isActive' || key === 'status') && (
-                        <div className="space-y-3 border border-gray-100 rounded-lg p-4">
-                          <h4 className="text-sm font-medium text-gray-700 mb-2">Status</h4>
+                      {/* Boolean filter (buttons) - Status */}
+                      {field.type === 'boolean' && field.options && key === 'isActive' && (
+                        <div className="space-y-3">
+                          {/* Selection buttons */}
                           <div className="flex flex-row gap-2">
                             {field.options.map(option => {
                               const isSelected = Array.isArray(filters[key]) && 
@@ -341,6 +393,18 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                               
                               // Match the icon style from the image
                               const Icon = option.value === 'active' ? CheckSquare : Ban;
+                              
+                              // Design based on the image
+                              let buttonStyle = '';
+                              if (option.value === 'active') {
+                                buttonStyle = isSelected 
+                                  ? "bg-green-50 text-green-700 border border-green-100"
+                                  : "bg-white text-gray-700 border border-gray-200";
+                              } else {
+                                buttonStyle = isSelected 
+                                  ? "bg-white text-gray-700 border border-gray-200"
+                                  : "bg-white text-gray-700 border border-gray-200";
+                              }
                               
                               return (
                                 <button
@@ -358,11 +422,7 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                                       handleChange(key, [option.value]);
                                     }
                                   }}
-                                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors flex items-center justify-center ${
-                                    isSelected 
-                                      ? "bg-gray-700 text-white" 
-                                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                  }`}
+                                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors flex items-center justify-center ${buttonStyle}`}
                                 >
                                   <Icon className="h-4 w-4 mr-2" />
                                   {option.label}
@@ -384,6 +444,8 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                             let Icon;
                             if (key === 'isFeatured') {
                               Icon = option.value === 'true' ? Star : StarOff;
+                            } else if (key === 'isPublished') {
+                              Icon = option.value === 'true' ? Eye : EyeOff;
                             } else {
                               Icon = option.value === 'true' ? Check : X;
                             }
@@ -585,7 +647,6 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                       onReset();
                       setIsOpen(false);
                     }}
-                    disabled={activeFilterCount === 0}
                     className="text-gray-700 font-medium hover:text-gray-900 px-3 py-2"
                   >
                     Reset All
@@ -607,60 +668,7 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
       {/* Active Filter Tags */}
       {activeFilters.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          {activeFilters.map(({ group, value, label, key }) => {
-            // Special styling for status filters
-            if (key === 'isActive') {
-              return (
-                <div
-                  key={`${key}-${value}-${label}`}
-                  className="inline-flex items-center rounded-full bg-slate-800 text-white"
-                >
-                  <span className="px-3 py-1 text-sm font-medium">
-                    {group}: {label}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleRemoveFilter(key, value);
-                    }}
-                    className="ml-1 mr-1 hover:bg-slate-700 rounded-full p-0.5"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              );
-            }
-            
-            // Default styling for other filters
-            return (
-              <div
-                key={`${key}-${value}-${label}`}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-600"
-              >
-                <span>
-                  {group}: {label}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    const field = config[key];
-                    if (field && (field.type === 'valueRange' || field.type === 'daterange')) {
-                      // For range types, clear the whole range
-                      handleChange(key, field.type === 'valueRange' ? { min: '', max: '' } : { from: '', to: '' });
-                    } else {
-                      // For array types, remove the specific value
-                      handleRemoveFilter(key, value);
-                    }
-                  }}
-                  className="rounded-sm hover:bg-opacity-20 -mr-1 ml-1"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            );
-          })}
+          {renderActiveFilters()}
           <button
             type="button"
             onClick={() => {

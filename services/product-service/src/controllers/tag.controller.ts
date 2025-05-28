@@ -7,7 +7,8 @@ const tagService = new TagService();
 
 const tagSchema = z.object({
   name: z.string(),
-  slug: z.string().optional()
+  slug: z.string().optional(),
+  isActive: z.boolean().optional().default(true)
 });
 
 export const tagController = {
@@ -19,22 +20,43 @@ export const tagController = {
         querystring: {
           type: 'object',
           properties: {
-            skip: { type: 'number' },
-            take: { type: 'number' },
-            search: { type: 'string' }
+            page: { type: 'string' },
+            take: { type: 'string' },
+            pageSize: { type: 'string' },
+            search: { type: 'string' },
+            isActive: { type: 'boolean' },
+            sortBy: { type: 'string' },
+            sortOrder: { type: 'string', enum: ['asc', 'desc'] },
           }
         },
         response: {
           200: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                name: { type: 'string' },
-                slug: { type: 'string' },
-                createdAt: { type: 'string', format: 'date-time' },
-                updatedAt: { type: 'string', format: 'date-time' }
+            type: 'object',
+            properties: {
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    slug: { type: 'string' },
+                    isActive: { type: 'boolean' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    updatedAt: { type: 'string', format: 'date-time' }
+                  }
+                }
+              },
+              pagination: {
+                type: 'object',
+                properties: {
+                  total: { type: 'number' },
+                  pageSize: { type: 'number' },
+                  currentPage: { type: 'number' },
+                  totalPages: { type: 'number' },
+                  hasMore: { type: 'boolean' },
+                  hasPrevious: { type: 'boolean' }
+                }
               }
             }
           }
@@ -42,13 +64,45 @@ export const tagController = {
       },
       handler: async (request: FastifyRequest<{
         Querystring: {
-          skip?: number;
-          take?: number;
+          page?: string;
+          take?: string;
+          pageSize?: string;
           search?: string;
+          isActive?: boolean;
+          sortBy?: string;
+          sortOrder?: string;
         }
       }>, reply) => {
-        const tags = await tagService.listTags(request.query);
-        return reply.send(tags);
+        const { page, take, pageSize, search, isActive, sortBy, sortOrder } = request.query;
+        
+        // Calculate pagination parameters
+        const pageNum = page ? parseInt(page) : 1;
+        const pageSizeNum = pageSize ? parseInt(pageSize) : (take ? parseInt(take) : 10);
+        const skip = (pageNum - 1) * pageSizeNum;
+        
+        const result = await tagService.listTags({
+          skip,
+          take: pageSizeNum,
+          search,
+          isActive,
+          sortBy,
+          sortOrder
+        });
+        
+        // Build pagination response
+        const totalPages = Math.ceil(result.total / pageSizeNum);
+        
+        return reply.send({
+          tags: result.tags,
+          pagination: {
+            total: result.total,
+            pageSize: pageSizeNum,
+            currentPage: pageNum,
+            totalPages,
+            hasMore: result.hasMore,
+            hasPrevious: pageNum > 1
+          }
+        });
       }
     });
 
@@ -70,6 +124,7 @@ export const tagController = {
               id: { type: 'string' },
               name: { type: 'string' },
               slug: { type: 'string' },
+              isActive: { type: 'boolean' },
               createdAt: { type: 'string', format: 'date-time' },
               updatedAt: { type: 'string', format: 'date-time' }
             }
@@ -151,7 +206,8 @@ export const tagController = {
           required: ['name'],
           properties: {
             name: { type: 'string' },
-            slug: { type: 'string' }
+            slug: { type: 'string' },
+            isActive: { type: 'boolean' }
           }
         },
         response: {
@@ -161,6 +217,7 @@ export const tagController = {
               id: { type: 'string' },
               name: { type: 'string' },
               slug: { type: 'string' },
+              isActive: { type: 'boolean' },
               createdAt: { type: 'string', format: 'date-time' },
               updatedAt: { type: 'string', format: 'date-time' }
             }
@@ -189,7 +246,8 @@ export const tagController = {
           type: 'object',
           properties: {
             name: { type: 'string' },
-            slug: { type: 'string' }
+            slug: { type: 'string' },
+            isActive: { type: 'boolean' }
           }
         },
         response: {
@@ -199,6 +257,7 @@ export const tagController = {
               id: { type: 'string' },
               name: { type: 'string' },
               slug: { type: 'string' },
+              isActive: { type: 'boolean' },
               createdAt: { type: 'string', format: 'date-time' },
               updatedAt: { type: 'string', format: 'date-time' }
             }
@@ -256,6 +315,44 @@ export const tagController = {
         } catch (error) {
           return reply.code(404).send({ message: 'Tag not found' });
         }
+      }
+    });
+    
+    // Add bulk status update endpoint
+    fastify.post('/bulk-status', {
+      schema: {
+        tags: ['tags'],
+        summary: 'Update status for multiple tags',
+        body: {
+          type: 'object',
+          required: ['tagIds', 'isActive'],
+          properties: {
+            tagIds: { 
+              type: 'array',
+              items: { type: 'string' }
+            },
+            isActive: { type: 'boolean' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              count: { type: 'number' },
+              success: { type: 'boolean' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{
+        Body: {
+          tagIds: string[];
+          isActive: boolean;
+        }
+      }>, reply) => {
+        const { tagIds, isActive } = request.body;
+        const result = await tagService.updateTagsStatus(tagIds, isActive);
+        return reply.send(result);
       }
     });
   }

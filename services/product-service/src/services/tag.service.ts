@@ -1,6 +1,7 @@
 import { AppDataSource } from '../config/dataSource';
 import { Tag } from '../entities/Tag';
 import { Product } from '../entities/Product';
+import { In } from 'typeorm';
 
 export class TagService {
   private tagRepo = AppDataSource.getRepository(Tag);
@@ -9,13 +10,15 @@ export class TagService {
   async createTag(data: {
     name: string;
     slug?: string;
+    isActive?: boolean;
   }) {
     // Generate slug if not provided
     const slug = data.slug || data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     
     const tag = this.tagRepo.create({
       name: data.name,
-      slug
+      slug,
+      isActive: data.isActive !== undefined ? data.isActive : true
     });
     
     return this.tagRepo.save(tag);
@@ -32,12 +35,25 @@ export class TagService {
     skip?: number; 
     take?: number;
     search?: string;
+    isActive?: boolean;
+    sortBy?: string;
+    sortOrder?: string;
   }) {
     const query = this.tagRepo.createQueryBuilder('tag');
     
     if (options?.search) {
       query.where('tag.name LIKE :search', { search: `%${options.search}%` });
     }
+    
+    // Add isActive filter if specified
+    if (options?.isActive !== undefined) {
+      const condition = options.search ? 'AND' : 'WHERE';
+      query.andWhere(`tag.isActive = :isActive`, { isActive: options.isActive });
+    }
+    
+    // Count total before applying pagination
+    const countQuery = query.clone();
+    const total = await countQuery.getCount();
     
     if (options?.skip) {
       query.skip(options.skip);
@@ -47,14 +63,27 @@ export class TagService {
       query.take(options.take);
     }
     
-    query.orderBy('tag.name', 'ASC');
+    // Apply sorting
+    if (options?.sortBy) {
+      const sortOrder = options?.sortOrder?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+      query.orderBy(`tag.${options.sortBy}`, sortOrder as 'ASC' | 'DESC');
+    } else {
+      query.orderBy('tag.name', 'ASC');
+    }
     
-    return query.getMany();
+    const tags = await query.getMany();
+    
+    return {
+      tags,
+      total,
+      hasMore: options?.take ? (options.skip || 0) + options.take < total : false,
+    };
   }
 
   async updateTag(id: string, data: Partial<{
     name: string;
     slug: string;
+    isActive: boolean;
   }>) {
     // If name is updated but slug isn't, update the slug too
     if (data.name && !data.slug) {
@@ -103,5 +132,18 @@ export class TagService {
       .take(options?.take || 10)
       .orderBy('product.createdAt', 'DESC')
       .getMany();
+  }
+  
+  async updateTagsStatus(tagIds: string[], isActive: boolean) {
+    // Update multiple tags at once
+    const result = await this.tagRepo.update(
+      { id: In(tagIds) },
+      { isActive }
+    );
+    
+    return {
+      count: result.affected || 0,
+      success: true
+    };
   }
 } 

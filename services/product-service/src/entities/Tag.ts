@@ -19,6 +19,9 @@ export class Tag {
   @Column({ unique: true })
   slug: string;
 
+  @Column({ default: true })
+  isActive: boolean;
+
   @ManyToMany(() => Product, product => product.tags)
   products: Product[];
 

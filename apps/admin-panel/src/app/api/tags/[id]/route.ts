@@ -22,10 +22,13 @@ async function makeRequest(url: string, options: RequestInit = {}) {
   }
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+interface RouteParams {
+  params: {
+    id: string;
+  };
+}
+
+export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('admin_token');
@@ -37,17 +40,10 @@ export async function GET(
       );
     }
 
-    // Get the tag ID from route params
-    const tagId = params.id;
-    if (!tagId) {
-      return NextResponse.json(
-        { message: 'Tag ID is required', code: 'VALIDATION_ERROR' },
-        { status: 400 }
-      );
-    }
+    const { id } = params;
 
     const response = await makeRequest(
-      `${PRODUCT_SERVICE_URL}/api/v1/tags/${tagId}`,
+      `${PRODUCT_SERVICE_URL}/api/v1/tags/${id}`,
       {
         headers: {
           'Authorization': `Bearer ${token.value}`,
@@ -57,13 +53,6 @@ export async function GET(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      
-      if (response.status === 404) {
-        return NextResponse.json(
-          { message: 'Tag not found', code: 'TAG_NOT_FOUND' },
-          { status: 404 }
-        );
-      }
       
       // Handle token expiration
       if (response.status === 401 && (
@@ -78,16 +67,13 @@ export async function GET(
       }
 
       return NextResponse.json(
-        { 
-          message: errorData?.message || 'Failed to fetch tag',
-          code: errorData?.code || 'API_ERROR'
-        },
+        { message: errorData?.message || 'Failed to fetch tag', code: errorData?.code || 'API_ERROR' },
         { status: response.status }
       );
     }
 
-    const tag = await response.json();
-    return NextResponse.json(tag);
+    const data = await response.json();
+    return NextResponse.json(data);
 
   } catch (error: any) {
     console.error('Error fetching tag:', error);
@@ -101,10 +87,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('admin_token');
@@ -116,15 +99,7 @@ export async function PUT(
       );
     }
 
-    // Get the tag ID from route params
-    const tagId = params.id;
-    if (!tagId) {
-      return NextResponse.json(
-        { message: 'Tag ID is required', code: 'VALIDATION_ERROR' },
-        { status: 400 }
-      );
-    }
-
+    const { id } = params;
     const tagData = await request.json();
 
     // Validate required fields
@@ -135,8 +110,22 @@ export async function PUT(
       );
     }
 
+    // If no slug is provided, generate one from the name
+    // This allows the backend to handle uniqueness
+    if (!tagData.slug && tagData.name) {
+      // Generate a simple slug from the name (convert to lowercase, replace spaces with hyphens)
+      tagData.slug = tagData.name
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-');
+    }
+
+    // Log the tag data being sent to the backend
+    console.log('Updating tag with data:', JSON.stringify(tagData, null, 2));
+
     const response = await makeRequest(
-      `${PRODUCT_SERVICE_URL}/api/v1/tags/${tagId}`,
+      `${PRODUCT_SERVICE_URL}/api/v1/admin/tags/${id}`,
       {
         method: 'PUT',
         headers: {
@@ -148,37 +137,56 @@ export async function PUT(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      
-      if (response.status === 404) {
-        return NextResponse.json(
-          { message: 'Tag not found', code: 'TAG_NOT_FOUND' },
-          { status: 404 }
-        );
-      }
+      console.error('Error response from backend:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorData,
+        endpoint: `${PRODUCT_SERVICE_URL}/api/v1/admin/tags/${id}`
+      });
       
       // Handle token expiration
-      if (response.status === 401 && (
-        errorData?.code === 'TOKEN_EXPIRED' ||
-        errorData?.message?.toLowerCase().includes('expired') ||
-        errorData?.message?.toLowerCase().includes('invalid token')
-      )) {
+      if (response.status === 401) {
+        console.error('Authentication error details:', {
+          token: token.value ? `${token.value.substring(0, 10)}...` : 'No token',
+          errorCode: errorData?.code,
+          errorMessage: errorData?.message
+        });
+        
+        if (
+          errorData?.code === 'TOKEN_EXPIRED' ||
+          errorData?.message?.toLowerCase().includes('expired') ||
+          errorData?.message?.toLowerCase().includes('invalid token')
+        ) {
+          return NextResponse.json(
+            { message: 'Token has expired', code: 'TOKEN_EXPIRED' },
+            { status: 401 }
+          );
+        }
+        
         return NextResponse.json(
-          { message: 'Token has expired', code: 'TOKEN_EXPIRED' },
+          { message: 'Unauthorized - Admin privileges required', code: 'UNAUTHORIZED' },
           { status: 401 }
         );
       }
 
       return NextResponse.json(
-        { 
-          message: errorData?.message || 'Failed to update tag',
-          code: errorData?.code || 'API_ERROR'
-        },
+        { message: errorData?.message || 'Failed to update tag', code: errorData?.code || 'API_ERROR' },
         { status: response.status }
       );
     }
 
-    const updatedTag = await response.json();
-    return NextResponse.json(updatedTag);
+    // Get the updated data from the response
+    const data = await response.json();
+    
+    // Ensure the returned data has the isActive field that was sent in the request
+    // since the backend might not include it in the response
+    const enhancedData = {
+      ...data,
+      isActive: tagData.isActive !== undefined ? tagData.isActive : data.isActive
+    };
+    
+    console.log('Updated tag response:', enhancedData);
+    return NextResponse.json(enhancedData);
 
   } catch (error: any) {
     console.error('Error updating tag:', error);
@@ -192,10 +200,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('admin_token');
@@ -207,17 +212,10 @@ export async function DELETE(
       );
     }
 
-    // Get the tag ID from route params
-    const tagId = params.id;
-    if (!tagId) {
-      return NextResponse.json(
-        { message: 'Tag ID is required', code: 'VALIDATION_ERROR' },
-        { status: 400 }
-      );
-    }
+    const { id } = params;
 
     const response = await makeRequest(
-      `${PRODUCT_SERVICE_URL}/api/v1/tags/${tagId}`,
+      `${PRODUCT_SERVICE_URL}/api/v1/admin/tags/${id}`,
       {
         method: 'DELETE',
         headers: {
@@ -228,13 +226,6 @@ export async function DELETE(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      
-      if (response.status === 404) {
-        return NextResponse.json(
-          { message: 'Tag not found', code: 'TAG_NOT_FOUND' },
-          { status: 404 }
-        );
-      }
       
       // Handle token expiration
       if (response.status === 401 && (
@@ -249,18 +240,12 @@ export async function DELETE(
       }
 
       return NextResponse.json(
-        { 
-          message: errorData?.message || 'Failed to delete tag',
-          code: errorData?.code || 'API_ERROR'
-        },
+        { message: errorData?.message || 'Failed to delete tag', code: errorData?.code || 'API_ERROR' },
         { status: response.status }
       );
     }
 
-    return NextResponse.json(
-      { message: 'Tag deleted successfully' },
-      { status: 200 }
-    );
+    return new NextResponse(null, { status: 204 });
 
   } catch (error: any) {
     console.error('Error deleting tag:', error);

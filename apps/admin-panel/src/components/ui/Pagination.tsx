@@ -64,7 +64,8 @@ export function Pagination({ currentPage, pageSize, totalItems, onPageChange }: 
     return pages;
   };
 
-  if (totalPages <= 1) return null;
+  // Don't render pagination if there are no pages
+  if (totalPages <= 0) return null;
 
   return (
     <div className="flex items-center gap-2">

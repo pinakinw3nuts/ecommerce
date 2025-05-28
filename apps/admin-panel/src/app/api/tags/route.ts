@@ -25,8 +25,6 @@ async function makeRequest(url: string, options: RequestInit = {}) {
 interface BackendTag {
   id: string;
   name: string;
-  slug?: string;
-  description?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -53,10 +51,12 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
+    console.log('Raw status param:', status);
+
     // Build query string for backend
     const queryParams = new URLSearchParams({
       page: page.toString(),
-      take: pageSize.toString(),
+      pageSize: pageSize.toString(),
       sortBy,
       sortOrder,
     });
@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
     if (status.length > 0) {
       const isActive = status.includes('active');
       queryParams.append('isActive', isActive.toString());
+      console.log(`Adding isActive=${isActive} filter from status=${status}`);
     }
 
     console.log('Making request with token:', token.value);
@@ -110,27 +111,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tags = (await response.json()) as BackendTag[];
-    console.log('Backend response:', tags);
+    const data = await response.json();
+    console.log('Backend response:', data);
 
-    // Filter tags based on search term if present
-    let filteredTags = [...tags];
-    if (search.trim()) {
-      const searchTerm = search.trim().toLowerCase();
-      filteredTags = tags.filter(tag => 
-        tag.name.toLowerCase().includes(searchTerm)
-      );
+    // Check if the response is already in the expected format
+    if (data.tags && data.pagination) {
+      console.log('Response is already in the expected format');
+      return NextResponse.json(data);
     }
 
-    // Transform the array response into the expected format with proper pagination
+    // If not, transform the array response into the expected format
+    const tags = Array.isArray(data) ? data : (data.tags || []);
     const transformedData = {
-      tags: filteredTags || [],
-      pagination: {
-        total: filteredTags.length,
-        totalPages: Math.ceil(filteredTags.length / pageSize),
+      tags: tags,
+      pagination: data.pagination || {
+        total: tags.length,
+        totalPages: Math.ceil(tags.length / pageSize),
         currentPage: page,
         pageSize: pageSize,
-        hasMore: page * pageSize < filteredTags.length,
+        hasMore: page * pageSize < tags.length,
         hasPrevious: page > 1,
       },
     };
@@ -178,7 +177,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const response = await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/tags`, {
+    // If no slug is provided, generate one from the name
+    // This allows the backend to handle uniqueness
+    if (!tagData.slug && tagData.name) {
+      // Generate a simple slug from the name (convert to lowercase, replace spaces with hyphens)
+      tagData.slug = tagData.name
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-');
+    }
+
+    const response = await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/tags`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token.value}`,

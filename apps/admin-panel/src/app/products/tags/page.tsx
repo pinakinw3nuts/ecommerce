@@ -11,6 +11,8 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  CheckSquare,
+  Ban
 } from 'lucide-react';
 import Table from '@/components/Table';
 import { Button } from '@/components/ui/Button';
@@ -20,11 +22,9 @@ import { formatDate } from '@/lib/utils';
 import { Pagination } from '@/components/ui/Pagination';
 import { CommonFilters, type FilterState, type FilterConfig } from '@/components/ui/CommonFilters';
 
-interface Brand {
+interface Tag {
   id: string;
   name: string;
-  website?: string;
-  description?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -34,8 +34,8 @@ interface Brand {
   }>;
 }
 
-interface BrandsResponse {
-  brands: Brand[];
+interface TagsResponse {
+  tags: Tag[];
   pagination: {
     total: number;
     totalPages: number;
@@ -49,26 +49,26 @@ interface BrandsResponse {
 const filterConfig: FilterConfig = {
   search: {
     type: 'text',
-    placeholder: 'Search brands by name...',
+    placeholder: 'Search tags by name...',
   },
   status: {
-    type: 'select',
+    type: 'boolean',
     placeholder: 'Filter by status',
     options: [
       { value: 'active', label: 'Active' },
       { value: 'inactive', label: 'Inactive' },
     ],
-  },
+  }
 };
 
 const initialFilters: FilterState = {
   search: '',
-  status: [],
+  status: []
 };
 
 const fetcher = async (url: string) => {
   try {
-    console.log('Fetching brands from:', url);
+    console.log('Fetching tags from:', url);
     const response = await fetch(url);
     console.log('Response status:', response.status);
     
@@ -84,11 +84,11 @@ const fetcher = async (url: string) => {
         window.location.href = '/login';
         return;
       }
-      throw new Error(error.message || 'Failed to fetch brands');
+      throw new Error(error.message || 'Failed to fetch tags');
     }
     
     const data = await response.json();
-    console.log('Successfully fetched brands data:', data);
+    console.log('Successfully fetched tags data:', data);
     return data;
   } catch (error) {
     console.error('Error in fetcher:', error);
@@ -96,12 +96,12 @@ const fetcher = async (url: string) => {
   }
 };
 
-export default function BrandsPage() {
+export default function TagsPage() {
   const router = useRouter();
   const toast = useToast();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -117,10 +117,16 @@ export default function BrandsPage() {
     return () => clearTimeout(timer);
   }, [filters]);
 
+  // Debug filters when they change
+  useEffect(() => {
+    console.log('Current filters:', filters);
+    console.log('status filter values:', filters.status);
+  }, [filters]);
+
   const resetFilters = useCallback(() => {
     setFilters(initialFilters);
     setPage(1);
-    setSelectedBrands([]);
+    setSelectedTags([]);
   }, []);
 
   const getApiUrl = useCallback(() => {
@@ -142,13 +148,27 @@ export default function BrandsPage() {
       params.append('status', (debouncedFilters.status as string[]).join(','));
     }
 
-    return `/api/brands?${params.toString()}`;
+    console.log('Final API URL:', `/api/tags?${params.toString()}`);
+    return `/api/tags?${params.toString()}`;
   }, [page, pageSize, debouncedFilters, sortBy, sortOrder]);
 
-  const { data, error, isLoading, mutate } = useSWR<BrandsResponse>(
+  const { data, error, isLoading, mutate } = useSWR<TagsResponse>(
     getApiUrl(),
     fetcher
   );
+  
+  // Debug pagination data when it changes
+  useEffect(() => {
+    if (data) {
+      console.log('Pagination data from API:', {
+        total: data.pagination.total,
+        totalPages: data.pagination.totalPages,
+        currentPage: data.pagination.currentPage,
+        pageSize: data.pagination.pageSize,
+        tags: data.tags.length
+      });
+    }
+  }, [data]);
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -177,52 +197,52 @@ export default function BrandsPage() {
     }
   };
 
-  const handleDelete = async (brandId: string) => {
-    if (!confirm('Are you sure you want to delete this brand?')) return;
+  const handleDelete = async (tagId: string) => {
+    if (!confirm('Are you sure you want to delete this tag?')) return;
     
     const success = await handleApiOperation(
-      () => fetch(`/api/brands/${brandId}`, { method: 'DELETE' }),
-      'Brand deleted successfully'
+      () => fetch(`/api/tags/${tagId}`, { method: 'DELETE' }),
+      'Tag deleted successfully'
     );
     
     if (success) {
-      setSelectedBrands(prev => prev.filter(id => id !== brandId));
+      setSelectedTags(prev => prev.filter(id => id !== tagId));
     }
   };
 
   const handleBulkDelete = async () => {
-    if (!confirm(`Are you sure you want to delete ${selectedBrands.length} brands?`)) return;
+    if (!confirm(`Are you sure you want to delete ${selectedTags.length} tags?`)) return;
     
     const success = await handleApiOperation(
-      () => fetch('/api/brands/bulk-delete', {
+      () => fetch('/api/tags/bulk-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandIds: selectedBrands }),
+        body: JSON.stringify({ tagIds: selectedTags }),
       }),
-      `${selectedBrands.length} brands deleted successfully`
+      `${selectedTags.length} tags deleted successfully`
     );
     
     if (success) {
-      setSelectedBrands([]);
+      setSelectedTags([]);
     }
   };
 
   const handleExport = () => 
     handleApiOperation(
       async () => {
-        const response = await fetch('/api/brands/export', {
+        const response = await fetch('/api/tags/export', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ brandIds: selectedBrands.length ? selectedBrands : 'all' }),
+          body: JSON.stringify({ tagIds: selectedTags.length ? selectedTags : 'all' }),
         });
         
-        if (!response.ok) throw new Error('Failed to export brands');
+        if (!response.ok) throw new Error('Failed to export tags');
         
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'brands.csv';
+        a.download = 'tags.csv';
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -230,33 +250,35 @@ export default function BrandsPage() {
         
         return response;
       },
-      'Brands exported successfully'
+      'Tags exported successfully'
     );
 
   const handlePageChange = (newPage: number) => {
+    console.log(`Changing page from ${page} to ${newPage}`);
     setPage(newPage);
-    setSelectedBrands([]);
+    setSelectedTags([]);
   };
 
   const handlePageSizeChange = (newSize: number) => {
+    console.log(`Changing page size from ${pageSize} to ${newSize}`);
     setPageSize(newSize);
     setPage(1);
-    setSelectedBrands([]);
+    setSelectedTags([]);
   };
 
   const handleBulkStatusChange = async (isActive: boolean) => {
-    if (!confirm(`Are you sure you want to mark ${selectedBrands.length} brands as ${isActive ? 'active' : 'inactive'}?`)) return;
+    if (!confirm(`Are you sure you want to mark ${selectedTags.length} tags as ${isActive ? 'active' : 'inactive'}?`)) return;
     
     const success = await handleApiOperation(
-      () => fetch('/api/brands/bulk-status', {
+      () => fetch('/api/tags/bulk-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          brandIds: selectedBrands,
+          tagIds: selectedTags,
           isActive
         }),
       }),
-      `${selectedBrands.length} brands marked as ${isActive ? 'active' : 'inactive'}`
+      `${selectedTags.length} tags marked as ${isActive ? 'active' : 'inactive'}`
     );
     
     if (success) {
@@ -286,7 +308,7 @@ export default function BrandsPage() {
           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
       ),
-      cell: ({ row, table }: { row: Brand; table: TableInstance & { getRowProps: (row: Brand) => { getIsSelected: () => boolean; getToggleSelectedHandler: () => () => void } } }) => {
+      cell: ({ row, table }: { row: Tag; table: TableInstance & { getRowProps: (row: Tag) => { getIsSelected: () => boolean; getToggleSelectedHandler: () => () => void } } }) => {
         const rowProps = table.getRowProps(row);
         return (
           <input
@@ -304,7 +326,7 @@ export default function BrandsPage() {
           onClick={() => handleSort('name')}
           className="flex items-center gap-1 hover:text-blue-600"
         >
-          Brand Name
+          Tag Name
           <span className="inline-flex">
             {sortBy === 'name' ? (
               sortOrder === 'asc' ? (
@@ -318,25 +340,8 @@ export default function BrandsPage() {
           </span>
         </button>
       ),
-      cell: ({ row }: { row: Brand }) => (
+      cell: ({ row }: { row: Tag }) => (
         <div className="font-medium">{row.name}</div>
-      ),
-    },
-    {
-      header: 'Website',
-      cell: ({ row }: { row: Brand }) => (
-        row.website ? (
-          <a 
-            href={row.website}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-800"
-          >
-            {row.website}
-          </a>
-        ) : (
-          <span className="text-gray-400">-</span>
-        )
       ),
     },
     {
@@ -359,7 +364,7 @@ export default function BrandsPage() {
           </span>
         </button>
       ),
-      cell: ({ row }: { row: Brand }) => (
+      cell: ({ row }: { row: Tag }) => (
         <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
           ${row.isActive
             ? 'bg-green-100 text-green-700'
@@ -390,10 +395,9 @@ export default function BrandsPage() {
           </span>
         </button>
       ),
-      cell: ({ row }: { row: Brand }) => {
-        // Log the createdAt value for debugging
+      cell: ({ row }: { row: Tag }) => {
         if (typeof row.createdAt === 'object' && row.createdAt !== null) {
-          console.log('Brand createdAt object:', row.createdAt);
+          console.log('Tag createdAt object:', row.createdAt);
         }
         return (
           <span className="text-sm text-gray-500">
@@ -404,12 +408,12 @@ export default function BrandsPage() {
     },
     {
       header: 'Actions',
-      cell: ({ row }: { row: Brand }) => (
+      cell: ({ row }: { row: Tag }) => (
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/products/brands/${row.id}/edit`)}
+            onClick={() => router.push(`/products/tags/${row.id}/edit`)}
             disabled={isLoadingOperation}
           >
             <Pencil className="h-4 w-4" />
@@ -431,13 +435,13 @@ export default function BrandsPage() {
     console.error('Rendering error state:', error);
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-        <p className="text-red-600 font-medium">Failed to load brands</p>
+        <p className="text-red-600 font-medium">Failed to load tags</p>
         <p className="text-red-500 text-sm mt-1">
           {error instanceof Error ? error.message : 'An unexpected error occurred'}
         </p>
         <button
           onClick={() => {
-            console.log('Retrying brands fetch...');
+            console.log('Retrying tags fetch...');
             mutate();
           }}
           className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
@@ -451,7 +455,7 @@ export default function BrandsPage() {
   return (
     <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Brands</h1>
+        <h1 className="text-2xl font-semibold">Tags</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -462,9 +466,9 @@ export default function BrandsPage() {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button onClick={() => router.push('/products/brands/new')} size="sm">
+          <Button onClick={() => router.push('/products/tags/new')} size="sm">
             <Plus className="h-4 w-4 mr-2" />
-            Add Brand
+            Add Tag
           </Button>
         </div>
       </div>
@@ -478,10 +482,10 @@ export default function BrandsPage() {
       />
 
       {/* Bulk Actions */}
-      {selectedBrands.length > 0 && (
+      {selectedTags.length > 0 && (
         <div className="flex items-center gap-4 py-4">
           <span className="text-sm text-gray-600">
-            {selectedBrands.length} items selected
+            {selectedTags.length} items selected
           </span>
           <div className="flex items-center gap-2">
             <Button
@@ -515,12 +519,12 @@ export default function BrandsPage() {
 
       <div className="rounded-lg border border-gray-200 bg-white">
         <Table
-          data={data?.brands ?? []}
+          data={data?.tags ?? []}
           columns={columns}
           isLoading={isLoading}
           selection={{
-            selectedRows: selectedBrands,
-            onSelectedRowsChange: setSelectedBrands,
+            selectedRows: selectedTags,
+            onSelectedRowsChange: setSelectedTags,
           }}
         />
 
@@ -558,11 +562,11 @@ export default function BrandsPage() {
           <Pagination
             currentPage={page}
             pageSize={pageSize}
-            totalItems={data?.pagination?.total || 0}
+            totalItems={data?.pagination?.total ?? 0}
             onPageChange={handlePageChange}
           />
         </div>
       </div>
     </div>
   );
-} 
+}

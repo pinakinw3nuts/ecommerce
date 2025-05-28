@@ -12,6 +12,7 @@ import { ProductReview } from '../entities/ProductReview';
 import { ProductAttribute } from '../entities/ProductAttribute';
 import { AttributeValue } from '../entities/AttributeValue';
 import { ProductBundle } from '../entities/ProductBundle';
+import { AddIsActiveToTags1749000000000 } from '../migrations/1749000000000-AddIsActiveToTags';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -36,6 +37,8 @@ export const AppDataSource = new DataSource({
     AttributeValue,
     ProductBundle
   ],
-  migrations: [],
+  migrations: [
+    AddIsActiveToTags1749000000000
+  ],
   subscribers: []
 }); 
