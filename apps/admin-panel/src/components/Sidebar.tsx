@@ -18,7 +18,8 @@ import {
   BookmarkIcon,
   ChevronDown,
   ChevronRight,
-  Tag
+  Tag,
+  Sliders
 } from 'lucide-react';
 
 interface NavigationItem {
@@ -38,6 +39,7 @@ const navigation: NavigationItem[] = [
     submenu: [
       { name: 'All Products', href: '/products', icon: Package },
       { name: 'Categories', href: '/products/categories', icon: BookmarkIcon },
+      { name: 'Attributes', href: '/products/attributes', icon: Sliders },
       { name: 'Brands', href: '/products/brands', icon: Tags },
       { name: 'Tags', href: '/products/tags', icon: Tag },
     ],

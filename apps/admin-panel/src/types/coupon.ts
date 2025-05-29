@@ -27,8 +27,8 @@ export interface CouponListParams {
   sortOrder?: 'asc' | 'desc';
   dateFrom?: string;
   dateTo?: string;
-  valueMin?: number;
-  valueMax?: number;
+  minValue?: number;
+  maxValue?: number;
   skip?: number;
   take?: number;
 }

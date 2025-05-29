@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { 
@@ -13,6 +13,9 @@ import {
   ChevronsUpDown,
   Tag,
   Ban,
+  Filter,
+  Search,
+  Percent
 } from 'lucide-react';
 import Table from '@/components/Table';
 import { Button } from '@/components/ui/Button';
@@ -27,7 +30,7 @@ import { offerApi } from '@/lib/offer-api-client';
 const filterConfig: FilterConfig = {
   search: {
     type: 'text',
-    placeholder: 'Search coupons...',
+    placeholder: 'Search coupons by name or code...',
   },
   status: {
     type: 'select',
@@ -66,12 +69,21 @@ const initialFilters: FilterState = {
 // Fetcher function for SWR
 const fetcher = async (url: string) => {
   try {
-    const response = await fetch(url);
+    console.log(`Fetching coupons from: ${url}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
+    });
+    
+    console.log('Response status:', response.status);
     
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       
       if (response.status === 401) {
+        console.log('Unauthorized access, redirecting to login');
         window.location.href = '/login';
         return;
       }
@@ -79,6 +91,11 @@ const fetcher = async (url: string) => {
     }
     
     const data = await response.json();
+    console.log('Successfully fetched coupons data:', {
+      couponsCount: data.coupons?.length,
+      pagination: data.pagination,
+    });
+    
     return data;
   } catch (error) {
     console.error('Error in fetcher:', error);
@@ -100,77 +117,180 @@ export default function OffersPage() {
 
   // Add debouncing for filters
   useEffect(() => {
+    // Store the currently focused element before filter update
+    const activeElement = document.activeElement;
+    const activeElementType = activeElement ? (activeElement as HTMLElement).getAttribute('data-input-type') : null;
+    
     const timer = setTimeout(() => {
       setDebouncedFilters(filters);
+      
+      // After state update, restore focus if it was on a value input
+      if (activeElementType === 'valueRange' && activeElement) {
+        setTimeout(() => {
+          (activeElement as HTMLElement).focus();
+        }, 0);
+      }
     }, 300); // 300ms debounce delay
 
     return () => clearTimeout(timer);
   }, [filters]);
-
-  const resetFilters = useCallback(() => {
-    setFilters(initialFilters);
-    setPage(1);
-    setSelectedCoupons([]);
-  }, []);
 
   const getApiUrl = useCallback(() => {
     const params = new URLSearchParams({
       page: page.toString(),
       pageSize: pageSize.toString(),
       sortBy,
-      sortOrder,
-      skip: ((page - 1) * pageSize).toString(),
-      take: pageSize.toString()
+      sortOrder: sortOrder.toUpperCase(),
     });
 
+    // Process text search
     if (debouncedFilters.search) {
-      const searchTerm = (debouncedFilters.search as string).trim();
+      const searchTerm = String(debouncedFilters.search).trim();
       if (searchTerm) {
         params.append('search', searchTerm);
+        console.log(`Adding search parameter: "${searchTerm}"`);
       }
     }
     
+    // Process status filter
     if ((debouncedFilters.status as string[])?.length) {
       params.append('status', (debouncedFilters.status as string[]).join(','));
+      console.log(`Adding status filter: ${(debouncedFilters.status as string[]).join(',')}`);
     }
 
+    // Process type filter
     if ((debouncedFilters.type as string[])?.length) {
       params.append('type', (debouncedFilters.type as string[]).join(','));
+      console.log(`Adding type filter: ${(debouncedFilters.type as string[]).join(',')}`);
     }
 
+    // Process date range filters
     const dateRange = debouncedFilters.dateRange as DateRangeFilter;
     if (dateRange?.from) {
       params.append('dateFrom', dateRange.from);
+      console.log(`Adding date from: ${dateRange.from}`);
     }
-
     if (dateRange?.to) {
       params.append('dateTo', dateRange.to);
+      console.log(`Adding date to: ${dateRange.to}`);
     }
 
+    // Process value range filters
     const valueRange = debouncedFilters.valueRange as RangeFilter;
     if (valueRange?.min) {
-      params.append('valueMin', valueRange.min);
+      params.append('minValue', valueRange.min);
+      console.log(`Adding value min: ${valueRange.min}`);
     }
-
     if (valueRange?.max) {
-      params.append('valueMax', valueRange.max);
+      params.append('maxValue', valueRange.max);
+      console.log(`Adding value max: ${valueRange.max}`);
     }
 
-    return `/api/coupons?${params.toString()}`;
+    console.log(`Full request URL: /api/admin/coupons?${params.toString()}`);
+    return `/api/admin/coupons?${params.toString()}`;
   }, [page, pageSize, debouncedFilters, sortBy, sortOrder]);
 
+  // Create a key for SWR that changes when pagination, sorting, or filters change
+  const swr_key = `coupons?${new URLSearchParams({
+    page: page.toString(),
+    pageSize: pageSize.toString(),
+    sortBy,
+    sortOrder,
+    filters: JSON.stringify(debouncedFilters),
+  }).toString()}`;
+
   const { data, error, isLoading, mutate } = useSWR<CouponListingResponse>(
-    getApiUrl(),
-    fetcher
+    swr_key,
+    () => fetcher(getApiUrl()),
+    {
+      keepPreviousData: false,
+      revalidateOnFocus: false,
+    }
   );
+  
+  const resetFilters = useCallback(() => {
+    console.log('Resetting all filters');
+    setFilters(initialFilters);
+    setPage(1);
+    setSelectedCoupons([]);
+    // Force a data refresh
+    mutate();
+  }, [mutate, setFilters, setPage, setSelectedCoupons]);
+
+  // Add effect for client-side sorting
+  useEffect(() => {
+    // Only apply client-side sorting for special columns when data is available
+    if (data?.coupons && data.coupons.length > 0 && 
+        sortBy === 'isActive') {
+      console.log(`Applying client-side sorting for ${sortBy}`);
+      
+      const sortedCoupons = [...data.coupons].sort((a, b) => {
+        if (sortBy === 'isActive') {
+          // For boolean values, true comes before false in ascending order
+          const aValue = a.isActive ? 1 : 0;
+          const bValue = b.isActive ? 1 : 0;
+          return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+        return 0;
+      });
+      
+      // Update the data with sorted coupons without triggering a refetch
+      mutate({
+        coupons: sortedCoupons,
+        pagination: data.pagination
+      }, false);
+    }
+  }, [data, sortBy, sortOrder]);
 
   const handleSort = (column: string) => {
-    if (sortBy === column) {
+    // Only allow sorting by fields supported by the backend API
+    const allowedSortFields = ['code', 'name', 'discountAmount', 'endDate', 'usageCount', 'createdAt'];
+    
+    // Handle special case for client-side sorting
+    if (column === 'isActive') {
+      console.log(`Sorting by ${column} using client-side sorting`);
+      
+      // Toggle sort order if already sorting by this column
+      if (sortBy === column) {
+        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortBy(column);
+        setSortOrder('asc');
+      }
+      
+      // Apply client-side sorting if we have data
+      if (data?.coupons && data.coupons.length > 0) {
+        const sortedCoupons = [...data.coupons].sort((a, b) => {
+          if (column === 'isActive') {
+            // For boolean values, true comes before false in ascending order
+            const aValue = a.isActive ? 1 : 0;
+            const bValue = b.isActive ? 1 : 0;
+            return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+          }
+          return 0;
+        });
+        
+        // Update the data with sorted coupons
+        mutate({
+          coupons: sortedCoupons,
+          pagination: data.pagination
+        }, false); // false means don't revalidate with the server
+      }
+    } else if (!allowedSortFields.includes(column)) {
+      console.log(`Sorting by ${column} is not supported by the API. Using createdAt instead.`);
+      if (sortBy === 'createdAt') {
+        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortBy('createdAt');
+        setSortOrder('asc');
+      }
+    } else if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
       setSortBy(column);
       setSortOrder('asc');
     }
+    setPage(1); // Reset to first page when sorting changes
   };
 
   const handleApiOperation = async (operation: () => Promise<any>, successMessage: string) => {
@@ -257,13 +377,31 @@ export default function OffersPage() {
   };
 
   const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-    setSelectedCoupons([]);
+    console.log(`Changing page from ${page} to ${newPage}`);
+    
+    // Only change if it's actually a different page
+    if (newPage !== page) {
+      // Clear selections when changing pages
+      setSelectedCoupons([]);
+      
+      // Update the page state
+      setPage(newPage);
+      
+      // Force a refresh of the data
+      const newUrl = getApiUrl();
+      console.log(`New API URL after page change: ${newUrl}`);
+      
+      // Force a data refresh when changing pages
+      setTimeout(() => {
+        mutate();
+      }, 0);
+    }
   };
 
   const handlePageSizeChange = (newSize: number) => {
+    console.log(`Changing page size from ${pageSize} to ${newSize}`);
     setPageSize(newSize);
-    setPage(1);
+    setPage(1); // Reset to first page when changing page size
     setSelectedCoupons([]);
   };
 
@@ -366,7 +504,12 @@ export default function OffersPage() {
         </button>
       ),
       cell: ({ row }: { row: Coupon }) => (
-        <span>{formatDiscountValue(row)}</span>
+        <div className="flex items-center gap-1">
+          <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700">
+            {row.discountType === 'PERCENTAGE' ? <Percent className="h-3 w-3 mr-1" /> : <Tag className="h-3 w-3 mr-1" />}
+            {formatDiscountValue(row)}
+          </span>
+        </div>
       ),
     },
     {
@@ -489,6 +632,7 @@ export default function OffersPage() {
   ];
 
   if (error) {
+    console.error('Rendering error state:', error);
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4">
         <p className="text-red-600 font-medium">Failed to load coupons</p>
@@ -497,6 +641,7 @@ export default function OffersPage() {
         </p>
         <button
           onClick={() => {
+            console.log('Retrying coupons fetch...');
             mutate();
           }}
           className="mt-2 text-sm text-red-600 hover:text-red-800 underline"

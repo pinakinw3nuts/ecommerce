@@ -652,5 +652,67 @@ export const attributeController = {
         }
       }
     });
+
+    // Add a dedicated endpoint for updating attribute status
+    fastify.post('/:id/status', {
+      schema: {
+        tags: ['attributes'],
+        summary: 'Update attribute status',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Attribute ID' }
+          }
+        },
+        body: {
+          type: 'object',
+          required: ['isActive'],
+          properties: {
+            isActive: { type: 'boolean', description: 'New status value' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              isActive: { type: 'boolean' },
+              updatedAt: { type: 'string', format: 'date-time' }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{ 
+        Params: { id: string }, 
+        Body: { isActive: boolean } 
+      }>, reply) => {
+        try {
+          console.log(`Updating attribute ${request.params.id} status to: ${request.body.isActive}`);
+          
+          const attribute = await attributeService.updateAttribute(request.params.id, { 
+            isActive: request.body.isActive 
+          });
+          
+          console.log(`Status update result:`, {
+            id: attribute.id,
+            name: attribute.name,
+            isActive: attribute.isActive
+          });
+          
+          return reply.send(attribute);
+        } catch (error) {
+          console.error(`Error updating attribute status:`, error);
+          return reply.code(404).send({ message: 'Attribute not found' });
+        }
+      }
+    });
   }
 }; 

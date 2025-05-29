@@ -38,8 +38,18 @@ export class AttributeService {
     take?: number;
     isActive?: boolean;
   }) {
+    // Build the where clause
+    const whereClause: any = {};
+    
+    // Only filter by isActive if it's explicitly specified
+    if (options?.isActive !== undefined) {
+      whereClause.isActive = options.isActive;
+    }
+    
+    console.log(`Listing attributes with filters:`, whereClause);
+    
     return this.attributeRepo.find({
-      where: { isActive: options?.isActive ?? true },
+      where: whereClause,
       relations: ['values'],
       skip: options?.skip,
       take: options?.take,
@@ -64,8 +74,32 @@ export class AttributeService {
     isActive: boolean;
   }>) {
     const attribute = await this.attributeRepo.findOneOrFail({ where: { id } });
-    Object.assign(attribute, data);
-    return this.attributeRepo.save(attribute);
+    
+    // Explicitly handle boolean fields to ensure false values are preserved
+    if (data.isActive !== undefined) {
+      // Convert to explicit boolean to handle any truthy/falsy values
+      attribute.isActive = Boolean(data.isActive);
+      console.log(`Setting attribute ${id} isActive to: ${attribute.isActive}`);
+    }
+    
+    if (data.isFilterable !== undefined) {
+      attribute.isFilterable = Boolean(data.isFilterable);
+    }
+    
+    if (data.isRequired !== undefined) {
+      attribute.isRequired = Boolean(data.isRequired);
+    }
+    
+    // Handle other fields
+    if (data.name !== undefined) attribute.name = data.name;
+    if (data.description !== undefined) attribute.description = data.description;
+    if (data.type !== undefined) attribute.type = data.type;
+    if (data.sortOrder !== undefined) attribute.sortOrder = data.sortOrder;
+    
+    // Save the updated attribute
+    const savedAttribute = await this.attributeRepo.save(attribute);
+    console.log(`Updated attribute ${id}:`, savedAttribute);
+    return savedAttribute;
   }
 
   async deleteAttribute(id: string) {

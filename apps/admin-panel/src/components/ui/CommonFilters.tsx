@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Filter as FilterIcon, Calendar, X, Check, ChevronDown, Star, StarOff, CheckSquare, Ban } from 'lucide-react';
+import { Search, Filter as FilterIcon, Calendar, X, Check, ChevronDown, Star, StarOff, CheckSquare, Ban, Tag, Percent } from 'lucide-react';
 import { Button } from './Button';
 
 export interface FilterOption {
@@ -45,22 +45,123 @@ export interface CommonFiltersProps {
 }
 
 export function CommonFilters({ config, filters, onChange, onReset }: CommonFiltersProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(() => {
+    // Try to restore the filter popup state from localStorage
+    if (typeof window !== 'undefined') {
+      const savedState = localStorage.getItem('filterPopupOpen');
+      return savedState === 'true';
+    }
+    return false;
+  });
   const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('top');
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
   const [dropdownSearches, setDropdownSearches] = useState<Record<string, string>>({});
+  // Track the last focused input to restore focus after refresh
+  const [lastFocusedInput, setLastFocusedInput] = useState<{
+    type: 'search' | 'valueRange' | 'dateRange';
+    key?: string;
+    field?: 'min' | 'max' | 'from' | 'to';
+  }>({ type: 'search' });
+  
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const selectDropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const valueMinInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const valueMaxInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  // Store last focused input in localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lastFocusedInput', JSON.stringify(lastFocusedInput));
+    }
+  }, [lastFocusedInput]);
+  
+  // Load last focused input from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedFocus = localStorage.getItem('lastFocusedInput');
+        if (savedFocus) {
+          setLastFocusedInput(JSON.parse(savedFocus));
+        }
+      } catch (e) {
+        console.error('Error loading last focused input:', e);
+      }
+    }
+  }, []);
 
   // Always position the dropdown at the top
   useEffect(() => {
     setDropdownPosition('top');
   }, [isOpen]);
 
+  // Save isOpen state to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('filterPopupOpen', isOpen.toString());
+    }
+    
+    // When filter popup opens, focus on the appropriate input
+    if (isOpen) {
+      setTimeout(() => {
+        // First priority: Focus on the last focused input if available
+        if (lastFocusedInput) {
+          if (lastFocusedInput.type === 'search' && searchInputRef.current) {
+            searchInputRef.current.focus();
+            return;
+          } 
+          else if (lastFocusedInput.type === 'valueRange' && lastFocusedInput.key && lastFocusedInput.field) {
+            if (lastFocusedInput.field === 'min' && valueMinInputRefs.current[lastFocusedInput.key]) {
+              valueMinInputRefs.current[lastFocusedInput.key]?.focus();
+              return;
+            } 
+            else if (lastFocusedInput.field === 'max' && valueMaxInputRefs.current[lastFocusedInput.key]) {
+              valueMaxInputRefs.current[lastFocusedInput.key]?.focus();
+              return;
+            }
+          }
+        }
+        
+        // Second priority: Focus on search input if it exists and is empty
+        if (searchInputRef.current && (!filters.search || (filters.search as string) === '')) {
+          searchInputRef.current.focus();
+          return;
+        }
+        
+        // Third priority: Find the first value range filter with a min value
+        const valueRangeKey = Object.keys(filters).find(key => {
+          const filter = filters[key];
+          return (
+            filter && 
+            typeof filter === 'object' && 
+            'min' in filter && 
+            config[key]?.type === 'valueRange'
+          );
+        });
+        
+        if (valueRangeKey && valueMinInputRefs.current[valueRangeKey]) {
+          valueMinInputRefs.current[valueRangeKey]?.focus();
+        }
+      }, 50); // Shorter delay for better responsiveness
+    }
+  }, [isOpen, filters, config, lastFocusedInput]);
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
+      // Close filter popup when clicking outside
+      if (
+        isOpen &&
+        dropdownRef.current && 
+        !dropdownRef.current.contains(event.target as Node) &&
+        filterButtonRef.current &&
+        !filterButtonRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+
+      // Close individual dropdowns when clicking outside
       Object.entries(selectDropdownRefs.current).forEach(([key, ref]) => {
         if (ref && !ref.contains(event.target as Node)) {
           setOpenDropdowns(prev => ({...prev, [key]: false}));
@@ -72,6 +173,39 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
+  }, [isOpen]);
+
+  // Add an effect to handle keyboard events globally
+  useEffect(() => {
+    // Function to handle keydown events
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Get the active element
+      const activeElement = document.activeElement;
+      const activeElementType = activeElement ? (activeElement as HTMLElement).getAttribute('data-input-type') : null;
+      
+      // If we're focused on a value range input, prevent other inputs from capturing keystrokes
+      if (activeElementType === 'valueRange') {
+        // Mark that we're in a value input
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('isChangingValue', 'true');
+        }
+        
+        // Clear the flag after a short delay
+        setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('isChangingValue', 'false');
+          }
+        }, 100);
+      }
+    };
+    
+    // Add the event listener
+    document.addEventListener('keydown', handleKeyDown, true);
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
   }, []);
 
   const toggleDropdown = (key: string) => {
@@ -82,17 +216,82 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
   };
 
   const handleChange = (key: string, value: string | string[] | DateRangeFilter | RangeFilter) => {
+    // Get the currently focused element before update
+    const activeElement = document.activeElement;
+    const activeElementType = activeElement ? (activeElement as HTMLElement).getAttribute('data-input-type') : null;
+    const activeElementId = activeElement ? (activeElement as HTMLElement).id : null;
+    
+    // Block search focus if we're changing a value range
+    const isChangingValue = typeof window !== 'undefined' && localStorage.getItem('isChangingValue') === 'true';
+    
+    // Update the filter state without closing the popup
     onChange({
       ...filters,
       [key]: value
     });
+    
+    // Ensure the popup stays open by setting it explicitly
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('filterPopupOpen', 'true');
+    }
+    
+    // If the active element was a value range input or we're in the middle of changing a value, restore focus after state update
+    if ((activeElementType === 'valueRange' && activeElementId) || isChangingValue) {
+      // Use multiple attempts to restore focus
+      const focusElement = () => {
+        const elementToFocus = activeElementId ? document.getElementById(activeElementId) : null;
+        if (elementToFocus) {
+          elementToFocus.focus();
+          return true;
+        }
+        
+        // If we can't find the element by ID, try to find it by type
+        if (activeElementType === 'valueRange') {
+          // Try to find any value range input and focus it
+          const valueInputs = document.querySelectorAll('[data-input-type="valueRange"]');
+          if (valueInputs.length > 0) {
+            (valueInputs[0] as HTMLElement).focus();
+            return true;
+          }
+        }
+        
+        return false;
+      };
+      
+      // Attempt focus restoration multiple times with increasing delays
+      setTimeout(focusElement, 0);
+      setTimeout(focusElement, 50);
+      setTimeout(focusElement, 100);
+    }
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Store the current selection/cursor position
+    const input = e.target;
+    const cursorPosition = input.type !== 'number' ? input.selectionStart || 0 : 0;
+    
+    // Update last focused input
+    setLastFocusedInput({
+      type: 'search'
+    });
+    
     handleChange('search', e.target.value);
+    
+    // Restore focus and cursor position after state update
+    setTimeout(() => {
+      input.focus();
+      if (input.type !== 'number') {
+        input.setSelectionRange(cursorPosition, cursorPosition);
+      }
+    }, 0);
   };
 
-  const handleOptionToggle = (groupKey: string, value: string) => {
+  const handleOptionToggle = (groupKey: string, value: string, event?: React.MouseEvent) => {
+    // Prevent event propagation if provided
+    if (event) {
+      event.stopPropagation();
+    }
+    
     const currentValues = (filters[groupKey] as string[]) || [];
     const newValues = currentValues.includes(value)
       ? currentValues.filter(v => v !== value)
@@ -100,7 +299,13 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
     handleChange(groupKey, newValues);
   };
 
-  const handleSelectAll = (groupKey: string, options: FilterOption[]) => {
+  const handleSelectAll = (groupKey: string, options: FilterOption[], event?: React.MouseEvent) => {
+    // Prevent event propagation if provided
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
     const allValues = options.map(option => option.value);
     const currentValues = filters[groupKey] as string[];
     
@@ -135,25 +340,114 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
     }
   };
 
-  const handleValueRangeChange = (key: string, field: 'min' | 'max', value: string) => {
+  const handleValueRangeChange = (key: string, field: 'min' | 'max', value: string, event?: React.ChangeEvent) => {
+    // Prevent event propagation if provided
+    if (event) {
+      event.stopPropagation();
+      // Prevent any default behavior
+      event.preventDefault();
+    }
+    
+    // Store the current selection/cursor position
+    const input = event?.target as HTMLInputElement;
+    const cursorPosition = input?.selectionStart || 0;
+    
+    // Update last focused input
+    setLastFocusedInput({
+      type: 'valueRange',
+      key,
+      field
+    });
+    
+    // Store the input element for focus restoration
+    const inputElement = field === 'min' ? 
+      valueMinInputRefs.current[key] : 
+      valueMaxInputRefs.current[key];
+      
+    // Set a flag in localStorage to indicate we're in the middle of a value change
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('isChangingValue', 'true');
+    }
+    
     handleChange(key, {
       ...(filters[key] as RangeFilter),
       [field]: value,
     });
+    
+    // Restore focus and cursor position after state update
+    if (inputElement) {
+      // Use multiple timeouts with increasing delays to ensure focus is maintained
+      setTimeout(() => {
+        inputElement.focus();
+        if (cursorPosition !== null) {
+          try {
+            inputElement.setSelectionRange(cursorPosition, cursorPosition);
+          } catch (e) {
+            console.error('Failed to set selection range:', e);
+          }
+        }
+        
+        // Clear the flag after focus is restored
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('isChangingValue', 'false');
+        }
+      }, 0);
+      
+      // Additional focus attempt with a slightly longer delay
+      setTimeout(() => {
+        inputElement.focus();
+      }, 50);
+    }
   };
 
-  const handleDateRangeChange = (key: string, field: 'from' | 'to', value: string) => {
+  const handleDateRangeChange = (key: string, field: 'from' | 'to', value: string, event?: React.ChangeEvent) => {
+    // Prevent event propagation if provided
+    if (event) {
+      event.stopPropagation();
+    }
+    
+    // Store the current selection/cursor position
+    const input = event?.target as HTMLInputElement;
+    
+    // Update last focused input
+    setLastFocusedInput({
+      type: 'dateRange',
+      key,
+      field
+    });
+    
     handleChange(key, {
       ...(filters[key] as DateRangeFilter),
       [field]: value,
     });
+    
+    // Restore focus after state update
+    if (input) {
+      setTimeout(() => {
+        input.focus();
+      }, 0);
+    }
   };
 
-  const handleDropdownSearch = (key: string, value: string) => {
+  const handleDropdownSearch = (key: string, value: string, event?: React.ChangeEvent<HTMLInputElement>) => {
+    // Store the input element and cursor position if event is provided
+    const input = event?.target;
+    const cursorPosition = input?.type !== 'number' ? input?.selectionStart || 0 : 0;
+    
     setDropdownSearches(prev => ({
       ...prev,
       [key]: value
     }));
+    
+    // Restore focus and cursor position after state update
+    if (input) {
+      setTimeout(() => {
+        input.focus();
+        if (input.type !== 'number') {
+          input.setSelectionRange(cursorPosition, cursorPosition);
+        }
+      }, 0);
+    }
   };
 
   // Filter options based on search
@@ -267,13 +561,39 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
 
   const activeFilters = getActiveFilters();
 
+  // Function to focus the search input
+  const focusSearchInput = () => {
+    if (searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  };
+
+  // Function to focus a specific input
+  const focusInput = (key: string, field: 'min' | 'max') => {
+    if (field === 'min' && valueMinInputRefs.current[key]) {
+      valueMinInputRefs.current[key]?.focus();
+    } else if (field === 'max' && valueMaxInputRefs.current[key]) {
+      valueMaxInputRefs.current[key]?.focus();
+    }
+  };
+
   // Function to set dropdown ref
   const setDropdownRef = (key: string) => (el: HTMLDivElement | null) => {
     selectDropdownRefs.current[key] = el;
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onKeyDown={(e) => {
+      // Get the active element
+      const activeElement = document.activeElement;
+      const activeElementType = activeElement ? (activeElement as HTMLElement).getAttribute('data-input-type') : null;
+      
+      // If we're focused on a value range input, prevent event propagation
+      if (activeElementType === 'valueRange') {
+        // Don't let the event bubble up to other handlers
+        e.stopPropagation();
+      }
+    }}>
       {/* Search Bar and Filter Button */}
       <div className="flex gap-3">
         <div className="relative flex-1">
@@ -284,6 +604,47 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
             onChange={handleSearchChange}
             placeholder={Object.entries(config).find(([_, field]) => field.type === 'text')?.[1]?.placeholder || ''}
             className="w-full rounded-lg border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            ref={searchInputRef}
+            onFocus={(e) => {
+              // Check if we're in the middle of changing a value range
+              const isChangingValue = typeof window !== 'undefined' && localStorage.getItem('isChangingValue') === 'true';
+              if (isChangingValue) {
+                // Prevent focus on search if we're changing a value range
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Try to find and focus the last active value input
+                const lastFocused = localStorage.getItem('lastFocusedInput');
+                if (lastFocused) {
+                  try {
+                    const focusInfo = JSON.parse(lastFocused);
+                    if (focusInfo.type === 'valueRange' && focusInfo.key && focusInfo.field) {
+                      const inputRef = focusInfo.field === 'min' ? 
+                        valueMinInputRefs.current[focusInfo.key] : 
+                        valueMaxInputRefs.current[focusInfo.key];
+                      
+                      if (inputRef) {
+                        setTimeout(() => inputRef.focus(), 0);
+                        return;
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Error parsing last focused input:', err);
+                  }
+                }
+                
+                // If we can't find the specific input, try to find any value range input
+                const valueInputs = document.querySelectorAll('[data-input-type="valueRange"]');
+                if (valueInputs.length > 0) {
+                  setTimeout(() => (valueInputs[0] as HTMLElement).focus(), 0);
+                  return;
+                }
+              }
+              
+              setLastFocusedInput({ type: 'search' });
+            }}
+            data-input-type="search"
+            id="global-search-input"
           />
         </div>
         <div className="relative">
@@ -291,7 +652,19 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
             ref={filterButtonRef}
             variant="outline"
             size="default"
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={() => {
+              const newIsOpen = !isOpen;
+              setIsOpen(newIsOpen);
+              
+              // If opening the popup, focus on the search input after a brief delay
+              if (newIsOpen) {
+                setTimeout(() => {
+                  if (searchInputRef.current) {
+                    searchInputRef.current.focus();
+                  }
+                }, 50);
+              }
+            }}
             className="flex items-center gap-2 px-4"
           >
             <FilterIcon className="h-4 w-4" />
@@ -311,7 +684,16 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
             >
               <div className="space-y-5 p-5">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-medium text-lg text-gray-900">Filter Options</h3>
+                  <h3 
+                    className="font-medium text-lg text-gray-900 cursor-pointer" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      focusSearchInput();
+                    }}
+                  >
+                    Filter Options
+                  </h3>
                   <button 
                     type="button"
                     onClick={() => setIsOpen(false)}
@@ -328,7 +710,24 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                   
                   return (
                     <div key={key} className="space-y-2 border-t border-gray-100 pt-4 mt-4">
-                      <h4 className="text-sm font-medium text-gray-700">{field.placeholder}</h4>
+                      <h4 
+                        className="text-sm font-medium text-gray-700 cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                          // If this is a value range filter, focus the min input
+                          if (field.type === 'valueRange' && valueMinInputRefs.current[key]) {
+                            focusInput(key, 'min');
+                          }
+                          // For other types, focus the search input
+                          else {
+                            focusSearchInput();
+                          }
+                        }}
+                      >
+                        {field.placeholder}
+                      </h4>
                       
                       {/* Boolean filter (buttons) - Status with box style */}
                       {field.type === 'boolean' && field.options && (key === 'isActive' || key === 'status') && (
@@ -346,7 +745,9 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                                 <button
                                   type="button"
                                   key={option.value}
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
                                     const currentValues = (filters[key] as string[]) || [];
                                     
                                     // Toggle logic for status filters
@@ -402,7 +803,9 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                               <button
                                 type="button"
                                 key={option.value}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
                                   // For boolean filters, we want to make it behave like a radio button
                                   // So we set it to the value or clear it if already selected
                                   const currentValues = (filters[key] as string[]) || [];
@@ -424,7 +827,81 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                         </div>
                       )}
                       
-                      {field.type === 'select' && (
+                      {field.type === 'select' && (key === 'status' || key === 'type') && (
+                        <div className="mt-2">
+                          <div className="flex flex-wrap gap-2">
+                            {field.options?.map(option => {
+                              const isSelected = Array.isArray(filters[key]) && 
+                                (filters[key] as string[]).includes(option.value);
+                              
+                              // Determine icon based on filter type and option
+                              let Icon;
+                              let buttonStyle = '';
+                              
+                              if (key === 'status') {
+                                Icon = option.value === 'active' ? CheckSquare : Ban;
+                                // Status-specific styling
+                                buttonStyle = isSelected
+                                  ? option.value === 'active'
+                                    ? 'bg-green-600 text-white hover:bg-green-700'
+                                    : 'bg-gray-700 text-white hover:bg-gray-800'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200';
+                              } else if (key === 'type') {
+                                // For discount type (flat vs percent)
+                                Icon = option.value === 'flat' ? Tag : Percent;
+                                // Type-specific styling
+                                buttonStyle = isSelected
+                                  ? option.value === 'flat'
+                                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200';
+                              }
+                              
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    
+                                    const currentValues = (filters[key] as string[]) || [];
+                                    if (currentValues.includes(option.value)) {
+                                      // If already selected, remove it
+                                      handleChange(key, currentValues.filter(v => v !== option.value));
+                                    } else {
+                                      // Add to selection (multi-select)
+                                      handleChange(key, [...currentValues, option.value]);
+                                    }
+                                  }}
+                                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${buttonStyle}`}
+                                >
+                                  {Icon && <Icon className="h-4 w-4" />}
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                            
+                            {/* Clear selection button */}
+                            {Array.isArray(filters[key]) && (filters[key] as string[]).length > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleChange(key, []);
+                                }}
+                                className="px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 border border-gray-200 text-gray-500 hover:bg-gray-50"
+                              >
+                                <X className="h-4 w-4" />
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {field.type === 'select' && key !== 'status' && key !== 'type' && (
                         <div className="relative mt-2" ref={setDropdownRef(key)}>
                           {field.isLoading ? (
                             <div className="flex items-center justify-center w-full py-2 text-sm text-gray-500">
@@ -456,7 +933,7 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                                           <input
                                             type="text"
                                             value={dropdownSearches[key] || ''}
-                                            onChange={(e) => handleDropdownSearch(key, e.target.value)}
+                                            onChange={(e) => handleDropdownSearch(key, e.target.value, e)}
                                             placeholder="Search..."
                                             className="w-full rounded-md border border-gray-200 bg-white pl-7 pr-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                             onClick={(e) => e.stopPropagation()}
@@ -467,7 +944,7 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                                       {/* Select All option */}
                                       <div
                                         className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
-                                        onClick={() => handleSelectAll(key, field.options || [])}
+                                        onClick={(e) => handleSelectAll(key, field.options || [], e)}
                                       >
                                         <div className={`flex h-4 w-4 items-center justify-center rounded border ${
                                           Array.isArray(filters[key]) && 
@@ -495,9 +972,8 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                                             <div
                                               key={option.value}
                                               className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                                              onClick={() => {
-                                                handleOptionToggle(key, option.value);
-                                                // Keep dropdown open for multi-select
+                                              onClick={(e) => {
+                                                handleOptionToggle(key, option.value, e);
                                               }}
                                             >
                                               <div className={`flex h-4 w-4 items-center justify-center rounded border ${
@@ -536,8 +1012,9 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                             <input
                               type="date"
                               value={(filters[key] as DateRangeFilter)?.from || ''}
-                              onChange={(e) => handleDateRangeChange(key, 'from', e.target.value)}
+                              onChange={(e) => handleDateRangeChange(key, 'from', e.target.value, e)}
                               className="w-full rounded-md border border-gray-200 py-1.5 px-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onFocus={() => setLastFocusedInput({ type: 'dateRange', key, field: 'from' })}
                             />
                           </div>
                           <div className="flex-1">
@@ -545,32 +1022,121 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                             <input
                               type="date"
                               value={(filters[key] as DateRangeFilter)?.to || ''}
-                              onChange={(e) => handleDateRangeChange(key, 'to', e.target.value)}
+                              onChange={(e) => handleDateRangeChange(key, 'to', e.target.value, e)}
                               className="w-full rounded-md border border-gray-200 py-1.5 px-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onFocus={() => setLastFocusedInput({ type: 'dateRange', key, field: 'to' })}
                             />
                           </div>
                         </div>
                       )}
                       {field.type === 'valueRange' && (
-                        <div className="grid grid-cols-2 gap-3 mt-2">
-                          <div className="relative">
-                            <input
-                              type="number"
-                              placeholder="Min"
-                              value={(filters[key] as RangeFilter)?.min || ''}
-                              onChange={(e) => handleValueRangeChange(key, 'min', e.target.value)}
-                              className="w-full rounded-md border border-gray-200 py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
+                        <div className="space-y-2 mt-2">
+                          <div 
+                            className="grid grid-cols-2 gap-3"
+                            onClick={() => focusInput(key, 'min')}
+                          >
+                            <div className="relative">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                placeholder="Min"
+                                value={(filters[key] as RangeFilter)?.min || ''}
+                                onChange={(e) => {
+                                  // Only allow numeric input
+                                  if (e.target.value === '' || /^[0-9]+$/.test(e.target.value)) {
+                                    handleValueRangeChange(key, 'min', e.target.value, e);
+                                  }
+                                }}
+                                className="w-full rounded-md border border-gray-200 py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                ref={(el) => {
+                                  valueMinInputRefs.current[key] = el;
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                onFocus={() => {
+                                  setLastFocusedInput({ type: 'valueRange', key, field: 'min' });
+                                  // Set flag that we're in a value input
+                                  if (typeof window !== 'undefined') {
+                                    localStorage.setItem('isChangingValue', 'true');
+                                  }
+                                }}
+                                onBlur={() => {
+                                  // Clear the flag with a delay to allow focus to transfer to another value input
+                                  setTimeout(() => {
+                                    if (typeof window !== 'undefined') {
+                                      localStorage.setItem('isChangingValue', 'false');
+                                    }
+                                  }, 100);
+                                }}
+                                onKeyDown={(e) => {
+                                  // Prevent event bubbling for all keyboard events
+                                  e.stopPropagation();
+                                }}
+                                data-input-type="valueRange"
+                                id={`valueRange-${key}-min`}
+                              />
+                            </div>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                placeholder="Max"
+                                value={(filters[key] as RangeFilter)?.max || ''}
+                                onChange={(e) => {
+                                  // Only allow numeric input
+                                  if (e.target.value === '' || /^[0-9]+$/.test(e.target.value)) {
+                                    handleValueRangeChange(key, 'max', e.target.value, e);
+                                  }
+                                }}
+                                className="w-full rounded-md border border-gray-200 py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                ref={(el) => {
+                                  valueMaxInputRefs.current[key] = el;
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                onFocus={() => {
+                                  setLastFocusedInput({ type: 'valueRange', key, field: 'max' });
+                                  // Set flag that we're in a value input
+                                  if (typeof window !== 'undefined') {
+                                    localStorage.setItem('isChangingValue', 'true');
+                                  }
+                                }}
+                                onBlur={() => {
+                                  // Clear the flag with a delay to allow focus to transfer to another value input
+                                  setTimeout(() => {
+                                    if (typeof window !== 'undefined') {
+                                      localStorage.setItem('isChangingValue', 'false');
+                                    }
+                                  }, 100);
+                                }}
+                                onKeyDown={(e) => {
+                                  // Prevent event bubbling for all keyboard events
+                                  e.stopPropagation();
+                                }}
+                                data-input-type="valueRange"
+                                id={`valueRange-${key}-max`}
+                              />
+                            </div>
                           </div>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              placeholder="Max"
-                              value={(filters[key] as RangeFilter)?.max || ''}
-                              onChange={(e) => handleValueRangeChange(key, 'max', e.target.value)}
-                              className="w-full rounded-md border border-gray-200 py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                          </div>
+                          
+                          {/* Clear button for value range */}
+                          {((filters[key] as RangeFilter)?.min || (filters[key] as RangeFilter)?.max) && (
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleChange(key, { min: '', max: '' });
+                                  setTimeout(() => focusInput(key, 'min'), 0);
+                                }}
+                                className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                              >
+                                <X className="h-3 w-3" />
+                                Clear range
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -592,7 +1158,11 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                   </button>
                   <button 
                     type="button"
-                    onClick={() => setIsOpen(false)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsOpen(false);
+                    }}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg px-4 py-2"
                   >
                     Apply Filters

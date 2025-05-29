@@ -63,35 +63,37 @@ interface InventoryFilterState extends FilterState {
 
 const filterConfig: FilterConfig = {
   search: {
+    type: 'text',
     placeholder: 'Search inventory...',
   },
-  filterGroups: [
-    {
-      name: 'Category',
-      key: 'categories',
-      options: [
-        { value: 'electronics', label: 'Electronics' },
-        { value: 'clothing', label: 'Clothing' },
-        { value: 'books', label: 'Books' },
-        { value: 'home', label: 'Home & Garden' },
-        { value: 'sports', label: 'Sports' },
-      ],
-    },
-    {
-      name: 'Status',
-      key: 'status',
-      options: [
-        { value: 'in_stock', label: 'In Stock' },
-        { value: 'low_stock', label: 'Low Stock' },
-        { value: 'out_of_stock', label: 'Out of Stock' },
-      ],
-    },
-  ],
-  hasValueRange: true,
-  valueRangeLabel: 'Price Range',
-  valueRangeType: 'currency',
-  hasDateRange: true,
-  dateRangeLabel: 'Created Date',
+  categories: {
+    type: 'select',
+    placeholder: 'Category',
+    options: [
+      { value: 'electronics', label: 'Electronics' },
+      { value: 'clothing', label: 'Clothing' },
+      { value: 'books', label: 'Books' },
+      { value: 'home', label: 'Home & Garden' },
+      { value: 'sports', label: 'Sports' },
+    ],
+  },
+  status: {
+    type: 'select',
+    placeholder: 'Status',
+    options: [
+      { value: 'in_stock', label: 'In Stock' },
+      { value: 'low_stock', label: 'Low Stock' },
+      { value: 'out_of_stock', label: 'Out of Stock' },
+    ],
+  },
+  valueRange: {
+    type: 'valueRange',
+    placeholder: 'Price Range',
+  },
+  dateRange: {
+    type: 'daterange',
+    placeholder: 'Created Date',
+  },
 };
 
 const initialFilters: InventoryFilterState = {

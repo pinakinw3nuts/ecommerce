@@ -1,20 +1,10 @@
-import Cookies from 'js-cookie';
 import { CouponListParams, CouponListingResponse, Coupon, CreateCouponData, UpdateCouponData } from '../types/coupon';
-
-const TOKEN_COOKIE_NAME = 'admin_token';
 
 // Helper function to get auth headers
 const getAuthHeaders = () => {
-  const token = Cookies.get(TOKEN_COOKIE_NAME);
-  const headers: HeadersInit = {
+  return {
     'Content-Type': 'application/json',
   };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  return headers;
 };
 
 // Helper function to handle API responses
@@ -24,7 +14,6 @@ const handleResponse = async (response: Response) => {
     
     // Handle auth errors
     if (response.status === 401) {
-      Cookies.remove(TOKEN_COOKIE_NAME);
       const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.href = `/login?returnUrl=${returnUrl}`;
       throw new Error(error.message || 'Authentication failed');
@@ -51,8 +40,8 @@ export const offerApi = {
     if (params.sortOrder) queryParams.append('sortOrder', params.sortOrder);
     if (params.dateFrom) queryParams.append('dateFrom', params.dateFrom);
     if (params.dateTo) queryParams.append('dateTo', params.dateTo);
-    if (params.valueMin) queryParams.append('valueMin', params.valueMin.toString());
-    if (params.valueMax) queryParams.append('valueMax', params.valueMax.toString());
+    if (params.minValue) queryParams.append('minValue', params.minValue.toString());
+    if (params.maxValue) queryParams.append('maxValue', params.maxValue.toString());
     if (params.skip) queryParams.append('skip', params.skip.toString());
     if (params.take) queryParams.append('take', params.take.toString());
     
@@ -88,7 +77,7 @@ export const offerApi = {
 
   // Create new coupon
   createCoupon: async (data: CreateCouponData): Promise<Coupon> => {
-    const response = await fetch('/api/coupons', {
+    const response = await fetch('/api/admin/coupons', {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data)

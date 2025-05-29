@@ -93,9 +93,13 @@ const initialFilters: FilterState = {
 const fetcher = async (url: string) => {
   try {
     console.log(`Fetching products from: ${url}`);
-    console.log(`Current page: ${new URL(url, window.location.origin).searchParams.get('page')}`);
     
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
+    });
+    
     console.log('Response status:', response.status);
     
     if (!response.ok) {
@@ -110,6 +114,7 @@ const fetcher = async (url: string) => {
         window.location.href = '/login';
         return;
       }
+      
       throw new Error(error.message || 'Failed to fetch products');
     }
     
@@ -174,7 +179,7 @@ export default function ProductsPage() {
   const getApiUrl = useCallback(() => {
     const params = new URLSearchParams({
       page: page.toString(),
-      limit: pageSize.toString(),
+      pageSize: pageSize.toString(),
       sortBy,
       sortOrder: sortOrder.toUpperCase(),
     });
@@ -209,8 +214,11 @@ export default function ProductsPage() {
         } 
         // Handle boolean filters (isFeatured, isPublished) - take only first value and convert to boolean
         else if (key === 'isFeatured' || key === 'isPublished') {
-          params.append(key, value[0]);
-          console.log(`Adding ${key} filter: ${value[0]}`);
+          if (value.length > 0) {
+            // Just use the value directly without array brackets
+            params.append(key, value[0]);
+            console.log(`Adding ${key} filter: ${value[0]}`);
+          }
         }
         // Handle other array filters (statuses, etc.)
         else {

@@ -51,11 +51,21 @@ export async function POST(request: Request) {
     // Create the response
     const res = NextResponse.json({
       token: data.accessToken,
+      refreshToken: data.refreshToken,
       user: data.user
     });
 
     // Set the token in an HTTP-only cookie
     cookies().set('admin_token', data.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60, // 15 minutes (match token expiration)
+      path: '/',
+    });
+
+    // Store refresh token in a separate cookie with longer expiration
+    cookies().set('admin_refresh_token', data.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',

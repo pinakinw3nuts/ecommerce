@@ -17,6 +17,7 @@ const couponSchema = z.object({
   usageLimit: z.number().int().positive().optional(),
   perUserLimit: z.number().int().positive().optional(),
   isFirstPurchaseOnly: z.boolean().optional(),
+  isActive: z.boolean().optional(),
   productIds: z.array(z.string()).optional()
 });
 
@@ -39,7 +40,12 @@ export const couponController = {
             skip: { type: 'number' },
             take: { type: 'number' },
             isActive: { type: 'boolean' },
-            includeExpired: { type: 'boolean' }
+            includeExpired: { type: 'boolean' },
+            discountType: { type: 'string', enum: ['PERCENTAGE', 'FIXED'] },
+            valueMin: { type: 'number' },
+            valueMax: { type: 'number' },
+            sortBy: { type: 'string' },
+            sortOrder: { type: 'string', enum: ['ASC', 'DESC', 'asc', 'desc'] }
           }
         },
         response: {
@@ -75,11 +81,16 @@ export const couponController = {
           take?: number;
           isActive?: boolean;
           includeExpired?: boolean;
+          discountType?: 'PERCENTAGE' | 'FIXED';
+          valueMin?: number;
+          valueMax?: number;
+          sortBy?: string;
+          sortOrder?: 'ASC' | 'DESC' | 'asc' | 'desc';
         }
       }>, reply) => {
-        // console.log('GET /coupons - Query params:', request.query);
+        console.log('GET /coupons - Query params:', request.query);
         const coupons = await couponService.listCoupons(request.query);
-        // console.log('GET /coupons - Found coupons:', coupons);
+        console.log('GET /coupons - Found coupons count:', coupons.length);
         return reply.send(coupons);
       }
     });
@@ -312,7 +323,18 @@ export const couponController = {
         Body: Partial<z.infer<typeof couponSchema>>;
       }>, reply) => {
         try {
-          const coupon = await couponService.updateCoupon(request.params.id, request.body);
+          console.log('PUT /coupons/:id - Request body:', request.body);
+          console.log('isActive value in request:', request.body.isActive);
+          
+          // Ensure isActive is properly handled as a boolean
+          const updateData = {
+            ...request.body,
+            isActive: request.body.isActive !== undefined ? Boolean(request.body.isActive) : undefined
+          };
+          
+          console.log('Processed update data:', updateData);
+          
+          const coupon = await couponService.updateCoupon(request.params.id, updateData);
           return reply.send(coupon);
         } catch (error: any) {
           if (error.message === 'Coupon not found') {

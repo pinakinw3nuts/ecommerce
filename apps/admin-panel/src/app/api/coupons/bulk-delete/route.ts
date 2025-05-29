@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { makeRequest } from '@/lib/make-request';
 import { PRODUCT_SERVICE_URL } from '@/lib/constants';
 
 // Use IPv4 explicitly to avoid IPv6 issues
@@ -18,7 +19,7 @@ const getValidAuthHeader = () => {
   return `Bearer ${token.value}`;
 };
 
-async function makeRequest(url: string, options: RequestInit = {}) {
+async function makeLocalRequest(url: string, options: RequestInit = {}) {
   console.log('Making request to:', url);
   try {
     const response = await fetch(url, {
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
       const results = await Promise.all(
         couponIds.map(async (id) => {
           try {
-            const response = await makeRequest(
+            const response = await makeLocalRequest(
               `${PRODUCT_SERVICE_URL_FIXED}/api/v1/coupons/${id}`,
               {
                 method: 'DELETE',

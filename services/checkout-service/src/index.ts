@@ -51,7 +51,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Register CORS
   await app.register(fastifyCors, {
     origin: true,
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range']
   });
 
   // Register Swagger

@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { loginAdmin } from '@/lib/auth';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/useToast';
 
 // Validation schema
 const loginSchema = z.object({
@@ -20,7 +20,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const toast = useToast();
+  const { success, error } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
   const {
@@ -35,10 +35,10 @@ export default function LoginPage() {
     try {
       setIsLoading(true);
       
-      await loginAdmin(data.email, data.password);
+      const response = await loginAdmin(data.email, data.password);
       
       // Show success message
-      toast.success('Logged in successfully');
+      success("Logged in successfully");
 
       // Get return URL from query params or default to dashboard
       const returnUrl = searchParams.get('returnUrl') || '/';
@@ -47,7 +47,7 @@ export default function LoginPage() {
       window.location.href = returnUrl;
     } catch (err: any) {
       console.error('Login error:', err);
-      toast.error(err.message || 'Failed to login');
+      error(err.message || 'Failed to login');
     } finally {
       setIsLoading(false);
     }

@@ -1,24 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { makeRequest } from '@/lib/make-request';
 
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace('localhost', '127.0.0.1') || 'http://127.0.0.1:3003';
-
-async function makeRequest(url: string, options: RequestInit = {}) {
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-    return response;
-  } catch (error) {
-    console.error('Request failed:', error);
-    throw error;
-  }
-}
 
 export async function PUT(
   request: NextRequest,
@@ -37,6 +22,18 @@ export async function PUT(
 
     const couponId = params.id;
     const couponData = await request.json();
+    
+    // Ensure isActive is explicitly set as a boolean if present
+    const processedData = {
+      ...couponData,
+      isActive: couponData.isActive !== undefined ? Boolean(couponData.isActive) : undefined
+    };
+    
+    // Debug log to see what's being sent
+    console.log('API route received coupon data:', JSON.stringify({
+      ...processedData,
+      isActive: processedData.isActive
+    }, null, 2));
 
     const response = await makeRequest(
       `${PRODUCT_SERVICE_URL}/api/v1/admin/coupons/${couponId}`,
@@ -45,7 +42,7 @@ export async function PUT(
         headers: {
           'Authorization': `Bearer ${token.value}`,
         },
-        body: JSON.stringify(couponData),
+        body: JSON.stringify(processedData),
       }
     );
 

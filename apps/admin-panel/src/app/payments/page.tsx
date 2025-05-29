@@ -63,35 +63,57 @@ interface PaymentFilterState extends FilterState {
 
 const filterConfig: FilterConfig = {
   search: {
+    type: 'text',
     placeholder: 'Search payments...',
   },
-  filterGroups: [
-    {
-      name: 'Status',
-      key: 'status',
-      options: [
-        { value: 'completed', label: 'Completed' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'failed', label: 'Failed' },
-        { value: 'refunded', label: 'Refunded' },
-      ],
-    },
-    {
-      name: 'Method',
-      key: 'methods',
-      options: [
-        { value: 'credit_card', label: 'Credit Card' },
-        { value: 'debit_card', label: 'Debit Card' },
-        { value: 'paypal', label: 'PayPal' },
-        { value: 'bank_transfer', label: 'Bank Transfer' },
-      ],
-    },
-  ],
-  hasDateRange: true,
-  dateRangeLabel: 'Payment Date',
-  hasValueRange: true,
-  valueRangeLabel: 'Amount Range',
-  valueRangeType: 'currency',
+  filterGroups: {
+    type: 'select',
+    placeholder: 'Filter by group',
+    options: [
+      { value: 'status', label: 'Status' },
+      { value: 'methods', label: 'Method' }
+    ]
+  },
+  status: {
+    type: 'select',
+    placeholder: 'Filter by status',
+    options: [
+      { value: 'completed', label: 'Completed' },
+      { value: 'pending', label: 'Pending' },
+      { value: 'failed', label: 'Failed' },
+      { value: 'refunded', label: 'Refunded' },
+    ],
+  },
+  methods: {
+    type: 'select',
+    placeholder: 'Filter by payment method',
+    options: [
+      { value: 'credit_card', label: 'Credit Card' },
+      { value: 'debit_card', label: 'Debit Card' },
+      { value: 'paypal', label: 'PayPal' },
+      { value: 'bank_transfer', label: 'Bank Transfer' },
+    ],
+  },
+  hasDateRange: {
+    type: 'boolean',
+    placeholder: 'Enable date range',
+  },
+  dateRangeLabel: {
+    type: 'text',
+    placeholder: 'Payment Date',
+  },
+  hasValueRange: {
+    type: 'boolean',
+    placeholder: 'Enable value range',
+  },
+  valueRangeLabel: {
+    type: 'text',
+    placeholder: 'Amount Range',
+  },
+  valueRangeType: {
+    type: 'text',
+    placeholder: 'currency',
+  },
 };
 
 const initialFilters: PaymentFilterState = {

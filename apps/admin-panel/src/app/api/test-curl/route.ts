@@ -44,8 +44,8 @@ export async function GET(request: Request) {
       return NextResponse.json({
         success: false,
         method: 'curl',
-        error: execError.message || 'Unknown error',
-        errorType: execError.name
+        error: execError instanceof Error ? execError.message : 'Unknown error',
+        errorType: execError instanceof Error ? execError.name : 'UnknownError'
       });
     }
   } catch (error) {

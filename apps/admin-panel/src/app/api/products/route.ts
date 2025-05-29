@@ -50,12 +50,9 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     
-    // Debug logging
-    console.log('Products API Request - Search Params:', Object.fromEntries(searchParams.entries()));
-    
     // Parse pagination parameters
     const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = parseInt(searchParams.get('limit') || searchParams.get('pageSize') || '10', 10);
+    const pageSize = parseInt(searchParams.get('pageSize') || '10', 10);
     
     // Parse and validate sorting parameters
     const requestedSortBy = searchParams.get('sortBy') || 'createdAt';
@@ -73,22 +70,52 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     
     // Handle both single and multiple category selections
-    let categories: string[] = [];
     const categoryId = searchParams.get('categoryId');
     const categoryIds = searchParams.get('categoryIds')?.split(',');
     
+    // Log category filter parameters for debugging
+    console.log('Category filter parameters:', {
+      categoryId,
+      categoryIds,
+      categories: searchParams.get('categories')
+    });
+    
+    // Create a dynamic filter object to store all filter values
+    const filterParams: Record<string, any> = {
+      search,
+      sortBy,
+      sortOrder,
+      page,
+      pageSize
+    };
+    
+    // Add category filter - use categoryId directly instead of categories array
     if (categoryId) {
       // Single category selection
-      categories = [categoryId];
+      filterParams.categoryId = categoryId;
+      console.log(`Setting single categoryId filter: ${categoryId}`);
     } else if (categoryIds && categoryIds.length > 0) {
       // Multiple category selection
-      categories = categoryIds;
+      filterParams.categoryIds = categoryIds.join(',');
+      console.log(`Setting multiple categoryIds filter: ${categoryIds.join(',')}`);
     } else {
       // Check for legacy 'categories' parameter
-      categories = searchParams.get('categories')?.split(',') || [];
+      const legacyCategories = searchParams.get('categories')?.split(',') || [];
+      if (legacyCategories.length > 0) {
+        if (legacyCategories.length === 1) {
+          filterParams.categoryId = legacyCategories[0];
+          console.log(`Setting legacy single categoryId filter: ${legacyCategories[0]}`);
+        } else {
+          filterParams.categoryIds = legacyCategories.join(',');
+          console.log(`Setting legacy multiple categoryIds filter: ${legacyCategories.join(',')}`);
+        }
+      }
     }
     
     const statuses = searchParams.get('statuses')?.split(',') || [];
+    if (statuses.length > 0) {
+      filterParams.statuses = statuses;
+    }
     
     // Handle price range - note API expects minPrice/maxPrice
     const minPrice = searchParams.get('minPrice') || searchParams.get('priceMin');
@@ -96,18 +123,10 @@ export async function GET(request: NextRequest) {
     const priceMin = minPrice ? parseFloat(minPrice) : undefined;
     const priceMax = maxPrice ? parseFloat(maxPrice) : undefined;
     
-    // Create a dynamic filter object to store all filter values
-    const filterParams: Record<string, any> = {
-      search,
-      categories,
-      statuses,
-      priceMin,
-      priceMax,
-      sortBy,
-      sortOrder,
-      page,
-      pageSize: limit
-    };
+    if (priceMin !== undefined || priceMax !== undefined) {
+      filterParams.minPrice = priceMin;
+      filterParams.maxPrice = priceMax;
+    }
     
     // Process date filters if present
     const dateFrom = searchParams.get('dateFrom');
@@ -124,8 +143,9 @@ export async function GET(request: NextRequest) {
     if (isFeaturedValue !== null) {
       // Convert 'true'/'false' string to actual boolean for API
       const boolValue = isFeaturedValue.toLowerCase() === 'true';
-      filterParams.isFeatured = [isFeaturedValue]; // Keep original format for getProducts
-      filterParams.isFeaturedBool = boolValue; // Add boolean version for debugging
+      // Send boolean value directly to the backend, not as an array
+      filterParams.isFeatured = boolValue;
+      console.log(`Setting isFeatured filter to boolean: ${boolValue}`);
     }
     
     // Handle isPublished filter
@@ -133,22 +153,110 @@ export async function GET(request: NextRequest) {
     if (isPublishedValue !== null) {
       // Convert 'true'/'false' string to actual boolean for API
       const boolValue = isPublishedValue.toLowerCase() === 'true';
-      filterParams.isPublished = [isPublishedValue]; // Keep original format for getProducts
-      filterParams.isPublishedBool = boolValue; // Add boolean version for debugging
+      // Send boolean value directly to the backend, not as an array
+      filterParams.isPublished = boolValue;
+      console.log(`Setting isPublished filter to boolean: ${boolValue}`);
     }
     
     // Log the parsed parameters
     console.log('Products API - Parsed parameters:', filterParams);
     
-    const data = await getProducts(filterParams);
+    // Build the admin API URL with the v1 prefix
+    const queryString = new URLSearchParams();
+    Object.entries(filterParams).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      
+      // Map pageSize to limit for backend compatibility
+      const paramKey = key === 'pageSize' ? 'limit' : key;
+      
+      if (Array.isArray(value)) {
+        value.forEach(item => {
+          if (item !== undefined && item !== null) {
+            // For category filters, use the correct parameter format
+            if (key === 'categories') {
+              if (value.length === 1) {
+                queryString.append('categoryId', item.toString());
+              } else {
+                queryString.append('categoryIds[]', item.toString());
+              }
+            } else {
+              queryString.append(`${paramKey}[]`, item.toString());
+            }
+          }
+        });
+      } else if (typeof value === 'object') {
+        Object.entries(value).forEach(([subKey, subValue]) => {
+          if (subValue !== undefined && subValue !== null) {
+            queryString.append(`${paramKey}.${subKey}`, subValue.toString());
+          }
+        });
+      } else {
+        // Handle categoryId and categoryIds specially
+        if (key === 'categoryId' || key === 'categoryIds') {
+          console.log(`Adding ${key} parameter: ${value}`);
+        }
+        queryString.append(paramKey, value.toString());
+      }
+    });
+    
+    // Use the v1 admin endpoint
+    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products?${queryString.toString()}`;
+    console.log('Making admin products request to:', url);
+    
+    const response = await makeRequest(url, {
+      headers: {
+        'Authorization': `Bearer ${token.value}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      // Handle token expiration
+      if (response.status === 401 && (
+        errorData?.code === 'TOKEN_EXPIRED' ||
+        errorData?.message?.toLowerCase().includes('expired') ||
+        errorData?.message?.toLowerCase().includes('invalid token')
+      )) {
+        return NextResponse.json(
+          { message: 'Token has expired', code: 'TOKEN_EXPIRED' },
+          { status: 401 }
+        );
+      }
+      
+      return NextResponse.json(
+        { 
+          message: errorData?.message || 'Failed to fetch products',
+          code: errorData?.code || 'API_ERROR'
+        },
+        { status: response.status }
+      );
+    }
+    
+    // Parse the API response
+    const apiData = await response.json();
     
     // Log the response data structure
     console.log('Products API Response - Structure:', {
-      productsCount: data.products?.length,
-      pagination: data.pagination,
+      keys: Object.keys(apiData),
+      dataItemsCount: apiData.data?.length,
+      metaInfo: apiData.meta
     });
     
-    return NextResponse.json(data);
+    // Transform the backend response format (data/meta) to the admin panel format (products/pagination)
+    const transformedData = {
+      products: Array.isArray(apiData.data) ? apiData.data : [],
+      pagination: {
+        total: apiData.meta?.total || 0,
+        totalPages: apiData.meta?.totalPages || 0,
+        currentPage: apiData.meta?.page || 1,
+        pageSize: apiData.meta?.limit || 10,
+        hasMore: apiData.meta?.hasNextPage || false,
+        hasPrevious: apiData.meta?.hasPrevPage || false
+      }
+    };
+    
+    return NextResponse.json(transformedData);
   } catch (error) {
     console.error('Error in products API route:', error);
     return NextResponse.json(
@@ -317,8 +425,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await response.json();
-    return NextResponse.json(data, { status: 201 });
+    const responseData = await response.json();
+    // Extract the product data from the nested 'data' property if it exists
+    const productResponse = responseData.data || responseData;
+    
+    return NextResponse.json(productResponse, { status: 201 });
   } catch (error: any) {
     console.error('Error creating product:', error);
     return NextResponse.json(
@@ -558,8 +669,11 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    const responseData = await response.json();
+    // Extract the product data from the nested 'data' property if it exists
+    const productResponse = responseData.data || responseData;
+    
+    return NextResponse.json(productResponse);
   } catch (error: any) {
     console.error('Error updating product:', error);
     return NextResponse.json(

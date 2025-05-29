@@ -13,14 +13,15 @@ export async function makeRequest(url: string, options: RequestInit = {}) {
     // Ensure URL is properly formatted
     const parsedUrl = new URL(ipv4Url);
     
-    // Log the exact URL components being sent
-    console.log('URL details:', {
-      href: parsedUrl.href,
-      origin: parsedUrl.origin,
-      pathname: parsedUrl.pathname,
-      search: parsedUrl.search,
-      searchParams: Object.fromEntries(parsedUrl.searchParams.entries())
-    });
+    // Log the request details
+    console.log('Request method:', options.method || 'GET');
+    console.log('Request headers:', Object.keys(options.headers || {}));
+    
+    if (options.headers && 'Authorization' in options.headers) {
+      console.log('Authorization header is present');
+    } else {
+      console.log('Authorization header is NOT present');
+    }
     
     // Set default headers if not provided
     const headers = {
@@ -35,7 +36,7 @@ export async function makeRequest(url: string, options: RequestInit = {}) {
       signal: options.signal || AbortSignal.timeout(30000), // 30 second timeout
     });
     
-    console.log('Response status:', response.status);
+    console.log('Response status:', response.status, response.statusText);
     return response;
   } catch (error) {
     console.error('Request failed:', error);

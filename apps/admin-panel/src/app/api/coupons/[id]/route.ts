@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { makeRequest } from '@/lib/make-request';
 import { PRODUCT_SERVICE_URL } from '@/lib/constants';
 
 // Use IPv4 explicitly to avoid IPv6 issues
@@ -11,15 +12,14 @@ const getValidAuthHeader = () => {
   const token = cookieStore.get('admin_token');
 
   if (!token) {
-    console.log('No token in cookies, using hardcoded token');
     return 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ODYwYmU1MS0wODNiLTQ5ZDAtODAyYy1lNDU3YjBmMmEwZDUiLCJlbWFpbCI6ImRlbW8zQGV4YW1wbGUuY29tIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzQ4MzUwMzAxLCJleHAiOjE3NDgzNTEyMDEsImF1ZCI6InVzZXItc2VydmljZSIsImlzcyI6ImF1dGgtc2VydmljZSJ9.W3yYuXfyVQ0H-8r2tYG_7DtkWt0CYXR6oL_PGVqT3qs';
   }
 
   return `Bearer ${token.value}`;
 };
 
-async function makeRequest(url: string, options: RequestInit = {}) {
-  console.log('Making request to:', url);
+// Local wrapper for fetch with logging
+async function localMakeRequest(url: string, options: RequestInit = {}) {
   try {
     const response = await fetch(url, {
       ...options,
@@ -28,7 +28,6 @@ async function makeRequest(url: string, options: RequestInit = {}) {
         ...options.headers,
       },
     });
-    console.log('Response status:', response.status);
     return response;
   } catch (error) {
     console.error('Request failed:', error);
@@ -72,7 +71,7 @@ export async function GET(
     }
 
     try {
-      const response = await makeRequest(
+      const response = await localMakeRequest(
         `${PRODUCT_SERVICE_URL_FIXED}/api/v1/coupons/${id}`,
         {
           headers: {
@@ -111,7 +110,6 @@ export async function GET(
       console.error(`Error fetching coupon with ID ${id}:`, error);
       
       // Return mock data as fallback
-      console.log('Returning mock coupon data for ID:', id);
       return NextResponse.json(getMockCoupon(id));
     }
   } catch (error: any) {
@@ -144,7 +142,7 @@ export async function PUT(
     const body = await request.json();
 
     try {
-      const response = await makeRequest(
+      const response = await localMakeRequest(
         `${PRODUCT_SERVICE_URL_FIXED}/api/v1/coupons/${id}`,
         {
           method: 'PUT',
@@ -185,7 +183,6 @@ export async function PUT(
       console.error(`Error updating coupon with ID ${id}:`, error);
       
       // Return mock data as fallback
-      console.log('Returning mock updated coupon data for ID:', id);
       return NextResponse.json({
         ...getMockCoupon(id),
         ...body,
@@ -220,7 +217,7 @@ export async function DELETE(
     }
 
     try {
-      const response = await makeRequest(
+      const response = await localMakeRequest(
         `${PRODUCT_SERVICE_URL_FIXED}/api/v1/coupons/${id}`,
         {
           method: 'DELETE',
@@ -259,7 +256,6 @@ export async function DELETE(
       console.error(`Error deleting coupon with ID ${id}:`, error);
       
       // Return success as fallback
-      console.log('Returning mock success for delete operation on ID:', id);
       return NextResponse.json({ success: true });
     }
   } catch (error: any) {

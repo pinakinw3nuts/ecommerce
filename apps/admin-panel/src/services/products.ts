@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import axios from 'axios';
+import apiClient from '@/lib/apiClient';
 
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace('localhost', '127.0.0.1') || 'http://127.0.0.1:3003';
@@ -145,9 +146,8 @@ async function makeRequest(url: string, options: RequestInit = {}) {
           errorData?.message?.toLowerCase().includes('invalid token')
         )) {
           if (!isServer()) {
-            // Clear token and redirect to login
-            document.cookie = 'admin_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-            window.location.href = '/login';
+            // Instead of redirecting to login, let apiClient handle token refresh
+            throw new Error('TOKEN_EXPIRED');
           }
         }
       } catch (e) {
@@ -199,10 +199,10 @@ function transformProduct(apiProduct: ApiProduct): Product {
     description: apiProduct.description,
     price: apiProduct.price,
     stock: totalStock,
-    image: apiProduct.mediaUrl || '/images/placeholder-product.jpg',
+    image: apiProduct.mediaUrl || '/images/placeholder.png',
     isPublished: apiProduct.isPublished,
-    isFeatured: apiProduct.isFeatured || false,
-    slug: apiProduct.slug || '',
+    isFeatured: apiProduct.isFeatured,
+    slug: apiProduct.slug,
     category: categoryName,
     createdAt: apiProduct.createdAt || now,
     updatedAt: apiProduct.updatedAt || now,
@@ -210,369 +210,276 @@ function transformProduct(apiProduct: ApiProduct): Product {
   };
 }
 
-export async function getProducts(params: ProductQueryParams = {}): Promise<ProductsResponse> {
-  const {
-    page = 1,
-    pageSize = 10,
-    search = '',
-    categories = [],
-    statuses = [],
-    priceMin,
-    priceMax,
-    sortBy: requestedSortBy = 'createdAt',
-    sortOrder = 'desc',
-    isFeatured = [],
-    isPublished = [],
-  } = params;
-
-  try {
-    // Validate sortBy parameter - only allow fields supported by the backend
-    const allowedSortFields = ['name', 'price', 'createdAt'];
-    const sortBy = allowedSortFields.includes(requestedSortBy) ? requestedSortBy : 'createdAt';
-    
-    if (sortBy !== requestedSortBy) {
-      console.warn(`Requested sort field '${requestedSortBy}' is not supported. Using '${sortBy}' instead.`);
+/**
+ * Build query string from parameters
+ */
+function buildQueryString(params: ProductQueryParams): string {
+  const queryParams = new URLSearchParams();
+  
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
     }
     
-    // Debug logging for input parameters
-    console.log('[API] GET /api/products - Query params:', {
-      page,
-      pageSize,
-      search,
-      categories,
-      statuses,
-      priceMin,
-      priceMax,
-      sortBy,
-      sortOrder
-    });
+    // Map pageSize to limit for backend compatibility
+    const paramKey = key === 'pageSize' ? 'limit' : key;
     
-    // Create a URL object with explicit string parameters
-    const url = new URL(`${PRODUCT_SERVICE_URL}/api/v1/admin/products`);
-    
-    // Add parameters as strings
-    url.searchParams.append('page', String(page));
-    url.searchParams.append('limit', String(pageSize)); // Backend expects 'limit'
-    
-    // Add sort parameters
-    if (sortBy && typeof sortBy === 'string') {
-      console.log('Adding sort parameter:', sortBy);
-      url.searchParams.append('sortBy', sortBy);
-    } else {
-      console.log('Adding default sort parameter: createdAt');
-      url.searchParams.append('sortBy', 'createdAt');
-    }
-    
-    // Always use uppercase sortOrder for backend
-    const normalizedSortOrder = (sortOrder && typeof sortOrder === 'string')
-      ? (sortOrder.toLowerCase() === 'asc' ? 'ASC' : 'DESC')
-      : 'DESC';
-    console.log('Adding sort order:', normalizedSortOrder);
-    url.searchParams.append('sortOrder', normalizedSortOrder);
-    
-    // Add filtering parameters
-    if (search && typeof search === 'string' && search.trim()) {
-      console.log('Adding search parameter:', search.trim());
-      url.searchParams.append('search', search.trim());
-    }
-    
-    if (categories && Array.isArray(categories) && categories.length > 0) {
-      // Handle both single and multiple category selections
-      if (categories.length === 1) {
-        console.log('Adding single category filter:', categories[0]);
-        url.searchParams.append('categoryId', categories[0]);
+    // Special handling for category filters
+    if (key === 'categories' && Array.isArray(value) && value.length > 0) {
+      if (value.length === 1) {
+        // Single category - use categoryId
+        queryParams.append('categoryId', value[0].toString());
       } else {
-        console.log('Adding multiple categories filter:', categories);
-        // Join all category IDs with commas for the backend
-        url.searchParams.append('categoryIds', categories.join(','));
+        // Multiple categories - use categoryIds
+        queryParams.append('categoryIds', value.join(','));
       }
-    } else {
-      console.log('No categories filter provided');
+      return;
     }
     
-    if (statuses && Array.isArray(statuses) && statuses.length > 0) {
-      console.log('Adding statuses filter:', statuses);
-      url.searchParams.append('statuses', statuses.join(','));
-    } else {
-      console.log('No statuses filter provided');
-    }
-    
-    // Handle isFeatured filter
-    if (isFeatured && Array.isArray(isFeatured) && isFeatured.length > 0) {
-      const featuredValue = isFeatured[0].toLowerCase() === 'true';
-      console.log('Adding isFeatured filter:', featuredValue);
-      url.searchParams.append('isFeatured', String(featuredValue));
-    } else {
-      console.log('No isFeatured filter provided');
-    }
-    
-    // Handle isPublished filter
-    if (isPublished && Array.isArray(isPublished) && isPublished.length > 0) {
-      const publishedValue = isPublished[0].toLowerCase() === 'true';
-      console.log('Adding isPublished filter:', publishedValue);
-      url.searchParams.append('isPublished', String(publishedValue));
-    } else {
-      console.log('No isPublished filter provided');
-    }
-    
-    if (priceMin !== undefined && priceMin !== null) {
-      url.searchParams.append('minPrice', String(priceMin));
-    }
-    
-    if (priceMax !== undefined && priceMax !== null) {
-      url.searchParams.append('maxPrice', String(priceMax));
-    }
-    
-    // Get the auth token for the request
-    const token = await getServerAuthToken();
-    console.log('Making request with token:', token);
-    console.log('Full request URL:', url.toString());
-    console.log('Search params:', Object.fromEntries(url.searchParams.entries()));
-    
-    const response = await makeRequest(url.toString());
-    console.log('Response status:', response.status);
-    const data = await response.json();
-    console.log('Backend response received:', data);
-
-    // Handle the new response format with data and meta properties
-    if (data.data && Array.isArray(data.data) && data.meta) {
-      const products = data.data.map(transformProduct);
-      return {
-        products,
-        pagination: {
-          total: data.meta.total,
-          totalPages: data.meta.totalPages,
-          currentPage: data.meta.page,
-          pageSize: data.meta.limit,
-          hasMore: data.meta.hasNextPage,
-          hasPrevious: data.meta.hasPrevPage
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        return;
+      }
+      
+      // For isFeatured and isPublished, use the first value directly
+      if ((key === 'isFeatured' || key === 'isPublished') && value.length > 0) {
+        queryParams.append(paramKey, value[0].toString());
+      } else {
+        // Handle regular array parameters
+        value.forEach(val => {
+          if (val !== undefined && val !== null) {
+            queryParams.append(`${paramKey}[]`, val.toString());
+          }
+        });
+      }
+    } else if (typeof value === 'boolean') {
+      // Handle boolean values directly (especially for isFeatured and isPublished)
+      queryParams.append(paramKey, value.toString());
+    } else if (typeof value === 'object') {
+      // Handle nested objects (like dateRange)
+      Object.entries(value).forEach(([subKey, subValue]) => {
+        if (subValue !== undefined && subValue !== null) {
+          queryParams.append(`${paramKey}.${subKey}`, subValue.toString());
         }
-      };
+      });
+    } else {
+      queryParams.append(paramKey, value.toString());
     }
+  });
+  
+  return queryParams.toString();
+}
 
-    // Fallback to legacy format handling
-    let products: Product[] = [];
-    if (Array.isArray(data)) {
-      products = data.map(transformProduct);
-    } else if (data.products && Array.isArray(data.products)) {
-      products = data.products.map(transformProduct);
-    } else if (data.items && Array.isArray(data.items)) {
-      products = data.items.map(transformProduct);
-    }
+/**
+ * Get products with pagination and filtering
+ */
+export async function getProducts(params: ProductQueryParams = {}): Promise<ProductsResponse> {
+  if (isServer()) {
+    // Server-side request
+    const queryString = buildQueryString(params);
+    const response = await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/products?${queryString}`);
+    const data = await response.json();
+    
+    // Handle the backend response format which uses 'data' and 'meta' keys
+    const products = Array.isArray(data.data) ? data.data : [];
+    const meta = data.meta || {};
+    
+    console.log('API Response Format:', Object.keys(data));
+    console.log('Products count:', products.length);
+    console.log('Meta data:', meta);
     
     return {
-      products,
-      pagination: data.pagination || {
-        total: products.length,
-        totalPages: Math.ceil(products.length / pageSize),
-        currentPage: page,
-        pageSize: pageSize,
-        hasMore: page * pageSize < products.length,
-        hasPrevious: page > 1
+      products: products.map(transformProduct),
+      pagination: {
+        total: meta.total || 0,
+        totalPages: meta.totalPages || 0,
+        currentPage: meta.page || 1,
+        pageSize: meta.limit || 10,
+        hasMore: meta.hasNextPage || false,
+        hasPrevious: meta.hasPrevPage || false
       }
     };
-  } catch (error) {
-    console.error('Failed to fetch products:', error);
-    throw error;
+  } else {
+    // Client-side request using apiClient with token refresh
+    try {
+      const response = await apiClient.get('/products', { params });
+      const data = response.data;
+      
+      // Handle the backend response format which uses 'data' and 'meta' keys
+      const products = Array.isArray(data.data) ? data.data : [];
+      const meta = data.meta || {};
+      
+      console.log('Client-side API Response Format:', Object.keys(data));
+      
+      return {
+        products: products.map(transformProduct),
+        pagination: {
+          total: meta.total || 0,
+          totalPages: meta.totalPages || 0,
+          currentPage: meta.page || 1,
+          pageSize: meta.limit || 10,
+          hasMore: meta.hasNextPage || false,
+          hasPrevious: meta.hasPrevPage || false
+        }
+      };
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      throw error;
+    }
   }
 }
 
+/**
+ * Get a product by ID
+ */
 export async function getProductById(id: string): Promise<Product> {
-  try {
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${id}`;
-    console.log(`Fetching product ${id}`);
+  if (isServer()) {
+    // Server-side request
+    const response = await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/products/${id}`);
+    const data = await response.json();
     
-    const response = await makeRequest(url);
-    console.log('Response status:', response.status);
+    // Backend might return data directly or nested in a data property
+    const productData = data.data || data;
     
-    const apiProduct: ApiProduct = await response.json();
-    return transformProduct(apiProduct);
-  } catch (error) {
-    console.error(`Error fetching product ${id}:`, error);
-    throw error;
+    return transformProduct(productData);
+  } else {
+    // Client-side request using apiClient with token refresh
+    const response = await apiClient.get(`/products/${id}`);
+    
+    // Backend might return data directly or nested in a data property
+    const productData = response.data.data || response.data;
+    
+    return transformProduct(productData);
   }
 }
 
+/**
+ * Create a new product
+ */
 export async function createProduct(productData: Partial<ApiProduct> & { 
   sku?: string; 
   stock?: number;
   categoryId?: string;
 }): Promise<Product> {
-  try {
-    console.log('Creating product with data:', productData);
-    
-    // Format the data for the API - ensure all required fields are present
-    const formattedData: any = {
-      name: productData.name || 'New Product',
-      description: productData.description || '',
-      price: typeof productData.price === 'number' ? productData.price : 0,
-      categoryId: productData.categoryId || '',
-      isPublished: typeof productData.isPublished === 'boolean' ? productData.isPublished : false,
-      isFeatured: typeof productData.isFeatured === 'boolean' ? productData.isFeatured : false,
-    };
-    
-    // Add variants if SKU or stock is provided
-    if (productData.sku || typeof productData.stock === 'number') {
-      formattedData.variants = [{
-        name: 'Default',
-        sku: productData.sku || `SKU-${Date.now()}`,
-        price: typeof productData.price === 'number' ? productData.price : 0,
-        stock: typeof productData.stock === 'number' ? productData.stock : 0
-      }];
-    }
-    
-    // Use the admin endpoint for creating products
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products`;
-    console.log('Making request to:', url);
-    console.log('Formatted product data for API:', formattedData);
-    
-    const response = await makeRequest(url, {
+  if (isServer()) {
+    // Server-side request
+    const response = await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/products`, {
       method: 'POST',
-      body: JSON.stringify(formattedData),
+      body: JSON.stringify(productData)
     });
-    
-    console.log('Response status:', response.status);
-    const apiProduct: ApiProduct = await response.json();
-    console.log('Created product:', apiProduct);
-    
-    return transformProduct(apiProduct);
-  } catch (error) {
-    console.error('Error creating product:', error);
-    throw error;
+    const data = await response.json();
+    // Backend might return data directly or nested in a data property
+    const productResponse = data.data || data;
+    return transformProduct(productResponse);
+  } else {
+    // Client-side request using apiClient with token refresh
+    const response = await apiClient.post('/products', productData);
+    // Backend might return data directly or nested in a data property
+    const productResponse = response.data.data || response.data;
+    return transformProduct(productResponse);
   }
 }
 
+/**
+ * Update an existing product
+ */
 export async function updateProduct(id: string, productData: Partial<ApiProduct>): Promise<Product> {
-  try {
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${id}`;
-    console.log(`Updating product ${id} with data:`, productData);
-    
-    const response = await makeRequest(url, {
+  if (isServer()) {
+    // Server-side request
+    const response = await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/products/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(productData),
+      body: JSON.stringify(productData)
     });
-    
-    console.log('Response status:', response.status);
-    const apiProduct: ApiProduct = await response.json();
-    return transformProduct(apiProduct);
-  } catch (error) {
-    console.error(`Error updating product ${id}:`, error);
-    throw error;
+    const data = await response.json();
+    // Backend might return data directly or nested in a data property
+    const productResponse = data.data || data;
+    return transformProduct(productResponse);
+  } else {
+    // Client-side request using apiClient with token refresh
+    const response = await apiClient.put(`/products/${id}`, productData);
+    // Backend might return data directly or nested in a data property
+    const productResponse = response.data.data || response.data;
+    return transformProduct(productResponse);
   }
 }
 
+/**
+ * Delete a product
+ */
 export async function deleteProduct(id: string): Promise<void> {
-  try {
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${id}`;
-    console.log(`Deleting product ${id}`);
-    
-    await makeRequest(url, {
-      method: 'DELETE',
+  if (isServer()) {
+    // Server-side request
+    await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/products/${id}`, {
+      method: 'DELETE'
     });
-    
-    console.log(`Product ${id} deleted successfully`);
-  } catch (error) {
-    console.error(`Error deleting product ${id}:`, error);
-    throw error;
+  } else {
+    // Client-side request using apiClient with token refresh
+    await apiClient.delete(`/products/${id}`);
   }
 }
 
+/**
+ * Update product status
+ */
 export async function updateProductStatus(id: string, status: string): Promise<void> {
-  try {
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${id}/status`;
-    console.log(`Updating product ${id} status to ${status}`);
-    
-    await makeRequest(url, {
+  if (isServer()) {
+    // Server-side request
+    await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/products/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status })
     });
-    
-    console.log(`Product ${id} status updated successfully`);
-  } catch (error) {
-    console.error(`Error updating product ${id} status:`, error);
-    throw error;
+  } else {
+    // Client-side request using apiClient with token refresh
+    await apiClient.patch(`/products/${id}/status`, { status });
   }
 }
 
+/**
+ * Bulk delete products
+ */
 export async function bulkDeleteProducts(ids: string[]): Promise<void> {
-  try {
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/bulk-delete`;
-    console.log(`Bulk deleting products: ${ids.join(', ')}`);
-    
-    await makeRequest(url, {
+  if (isServer()) {
+    // Server-side request
+    await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/products/bulk-delete`, {
       method: 'POST',
-      body: JSON.stringify({ productIds: ids }),
+      body: JSON.stringify({ ids })
     });
-    
-    console.log('Products deleted successfully');
-  } catch (error) {
-    console.error('Error bulk deleting products:', error);
-    throw error;
+  } else {
+    // Client-side request using apiClient with token refresh
+    await apiClient.post('/products/bulk-delete', { ids });
   }
 }
 
+/**
+ * Bulk update product status
+ */
 export async function bulkUpdateProductStatus(ids: string[], status: string): Promise<void> {
-  try {
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/bulk-status`;
-    console.log(`Bulk updating product status to ${status} for: ${ids.join(', ')}`);
-    
-    await makeRequest(url, {
-      method: 'PATCH',
-      body: JSON.stringify({ productIds: ids, status }),
+  if (isServer()) {
+    // Server-side request
+    await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/products/bulk-status`, {
+      method: 'POST',
+      body: JSON.stringify({ ids, status })
     });
-    
-    console.log('Product statuses updated successfully');
-  } catch (error) {
-    console.error('Error bulk updating product status:', error);
-    throw error;
+  } else {
+    // Client-side request using apiClient with token refresh
+    await apiClient.post('/products/bulk-status', { ids, status });
   }
 }
 
+/**
+ * Export products as CSV/Excel
+ */
 export async function exportProducts(filters?: ProductQueryParams): Promise<Blob> {
-  try {
-    const queryParams = new URLSearchParams();
-    
-    if (filters) {
-      if (filters.search) queryParams.append('search', filters.search);
-      if (filters.categories?.length) queryParams.append('categories', filters.categories.join(','));
-      if (filters.statuses?.length) queryParams.append('statuses', filters.statuses.join(','));
-      if (filters.priceMin !== undefined) queryParams.append('priceMin', filters.priceMin.toString());
-      if (filters.priceMax !== undefined) queryParams.append('priceMax', filters.priceMax.toString());
-      
-      // Add isFeatured filter
-      if (filters.isFeatured?.length) {
-        const featuredValue = filters.isFeatured[0].toLowerCase() === 'true';
-        queryParams.append('isFeatured', String(featuredValue));
-      }
-      
-      // Add isPublished filter
-      if (filters.isPublished?.length) {
-        const publishedValue = filters.isPublished[0].toLowerCase() === 'true';
-        queryParams.append('isPublished', String(publishedValue));
-      }
-      
-      // Add date range filters
-      if (filters.dateRange?.from) {
-        queryParams.append('fromDate', filters.dateRange.from);
-      }
-      if (filters.dateRange?.to) {
-        queryParams.append('toDate', filters.dateRange.to);
-      }
-    }
-
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/export?${queryParams}`;
-    console.log('Exporting products with URL:', url);
-    
-    const response = await makeRequest(url, {
-      headers: {
-        Accept: 'application/vnd.ms-excel',
-      },
-    });
-    
-    console.log('Export response status:', response.status);
-    return response.blob();
-  } catch (error) {
-    console.error('Error exporting products:', error);
-    throw error;
+  if (isServer()) {
+    throw new Error('Export is only available on the client side');
   }
+  
+  const queryString = filters ? buildQueryString(filters) : '';
+  
+  // Client-side request with token refresh and blob response
+  const response = await apiClient.get(`/products/export?${queryString}`, {
+    responseType: 'blob'
+  });
+  
+  return response.data;
 } 

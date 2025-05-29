@@ -152,98 +152,51 @@ export async function PUT(
     }
 
     const productId = params.id;
+    console.log(`Updating product with ID: ${productId}`);
+    
     const productData = await request.json();
     
     // Validate required fields
-    if (!productData.name) {
+    if (!productData.name || !productData.price) {
       return NextResponse.json(
-        { message: 'Name is required', code: 'VALIDATION_ERROR' },
+        { message: 'Name and price are required', code: 'VALIDATION_ERROR' },
         { status: 400 }
       );
     }
 
-    // Handle categoryId as required by the backend
-    if (productData.categoryId) {
-      // Check if we're using the fallback category
-      if (productData.categoryId === 'default-category') {
-        console.log('Using fallback category ID for update');
-        
-        // Try to create a default category if needed
-        try {
-          const createCategoryResponse = await makeRequest(
-            `${PRODUCT_SERVICE_URL}/api/v1/admin/categories`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token.value}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                name: 'Default Category',
-                description: 'Automatically created default category'
-              }),
-            }
-          );
-          
-          if (createCategoryResponse.ok) {
-            const categoryData = await createCategoryResponse.json();
-            productData.categoryId = categoryData.id;
-            console.log('Created default category with ID:', categoryData.id);
-          }
-        } catch (error) {
-          console.error('Failed to create default category:', error);
-          // Continue with the fallback ID
-        }
-      } else {
-        console.log('Using provided categoryId for update:', productData.categoryId);
-      }
-    } else {
-      console.log('No categoryId provided for update');
+    // Validate categoryId
+    if (!productData.categoryId) {
+      return NextResponse.json(
+        { message: 'Category is required', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      );
     }
 
     // Handle variants for SKU and stock
-    if (productData.sku !== undefined || productData.stock !== undefined) {
-      // Determine if we need to create a new variant or update existing ones
-      let variants = [];
-      
-      // If the product already has variants, try to update the first one
-      if (Array.isArray(productData.variants) && productData.variants.length > 0) {
-        // Update existing variant with new data
-        variants = productData.variants.map((variant: any, index: number) => {
-          if (index === 0) {
-            return {
-              ...variant,
-              sku: productData.sku !== undefined ? productData.sku : variant.sku,
-              stock: productData.stock !== undefined ? productData.stock : variant.stock,
-              price: productData.price !== undefined ? productData.price : variant.price,
-            };
-          }
-          return variant;
-        });
-      } else {
-        // Create a new variant
+    if (productData.sku || productData.stock !== undefined) {
+      // Create a variant from SKU and stock or update existing one
+      if (!productData.variants || productData.variants.length === 0) {
         const variant = {
           name: 'Default',
           sku: productData.sku || `SKU-${Date.now()}`,
           price: productData.price || 0,
-          stock: productData.stock !== undefined ? productData.stock : 0
+          stock: productData.stock || 0
         };
-        variants = [variant];
+        
+        // Add variant to the product data
+        productData.variants = [variant];
+        console.log('Created variant from SKU and stock:', variant);
+      } else {
+        // Update the first variant
+        productData.variants[0].sku = productData.sku || productData.variants[0].sku;
+        productData.variants[0].stock = productData.stock !== undefined ? productData.stock : productData.variants[0].stock;
+        productData.variants[0].price = productData.price || productData.variants[0].price;
+        console.log('Updated variant with SKU and stock:', productData.variants[0]);
       }
       
-      // Add variants to the product data
-      productData.variants = variants;
-      console.log('Updated variants:', variants);
-    } else if (!Array.isArray(productData.variants) || productData.variants.length === 0) {
-      // If no SKU/stock provided and no variants exist, create a default variant
-      const variant = {
-        name: 'Default',
-        sku: `SKU-${Date.now()}`,
-        price: productData.price || 0,
-        stock: 0
-      };
-      productData.variants = [variant];
-      console.log('Created default variant:', variant);
+      // Remove sku and stock from root product data to avoid confusion
+      delete productData.sku;
+      delete productData.stock;
     }
 
     // Validate brandId before sending to API
@@ -277,49 +230,31 @@ export async function PUT(
         keywords: [],
         ogImage: ''
       },
-      // Clean up ogImage if it's not a valid image URL
-      ...(productData.seoMetadata && {
-        seoMetadata: {
-          ...productData.seoMetadata,
-          ogImage: (() => {
-            if (productData.seoMetadata.ogImage === null || productData.seoMetadata.ogImage === undefined || productData.seoMetadata.ogImage.trim() === '') return '';
-            
-            // Check if it's a valid image URL (should end with an image extension or be a valid image URL)
-            const isValidImageUrl = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(productData.seoMetadata.ogImage) || 
-                                   /^(https?:\/\/.*\.(jpg|jpeg|png|gif|webp|svg))/i.test(productData.seoMetadata.ogImage);
-            
-            if (!isValidImageUrl) {
-              console.log(`Invalid image URL detected: ${productData.seoMetadata.ogImage} - removing from request`);
-              return '';
-            }
-            
-            return productData.seoMetadata.ogImage;
-          })()
-        }
-      }),
-      // Only include brandId if it's a valid UUID
-      ...(productData.brandId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productData.brandId) 
-        ? { brandId: productData.brandId } 
-        : {}),
-      tagIds: productData.tagIds,
+      brandId: productData.brandId
     };
-
-    // Only add date fields if they are valid dates
-    if (productData.saleStartDate) {
-      apiProductData.saleStartDate = productData.saleStartDate;
+    
+    // Clean up seoMetadata object - especially the ogImage which can cause issues if it's an invalid URL
+    if (apiProductData.seoMetadata && apiProductData.seoMetadata.ogImage) {
+      const ogImage = apiProductData.seoMetadata.ogImage;
+      if (typeof ogImage !== 'string' || ogImage.trim() === '') {
+        apiProductData.seoMetadata.ogImage = '';
+      } else {
+        // Check if it's a valid image URL
+        const isValidImageUrl = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(ogImage) || 
+                               /^(https?:\/\/.*\.(jpg|jpeg|png|gif|webp|svg))/i.test(ogImage);
+        
+        if (!isValidImageUrl) {
+          console.log(`Invalid image URL detected in SEO metadata: ${ogImage} - removing from request`);
+          apiProductData.seoMetadata.ogImage = '';
+        }
+      }
     }
     
-    if (productData.saleEndDate) {
-      apiProductData.saleEndDate = productData.saleEndDate;
-    }
-
-    // Log complete data being sent to API
     console.log('Complete product data for API:', JSON.stringify(apiProductData, null, 2));
-
+    
     // Use the admin endpoint for updating products
     const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${productId}`;
-    console.log('Updating product with URL:', url);
-    console.log('Product data for API:', apiProductData);
+    console.log('Full request URL:', url);
     
     const response = await makeRequest(url, {
       method: 'PUT',
@@ -395,6 +330,7 @@ export async function DELETE(
 
     // Use the admin endpoint for deleting products
     const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/products/${productId}`;
+    console.log('Full request URL:', url);
     
     const response = await makeRequest(url, {
       method: 'DELETE',
@@ -434,7 +370,7 @@ export async function DELETE(
       );
     }
 
-    return NextResponse.json({ success: true });
+    return new NextResponse(null, { status: 204 });
   } catch (error: any) {
     console.error('Error deleting product:', error);
     return NextResponse.json(

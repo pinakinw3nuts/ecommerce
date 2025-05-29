@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { makeRequest as apiMakeRequest } from '@/lib/make-request';
 
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace('localhost', '127.0.0.1') || 'http://127.0.0.1:3003';
@@ -59,7 +60,9 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status')?.split(',').filter(Boolean) || [];
     const type = searchParams.get('type')?.split(',').filter(Boolean) || [];
     const sortBy = searchParams.get('sortBy') || 'createdAt';
-    const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const sortOrderInput = searchParams.get('sortOrder') || 'desc';
+    // Normalize sort order to uppercase for the backend
+    const sortOrder = sortOrderInput.toUpperCase();
     const dateFrom = searchParams.get('dateFrom') || '';
     const dateTo = searchParams.get('dateTo') || '';
     const valueMin = searchParams.get('valueMin') || '';
@@ -88,8 +91,11 @@ export async function GET(request: NextRequest) {
 
     // Add type filter if present
     if (type.length > 0) {
-      const discountType = type.includes('percent') ? 'PERCENTAGE' : 'FIXED';
-      queryParams.append('discountType', discountType);
+      // If both percent and flat are selected, don't filter by type
+      if (!(type.includes('percent') && type.includes('flat'))) {
+        const discountType = type.includes('percent') ? 'PERCENTAGE' : 'FIXED';
+        queryParams.append('discountType', discountType);
+      }
     }
 
     // Add date range filters if present
@@ -108,7 +114,7 @@ export async function GET(request: NextRequest) {
       queryParams.append('valueMax', valueMax);
     }
     
-    const response = await makeRequest(
+    const response = await apiMakeRequest(
       `${PRODUCT_SERVICE_URL}/api/v1/coupons?${queryParams.toString()}`,
       {
         headers: {
@@ -227,7 +233,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const response = await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/coupons`, {
+    const response = await apiMakeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/coupons`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token.value}`,

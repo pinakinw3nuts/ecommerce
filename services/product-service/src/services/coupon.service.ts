@@ -1,7 +1,7 @@
 import { AppDataSource } from '../config/dataSource';
 import { Coupon } from '../entities/Coupon';
 import { Product } from '../entities/Product';
-import { In, MoreThan } from 'typeorm';
+import { In, MoreThan, MoreThanOrEqual, LessThanOrEqual, Between } from 'typeorm';
 
 export class CouponService {
   private couponRepo = AppDataSource.getRepository(Coupon);
@@ -72,6 +72,11 @@ export class CouponService {
     take?: number;
     isActive?: boolean;
     includeExpired?: boolean;
+    valueMin?: number;
+    valueMax?: number;
+    discountType?: 'PERCENTAGE' | 'FIXED';
+    sortBy?: string;
+    sortOrder?: 'ASC' | 'DESC' | 'asc' | 'desc';
   }) {
     const currentDate = new Date();
     const where: any = {};
@@ -86,33 +91,64 @@ export class CouponService {
     if (options?.includeExpired === false) {
       where.endDate = MoreThan(currentDate);
     }
+    
+    // Add filter by discount type if specified
+    if (options?.discountType) {
+      where.discountType = options.discountType;
+    }
+    
+    // Add filter by discount amount range
+    if (options?.valueMin !== undefined) {
+      where.discountAmount = MoreThanOrEqual(options.valueMin);
+    }
+    
+    if (options?.valueMax !== undefined) {
+      if (where.discountAmount) {
+        // If we already have a min condition, use a raw where clause
+        where.discountAmount = Between(
+          options.valueMin !== undefined ? options.valueMin : 0,
+          options.valueMax
+        );
+      } else {
+        where.discountAmount = LessThanOrEqual(options.valueMax);
+      }
+    }
 
-    // console.log('listCoupons - Query conditions:', {
-    //   where,
-    //   skip: options?.skip,
-    //   take: options?.take,
-    //   currentDate
-    // });
+    console.log('listCoupons - Query conditions:', where);
+
+    // Set up sorting
+    const sortBy = options?.sortBy || 'createdAt';
+    const sortOrderInput = options?.sortOrder || 'DESC';
+    // Normalize sort order to uppercase
+    const sortOrder = typeof sortOrderInput === 'string' 
+      ? sortOrderInput.toUpperCase() as 'ASC' | 'DESC'
+      : 'DESC';
+    
+    // Create order object
+    const order: any = {};
+    order[sortBy] = sortOrder;
+    
+    console.log('Sorting by:', sortBy, sortOrder);
 
     try {
       // First try to get total count
       const total = await this.couponRepo.count();
-      // console.log('Total coupons in database:', total);
+      console.log('Total coupons in database:', total);
 
       // Now try to get all coupons without any conditions
       const allCoupons = await this.couponRepo.find();
-      // console.log('All coupons without conditions:', allCoupons);
+      console.log('All coupons without conditions count:', allCoupons.length);
 
       // Then try with our conditions
       const result = await this.couponRepo.find({
         where,
         skip: options?.skip,
         take: options?.take,
-        order: { createdAt: 'DESC' },
+        order,
         relations: ['products']
       });
 
-      // console.log('listCoupons - Raw query result:', result);
+      console.log('listCoupons - Filtered results count:', result.length);
       return result;
     } catch (error) {
       console.error('Error in listCoupons:', error);
@@ -134,10 +170,19 @@ export class CouponService {
     isFirstPurchaseOnly: boolean;
     productIds: string[];
   }>) {
+    console.log('Updating coupon with ID:', id);
+    console.log('Update data received:', JSON.stringify(data, null, 2));
+    
     const coupon = await this.getCouponById(id);
     if (!coupon) {
       throw new Error('Coupon not found');
     }
+
+    console.log('Current coupon state:', JSON.stringify({
+      id: coupon.id,
+      code: coupon.code,
+      isActive: coupon.isActive
+    }, null, 2));
 
     // Validate discount amount for percentage type
     if (data.discountType === 'PERCENTAGE' && data.discountAmount !== undefined) {
@@ -160,8 +205,31 @@ export class CouponService {
       delete data.productIds;
     }
 
-    Object.assign(coupon, data);
-    return this.couponRepo.save(coupon);
+    // Explicitly handle isActive field
+    if (data.isActive !== undefined) {
+      console.log('Setting isActive to:', data.isActive);
+      coupon.isActive = data.isActive;
+    }
+
+    // Update other fields
+    const { isActive, ...otherData } = data;
+    Object.assign(coupon, otherData);
+    
+    console.log('Coupon after updates (before save):', JSON.stringify({
+      id: coupon.id,
+      code: coupon.code,
+      isActive: coupon.isActive
+    }, null, 2));
+    
+    const updatedCoupon = await this.couponRepo.save(coupon);
+    
+    console.log('Coupon after save:', JSON.stringify({
+      id: updatedCoupon.id,
+      code: updatedCoupon.code,
+      isActive: updatedCoupon.isActive
+    }, null, 2));
+    
+    return updatedCoupon;
   }
 
   async deleteCoupon(id: string) {

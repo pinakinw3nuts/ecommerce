@@ -68,36 +68,58 @@ interface OrderFilterState extends FilterState {
 
 const filterConfig: FilterConfig = {
   search: {
+    type: 'text',
     placeholder: 'Search orders by ID or customer...',
   },
-  filterGroups: [
-    {
-      name: 'Status',
-      key: 'status',
-      options: [
-        { value: 'pending', label: 'Pending' },
-        { value: 'processing', label: 'Processing' },
-        { value: 'shipped', label: 'Shipped' },
-        { value: 'delivered', label: 'Delivered' },
-        { value: 'cancelled', label: 'Cancelled' },
-      ],
-    },
-    {
-      name: 'Payment Status',
-      key: 'paymentStatus',
-      options: [
-        { value: 'paid', label: 'Paid' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'failed', label: 'Failed' },
-        { value: 'refunded', label: 'Refunded' },
-      ],
-    },
-  ],
-  hasDateRange: true,
-  dateRangeLabel: 'Order Date',
-  hasValueRange: true,
-  valueRangeLabel: 'Order Value',
-  valueRangeType: 'currency',
+  filterGroups: {
+    type: 'select',
+    placeholder: 'Filter by group',
+    options: [
+      { value: 'status', label: 'Status' },
+      { value: 'paymentStatus', label: 'Payment Status' }
+    ]
+  },
+  status: {
+    type: 'select',
+    placeholder: 'Filter by status',
+    options: [
+      { value: 'pending', label: 'Pending' },
+      { value: 'processing', label: 'Processing' },
+      { value: 'shipped', label: 'Shipped' },
+      { value: 'delivered', label: 'Delivered' },
+      { value: 'cancelled', label: 'Cancelled' },
+    ],
+  },
+  paymentStatus: {
+    type: 'select',
+    placeholder: 'Filter by payment status',
+    options: [
+      { value: 'paid', label: 'Paid' },
+      { value: 'pending', label: 'Pending' },
+      { value: 'failed', label: 'Failed' },
+      { value: 'refunded', label: 'Refunded' },
+    ],
+  },
+  hasDateRange: {
+    type: 'boolean',
+    placeholder: 'Enable date range',
+  },
+  dateRangeLabel: {
+    type: 'text',
+    placeholder: 'Order Date',
+  },
+  hasValueRange: {
+    type: 'boolean',
+    placeholder: 'Enable value range',
+  },
+  valueRangeLabel: {
+    type: 'text',
+    placeholder: 'Order Value',
+  },
+  valueRangeType: {
+    type: 'text',
+    placeholder: 'currency',
+  },
 };
 
 const initialFilters: OrderFilterState = {

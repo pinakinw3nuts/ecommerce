@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
-import { getToken } from '@lib/auth';
+import { getToken } from './auth';
 
 // Create axios instance with default config
 const api = axios.create({
