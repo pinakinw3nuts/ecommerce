@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
+import { useLoadingState } from '@/hooks/useLoadingState';
 import {
   LayoutDashboard,
   Users,
@@ -19,7 +21,8 @@ import {
   ChevronDown,
   ChevronRight,
   Tag,
-  Sliders
+  Sliders,
+  Loader2
 } from 'lucide-react';
 
 interface NavigationItem {
@@ -54,8 +57,11 @@ const navigation: NavigationItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { logout } = useAuth();
+  const { setLoading } = useLoadingState();
   const [isOpen, setIsOpen] = useState(true);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Product Management']);
+  const [activeItem, setActiveItem] = useState<string | null>(null);
 
   const toggleSubmenu = (menuName: string) => {
     setExpandedMenus((prev) =>
@@ -65,19 +71,58 @@ export default function Sidebar() {
     );
   };
 
+  const handleLogout = async () => {
+    try {
+      // First clear auth state
+      logout();
+      
+      // Then make the API call
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      }).catch(() => {
+        // Silently fail if the endpoint doesn't exist yet
+      });
+
+      // Finally, force a hard navigation to login
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Still attempt to force navigation on error
+      window.location.href = '/login';
+    }
+  };
+
+  const handleNavigation = (href: string, itemName: string) => {
+    // Don't navigate if we're already on this page
+    if (pathname === href) return;
+    
+    // Set loading state
+    setActiveItem(itemName);
+    setLoading(true);
+    
+    // Use direct navigation for faster page loads
+    window.location.href = href;
+  };
+
   const renderNavigationItem = (item: NavigationItem) => {
     const isActive = pathname === item.href;
     const hasSubmenu = Array.isArray(item.submenu) && item.submenu.length > 0;
     const isExpanded = expandedMenus.includes(item.name);
+    const isLoading = activeItem === item.name;
 
     const MenuContent = () => (
       <div className="flex items-center">
-        <item.icon
-          className={`mr-3 h-5 w-5 flex-shrink-0 ${
-            isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'
-          }`}
-          aria-hidden="true"
-        />
+        {isLoading ? (
+          <Loader2 className="mr-3 h-5 w-5 flex-shrink-0 animate-spin text-blue-600" />
+        ) : (
+          <item.icon
+            className={`mr-3 h-5 w-5 flex-shrink-0 ${
+              isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'
+            }`}
+            aria-hidden="true"
+          />
+        )}
         {item.name}
       </div>
     );
@@ -103,40 +148,46 @@ export default function Sidebar() {
             </div>
           </div>
         ) : (
-          <Link
-            href={item.href}
-            className={`group flex items-center rounded-lg px-3 py-2 text-sm font-medium ${
+          <button
+            onClick={() => handleNavigation(item.href, item.name)}
+            className={`group flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium ${
               isActive
                 ? 'bg-blue-50 text-blue-600'
                 : 'text-gray-700 hover:bg-gray-50 hover:text-blue-600'
             }`}
+            disabled={isLoading}
           >
             <MenuContent />
-          </Link>
+          </button>
         )}
         
         {hasSubmenu && isExpanded && item.submenu && (
           <div className="ml-6 mt-1 space-y-1">
             {item.submenu.map((subItem) => (
-              <Link
+              <button
                 key={subItem.name}
-                href={subItem.href}
-                className={`group flex items-center rounded-lg px-3 py-2 text-sm font-medium ${
+                onClick={() => handleNavigation(subItem.href, subItem.name)}
+                className={`group flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium ${
                   pathname === subItem.href
                     ? 'bg-blue-50 text-blue-600'
                     : 'text-gray-700 hover:bg-gray-50 hover:text-blue-600'
                 }`}
+                disabled={isLoading && activeItem === subItem.name}
               >
-                <subItem.icon
-                  className={`mr-3 h-4 w-4 flex-shrink-0 ${
-                    pathname === subItem.href
-                      ? 'text-blue-600'
-                      : 'text-gray-400 group-hover:text-blue-600'
-                  }`}
-                  aria-hidden="true"
-                />
+                {isLoading && activeItem === subItem.name ? (
+                  <Loader2 className="mr-3 h-4 w-4 flex-shrink-0 animate-spin text-blue-600" />
+                ) : (
+                  <subItem.icon
+                    className={`mr-3 h-4 w-4 flex-shrink-0 ${
+                      pathname === subItem.href
+                        ? 'text-blue-600'
+                        : 'text-gray-400 group-hover:text-blue-600'
+                    }`}
+                    aria-hidden="true"
+                  />
+                )}
                 {subItem.name}
-              </Link>
+              </button>
             ))}
           </div>
         )}
@@ -164,6 +215,7 @@ export default function Sidebar() {
         <button
           type="button"
           className="group flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-red-600"
+          onClick={handleLogout}
         >
           <LogOut
             className="mr-3 h-5 w-5 text-gray-400 group-hover:text-red-600"

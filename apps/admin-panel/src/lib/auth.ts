@@ -1,10 +1,6 @@
 'use client';
 
-import Cookies from 'js-cookie';
 import { jwtDecode } from 'jwt-decode';
-
-const TOKEN_KEY = 'admin_token';
-const REFRESH_TOKEN_KEY = 'admin_refresh_token';
 
 interface DecodedToken {
   userId: string;
@@ -13,59 +9,27 @@ interface DecodedToken {
   exp: number;
 }
 
-/**
- * Set the JWT token in a cookie
- */
-export function setToken(token: string): void {
-  Cookies.set(TOKEN_KEY, token, { 
-    expires: 1/96, // 15 minutes
-    secure: window.location.protocol === 'https:',
-    sameSite: 'strict',
-  });
-}
+// We'll use a memory cache for the decoded token to avoid parsing it repeatedly
+let cachedDecodedToken: DecodedToken | null = null;
+let cachedTokenString: string | null = null;
 
 /**
- * Set the refresh token in a cookie
+ * Get the decoded token from the memory cache or parse it from the API response
  */
-export function setRefreshToken(token: string): void {
-  Cookies.set(REFRESH_TOKEN_KEY, token, { 
-    expires: 7, // 7 days
-    secure: window.location.protocol === 'https:',
-    sameSite: 'strict',
-  });
-}
-
-/**
- * Get the JWT token from the cookie
- */
-export function getToken(): string | undefined {
-  return Cookies.get(TOKEN_KEY);
-}
-
-/**
- * Get the refresh token from the cookie
- */
-export function getRefreshToken(): string | undefined {
-  return Cookies.get(REFRESH_TOKEN_KEY);
-}
-
-/**
- * Clear both tokens from cookies
- */
-export function clearTokens(): void {
-  Cookies.remove(TOKEN_KEY);
-  Cookies.remove(REFRESH_TOKEN_KEY);
-}
-
 export function getDecodedToken(): DecodedToken | null {
-  const token = getToken();
-  if (!token) return null;
-
-  try {
-    return jwtDecode<DecodedToken>(token);
-  } catch {
-    return null;
+  // If we have a cached token, return it
+  if (cachedDecodedToken) {
+    // Check if it's expired
+    const currentTime = Date.now() / 1000 + 30;
+    if (cachedDecodedToken.exp > currentTime) {
+      return cachedDecodedToken;
+    }
+    // Clear the cache if expired
+    cachedDecodedToken = null;
+    cachedTokenString = null;
   }
+  
+  return null;
 }
 
 /**
@@ -97,40 +61,38 @@ export function isTokenExpiringSoon(): boolean {
 /**
  * Refresh the access token using the refresh token
  */
-export async function refreshAccessToken(): Promise<{ accessToken: string; refreshToken: string }> {
-  const refreshToken = getRefreshToken();
-  
-  if (!refreshToken) {
-    throw new Error('No refresh token available');
-  }
-  
-  const response = await fetch('/api/auth/refresh-token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ refreshToken }),
-  });
+export async function refreshAccessToken(): Promise<boolean> {
+  try {
+    const response = await fetch('/api/auth/refresh-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store'
+    });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to refresh token');
-  }
+    if (!response.ok) {
+      return false;
+    }
 
-  const data = await response.json();
-  
-  if (!data.accessToken || !data.refreshToken) {
-    throw new Error('Invalid response from server');
-  }
+    const data = await response.json();
+    
+    if (!data.accessToken) {
+      return false;
+    }
 
-  // Update cookies with new tokens
-  setToken(data.accessToken);
-  setRefreshToken(data.refreshToken);
-  
-  return {
-    accessToken: data.accessToken,
-    refreshToken: data.refreshToken
-  };
+    // Update the cached token
+    try {
+      cachedDecodedToken = jwtDecode<DecodedToken>(data.accessToken);
+      cachedTokenString = data.accessToken;
+    } catch {
+      return false;
+    }
+    
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function loginAdmin(email: string, password: string) {
@@ -140,6 +102,7 @@ export async function loginAdmin(email: string, password: string) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ email, password }),
+    cache: 'no-store'
   });
 
   if (!response.ok) {
@@ -153,18 +116,28 @@ export async function loginAdmin(email: string, password: string) {
     throw new Error('No token received from server');
   }
 
-  // Set both tokens in cookies
-  setToken(data.token);
-  
-  if (data.refreshToken) {
-    setRefreshToken(data.refreshToken);
+  // Cache the decoded token
+  try {
+    cachedDecodedToken = jwtDecode<DecodedToken>(data.token);
+    cachedTokenString = data.token;
+  } catch (e) {
+    console.error('Failed to decode token:', e);
   }
   
   return data;
 }
 
 export async function logoutAdmin() {
-  clearTokens();
+  // Clear the cached token
+  cachedDecodedToken = null;
+  cachedTokenString = null;
+  
+  // Call logout API to clear HTTP-only cookies
+  await fetch('/api/auth/logout', {
+    method: 'POST',
+    cache: 'no-store'
+  });
+  
   // Force reload to clear any cached state
   window.location.href = '/login';
 } 

@@ -17,11 +17,14 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+// Define loading states for better UX feedback
+type LoadingState = 'idle' | 'authenticating' | 'redirecting';
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { success, error } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingState, setLoadingState] = useState<LoadingState>('idle');
 
   const {
     register,
@@ -29,29 +32,59 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: process.env.NODE_ENV === 'development' ? 'admin@example.com' : '',
+      password: process.env.NODE_ENV === 'development' ? 'admin123' : '',
+    }
   });
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      setIsLoading(true);
+      setLoadingState('authenticating');
       
       const response = await loginAdmin(data.email, data.password);
       
       // Show success message
       success("Logged in successfully");
+      
+      // Update loading state to show redirecting feedback
+      setLoadingState('redirecting');
 
       // Get return URL from query params or default to dashboard
       const returnUrl = searchParams.get('returnUrl') || '/';
       
-      // Redirect to the return URL or dashboard
+      // Use window.location.href for a full page reload instead of client-side navigation
       window.location.href = returnUrl;
     } catch (err: any) {
       console.error('Login error:', err);
       error(err.message || 'Failed to login');
-    } finally {
-      setIsLoading(false);
+      setLoadingState('idle');
     }
   };
+
+  // Determine button text based on loading state
+  const getButtonText = () => {
+    switch (loadingState) {
+      case 'authenticating':
+        return (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Signing in...
+          </>
+        );
+      case 'redirecting':
+        return (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Redirecting...
+          </>
+        );
+      default:
+        return 'Sign in';
+    }
+  };
+
+  const isLoading = loadingState !== 'idle';
 
   return (
     <div className="w-full max-w-md space-y-8 p-6 bg-white rounded-lg shadow-md">
@@ -76,6 +109,8 @@ export default function LoginPage() {
               {...register('email')}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
               placeholder="admin@example.com"
+              disabled={isLoading}
+              autoComplete="username"
             />
             {errors.email && (
               <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
@@ -92,6 +127,8 @@ export default function LoginPage() {
               {...register('password')}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
               placeholder="••••••••"
+              disabled={isLoading}
+              autoComplete="current-password"
             />
             {errors.password && (
               <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
@@ -104,14 +141,7 @@ export default function LoginPage() {
           disabled={isLoading}
           className="group relative flex w-full justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Signing in...
-            </>
-          ) : (
-            'Sign in'
-          )}
+          {getButtonText()}
         </button>
       </form>
     </div>

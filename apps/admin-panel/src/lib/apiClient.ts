@@ -1,7 +1,7 @@
 'use client';
 
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { getToken, isTokenExpired, refreshAccessToken, isTokenExpiringSoon } from './auth';
+import { getDecodedToken, isTokenExpired, refreshAccessToken, isTokenExpiringSoon } from './auth';
 
 // Create axios instance
 const apiClient = axios.create({
@@ -41,22 +41,29 @@ apiClient.interceptors.request.use(
         if (!isRefreshing) {
           isRefreshing = true;
           // Refresh the access token
-          const { accessToken } = await refreshAccessToken();
+          const refreshSuccessful = await refreshAccessToken();
           isRefreshing = false;
           
-          // Process any pending requests with new token
-          processQueue(null, accessToken);
+          if (refreshSuccessful) {
+            // Get the new token from memory cache
+            const decodedToken = getDecodedToken();
+            if (decodedToken) {
+              // Get access token from cookies (HTTP-only)
+              // Process any pending requests with new token
+              processQueue(null, 'token-refreshed'); // We don't have direct access to the token
+              return config;
+            }
+          }
           
-          // Add the new token to the current request
-          config.headers.Authorization = `Bearer ${accessToken}`;
+          // If refresh failed
+          processQueue(new Error('Failed to refresh token'));
           return config;
         }
         
         // If refresh is already in progress, add request to queue
         return new Promise<typeof config>((resolve, reject) => {
           refreshQueue.push({
-            resolve: (token: string) => {
-              config.headers.Authorization = `Bearer ${token}`;
+            resolve: () => {
               resolve(config);
             },
             reject,
@@ -69,11 +76,8 @@ apiClient.interceptors.request.use(
       }
     }
     
-    // Add token to request if available
-    const token = getToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // We don't need to manually add the token here anymore
+    // The HTTP-only cookie will be sent automatically with the request
     
     return config;
   },
@@ -101,23 +105,18 @@ apiClient.interceptors.response.use(
         
         try {
           // Attempt to refresh the token
-          const { accessToken } = await refreshAccessToken();
+          const refreshSuccessful = await refreshAccessToken();
           isRefreshing = false;
           
-          // Update auth header with new token
-          apiClient.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
-          
-          // Process any requests that were waiting
-          processQueue(null, accessToken);
-          
-          // Retry the original request with new token
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+          if (refreshSuccessful) {
+            // Process any requests that were waiting
+            processQueue(null, 'token-refreshed');
+            
+            // Retry the original request (token will be sent via HTTP-only cookie)
+            return apiClient(originalRequest);
           } else {
-            originalRequest.headers = { Authorization: `Bearer ${accessToken}` };
+            throw new Error('Failed to refresh token');
           }
-          
-          return apiClient(originalRequest);
         } catch (refreshError) {
           isRefreshing = false;
           processQueue(refreshError);
@@ -134,12 +133,7 @@ apiClient.interceptors.response.use(
       // If refresh is already in progress, add request to queue
       return new Promise((resolve, reject) => {
         refreshQueue.push({
-          resolve: (token: string) => {
-            if (originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-            } else {
-              originalRequest.headers = { Authorization: `Bearer ${token}` };
-            }
+          resolve: () => {
             resolve(apiClient(originalRequest));
           },
           reject: (err) => reject(err),

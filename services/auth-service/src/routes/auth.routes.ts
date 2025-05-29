@@ -4,7 +4,6 @@ import { AuthService } from '../services/auth.service';
 import { User } from '../entities/user.entity';
 import { DataSource } from 'typeorm';
 import { Redis } from 'ioredis';
-import { configTyped } from '../config/env';
 
 // Define swagger schemas outside the route registration
 const swaggerSchemas = {
@@ -78,16 +77,33 @@ export async function registerAuthRoutes(
   server: FastifyInstance<RawServerDefault, any, any, FastifyBaseLogger>,
   dataSource: DataSource
 ): Promise<void> {
-  // Initialize Redis connection
-  const redis = new Redis({
-    host: configTyped.redis.host,
-    port: configTyped.redis.port,
-    password: configTyped.redis.password,
-    db: configTyped.redis.db
-  });
-
+  // Get Redis from DI container or create a new instance
+  let redis: Redis | null = null;
+  
+  try {
+    // Try to get Redis from DI container if available
+    if (server.diContainer) {
+      try {
+        redis = server.diContainer.resolve<Redis>('redis');
+      } catch (error) {
+        server.log.warn('Redis not available in DI container');
+      }
+    }
+    
+    // If Redis is still null and we're not in production, we'll continue without it
+    if (!redis && process.env.NODE_ENV === 'production') {
+      server.log.warn('Redis not available but required in production');
+    }
+  } catch (error) {
+    server.log.error(error, 'Failed to initialize Redis');
+    // In production, this is a critical error
+    if (process.env.NODE_ENV === 'production') {
+      throw error;
+    }
+  }
+  
   const userRepository = dataSource.getRepository(User);
-  const authService = new AuthService(userRepository);
+  const authService = new AuthService(userRepository, redis);
   const authController = new AuthController(authService, redis);
 
   // Register routes under /auth prefix
@@ -104,8 +120,10 @@ export async function registerAuthRoutes(
     await authController.register(fastify);
   }, { prefix: '/auth' });
 
-  // Cleanup Redis on server close
-  server.addHook('onClose', async () => {
-    await redis.quit();
-  });
+  // Cleanup Redis on server close if we created it here
+  if (redis && !server.diContainer) {
+    server.addHook('onClose', async () => {
+      await redis?.quit();
+    });
+  }
 } 

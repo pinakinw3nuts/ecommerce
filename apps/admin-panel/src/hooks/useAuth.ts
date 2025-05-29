@@ -1,16 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { jwtDecode } from 'jwt-decode';
-import Cookies from 'js-cookie';
-import { refreshAccessToken, getToken, getRefreshToken, clearTokens, isTokenExpired } from '@/lib/auth';
-
-interface DecodedToken {
-  userId: string;
-  email: string;
-  role: string;
-  exp: number;
-}
+import { refreshAccessToken, getDecodedToken, isTokenExpired, logoutAdmin } from '@/lib/auth';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -18,9 +9,6 @@ interface AuthState {
   userId: string | null;
   isLoading: boolean;
 }
-
-const TOKEN_COOKIE_NAME = 'admin_token';
-const REFRESH_TOKEN_COOKIE_NAME = 'admin_refresh_token';
 
 export function useAuth() {
   const [authState, setAuthState] = useState<AuthState>({
@@ -34,68 +22,48 @@ export function useAuth() {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const token = getToken();
-        const refreshToken = getRefreshToken();
+        // Get decoded token from memory cache or null if not available/expired
+        const decodedToken = getDecodedToken();
 
-        // If no tokens at all, user is not authenticated
-        if (!token && !refreshToken) {
+        // If we have a valid token in memory
+        if (decodedToken) {
+          setAuthState({
+            isAuthenticated: true,
+            role: decodedToken.role,
+            userId: decodedToken.userId,
+            isLoading: false,
+          });
+          return;
+        }
+
+        // If token is expired or not available, try to refresh
+        try {
+          const refreshSuccessful = await refreshAccessToken();
+          
+          if (refreshSuccessful) {
+            // Get the newly refreshed token
+            const newToken = getDecodedToken();
+            
+            if (newToken) {
+              setAuthState({
+                isAuthenticated: true,
+                role: newToken.role,
+                userId: newToken.userId,
+                isLoading: false,
+              });
+              return;
+            }
+          }
+          
+          // If refresh failed or no new token available
           setAuthState({
             isAuthenticated: false,
             role: null,
             userId: null,
             isLoading: false,
           });
-          return;
-        }
-
-        // Check if access token is valid
-        if (token) {
-          try {
-            const decoded = jwtDecode<DecodedToken>(token);
-            const currentTime = Date.now() / 1000;
-
-            // If token is still valid, set auth state
-            if (decoded.exp > currentTime) {
-              setAuthState({
-                isAuthenticated: true,
-                role: decoded.role,
-                userId: decoded.userId,
-                isLoading: false,
-              });
-              return;
-            }
-          } catch (error) {
-            console.error('Error decoding token:', error);
-          }
-        }
-
-        // If we got here, access token is expired or invalid
-        // Try to refresh if we have a refresh token
-        if (refreshToken) {
-          try {
-            const { accessToken } = await refreshAccessToken();
-            const decoded = jwtDecode<DecodedToken>(accessToken);
-            
-            setAuthState({
-              isAuthenticated: true,
-              role: decoded.role,
-              userId: decoded.userId,
-              isLoading: false,
-            });
-          } catch (error) {
-            console.error('Error refreshing token:', error);
-            // Clear all tokens if refresh fails
-            clearTokens();
-            setAuthState({
-              isAuthenticated: false,
-              role: null,
-              userId: null,
-              isLoading: false,
-            });
-          }
-        } else {
-          // No refresh token, clear state
-          clearTokens();
+        } catch (error) {
+          console.error('Error refreshing token:', error);
           setAuthState({
             isAuthenticated: false,
             role: null,
@@ -118,8 +86,8 @@ export function useAuth() {
   }, []);
 
   // Logout function
-  const logout = () => {
-    clearTokens();
+  const logout = async () => {
+    await logoutAdmin();
     setAuthState({
       isAuthenticated: false,
       role: null,
@@ -131,16 +99,25 @@ export function useAuth() {
   // Function to refresh token manually if needed
   const refresh = async (): Promise<boolean> => {
     try {
-      const { accessToken } = await refreshAccessToken();
-      const decoded = jwtDecode<DecodedToken>(accessToken);
+      const refreshSuccessful = await refreshAccessToken();
       
-      setAuthState({
-        isAuthenticated: true,
-        role: decoded.role,
-        userId: decoded.userId,
-        isLoading: false,
-      });
-      return true;
+      if (refreshSuccessful) {
+        const newToken = getDecodedToken();
+        
+        if (newToken) {
+          setAuthState({
+            isAuthenticated: true,
+            role: newToken.role,
+            userId: newToken.userId,
+            isLoading: false,
+          });
+          return true;
+        }
+      }
+      
+      // If refresh failed or no new token available
+      logout();
+      return false;
     } catch (error) {
       console.error('Manual refresh error:', error);
       logout();

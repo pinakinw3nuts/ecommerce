@@ -10,6 +10,7 @@ import {
 } from '../utils/jwt';
 import { configTyped } from '../config/env';
 import logger from '../utils/logger';
+import { Redis } from 'ioredis';
 
 const authLogger = logger.child({ module: 'auth-service' });
 
@@ -39,12 +40,14 @@ export interface LoginResponse {
 
 export class AuthService {
   private googleClient: OAuth2Client;
+  private redis: Redis | null;
 
-  constructor(private userRepository: Repository<User>) {
+  constructor(private userRepository: Repository<User>, redis: Redis | null) {
     this.googleClient = new OAuth2Client(
       configTyped.oauth.google.clientId,
       configTyped.oauth.google.clientSecret
     );
+    this.redis = redis;
   }
 
   /**
@@ -420,30 +423,54 @@ export class AuthService {
         );
       }
 
-      logger.debug({ email }, 'Admin login attempt');
-
-      // Find user with password and ensure they are an admin
-      const user = await this.userRepository
-        .createQueryBuilder('user')
-        .where('user.email = :email', { email })
-        .andWhere('user.role = :role', { role: UserRole.ADMIN })
-        .addSelect('user.password')
-        .getOne();
+      // Check cache first for admin user if Redis is available
+      let user;
+      const cachedUserKey = `admin:${email}`;
+      
+      if (this.redis) {
+        try {
+          const cachedUser = await this.redis.get(cachedUserKey);
+          
+          if (cachedUser) {
+            // Use cached user data but still need to get password for verification
+            const parsedUser = JSON.parse(cachedUser);
+            
+            // Get only the password from DB to verify
+            const userWithPassword = await this.userRepository
+              .createQueryBuilder('user')
+              .where('user.id = :id', { id: parsedUser.id })
+              .addSelect('user.password')
+              .getOne();
+            
+            if (userWithPassword) {
+              // Merge cached user with password for verification
+              user = { ...parsedUser, password: userWithPassword.password };
+            }
+          }
+        } catch (error) {
+          logger.warn({ error }, 'Redis cache error, falling back to database');
+        }
+      }
+      
+      // If not in cache or password not found, do a full DB query
+      if (!user) {
+        user = await this.userRepository
+          .createQueryBuilder('user')
+          .where('user.email = :email', { email })
+          .andWhere('user.role = :role', { role: UserRole.ADMIN })
+          .addSelect('user.password')
+          .getOne();
+      }
 
       if (!user) {
-        logger.debug({ email }, 'Admin not found or user is not an admin');
+        if (process.env.NODE_ENV !== 'production') {
+          logger.debug({ email }, 'Admin not found or user is not an admin');
+        }
         throw new AuthenticationError(
           'Invalid admin credentials',
           'INVALID_CREDENTIALS'
         );
       }
-
-      logger.debug({ 
-        userId: user.id, 
-        role: user.role,
-        status: user.status,
-        isLocked: user.isAccountLocked()
-      }, 'Admin user found');
 
       // Check if account is locked
       if (user.isAccountLocked()) {
@@ -458,13 +485,16 @@ export class AuthService {
 
       // Verify password with constant-time comparison
       const isPasswordValid = await comparePassword(password, user.password);
-      logger.debug({ userId: user.id, isPasswordValid }, 'Admin password verification result');
-
+      
       if (!isPasswordValid) {
-        user.incrementFailedLoginAttempts();
-        await this.userRepository.save(user);
+        // Use a single transaction for updating failed attempts
+        await this.userRepository.manager.transaction(async (manager) => {
+          const userRepo = manager.getRepository(User);
+          user.incrementFailedLoginAttempts();
+          await userRepo.save(user);
+        });
 
-        const attemptsLeft = 3 - user.failedLoginAttempts; // Stricter limit for admin accounts
+        const attemptsLeft = 3 - user.failedLoginAttempts;
         logger.warn({ 
           userId: user.id, 
           failedAttempts: user.failedLoginAttempts,
@@ -485,28 +515,34 @@ export class AuthService {
         }
       }
 
-      // Store the password before it gets removed
-      const currentPassword = user.password;
-
-      // Reset failed attempts and update last login
-      user.resetFailedLoginAttempts();
-      user.lastLogin = new Date();
-      
-      // Save with password preserved
-      await this.userRepository
-        .createQueryBuilder()
-        .update(User)
-        .set({
-          failedLoginAttempts: user.failedLoginAttempts,
-          lastLogin: user.lastLogin,
-          accountLockedUntil: user.accountLockedUntil,
-          password: currentPassword
-        })
-        .where('id = :id', { id: user.id })
-        .execute();
+      // Use a single transaction for updating user login status
+      await this.userRepository.manager.transaction(async (manager) => {
+        const userRepo = manager.getRepository(User);
+        
+        // Update user in a single query
+        await userRepo.update(
+          { id: user.id },
+          {
+            failedLoginAttempts: 0,
+            lastLogin: new Date(),
+            accountLockedUntil: null
+          }
+        );
+      });
 
       // Generate tokens with admin-specific claims
       const tokens = await this.generateAdminTokens(user);
+
+      // Cache admin user for future requests if Redis is available
+      if (this.redis) {
+        try {
+          const userToCache = { ...user };
+          delete userToCache.password;
+          await this.redis.set(cachedUserKey, JSON.stringify(userToCache), 'EX', 3600); // Cache for 1 hour
+        } catch (error) {
+          logger.warn({ error }, 'Failed to cache admin user');
+        }
+      }
 
       logger.info({ userId: user.id }, 'Admin logged in successfully');
 

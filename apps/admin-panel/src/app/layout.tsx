@@ -5,6 +5,8 @@ import './globals.css';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { ToastProvider } from '@/components/providers/ToastProvider';
+import { LoadingProvider } from '@/hooks/useLoadingState';
+import LoadingOverlay from '@/components/LoadingOverlay';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -78,23 +80,26 @@ export default async function RootLayout({
     <html lang="en" className="h-full">
       <body className={`${inter.className} h-full`}>
         <ToastProvider>
-          <div className="flex min-h-screen bg-gray-50">
-            {/* Sidebar */}
-            <div className="fixed inset-y-0 z-50 flex w-64 flex-col">
-              <Sidebar />
-            </div>
+          <LoadingProvider>
+            <div className="flex min-h-screen bg-gray-50">
+              {/* Sidebar */}
+              <div className="fixed inset-y-0 z-50 flex w-64 flex-col">
+                <Sidebar />
+              </div>
 
-            {/* Main content */}
-            <div className="pl-64 flex flex-col flex-1">
-              {/* Header */}
-              <Header />
+              {/* Main content */}
+              <div className="pl-64 flex flex-col flex-1">
+                {/* Header */}
+                <Header />
 
-              {/* Page content */}
-              <main className="flex-1 p-6">
-                {children}
-              </main>
+                {/* Page content */}
+                <main className="flex-1 p-6">
+                  {children}
+                </main>
+              </div>
             </div>
-          </div>
+            <LoadingOverlay />
+          </LoadingProvider>
         </ToastProvider>
       </body>
     </html>

@@ -61,9 +61,9 @@ interface RefreshTokenRequest {
 }
 
 export class AuthController {
-  private redis: Redis;
+  private redis: Redis | null;
 
-  constructor(private authService: AuthService, redis: Redis) {
+  constructor(private authService: AuthService, redis: Redis | null) {
     this.redis = redis;
   }
 
@@ -191,7 +191,7 @@ export class AuthController {
           }
         }
       },
-      onRequest: [adminLoginRateLimit(this.redis)],
+      onRequest: this.redis ? [adminLoginRateLimit(this.redis)] : [],
       preHandler: validateRequest(adminLoginSchema),
       handler: async (request: FastifyRequest<LoginRequest>, reply: FastifyReply) => {
         try {

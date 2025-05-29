@@ -1,5 +1,4 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
-import { getToken } from './auth';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -8,15 +7,14 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   timeout: 10000, // 10 seconds
+  withCredentials: true, // Include cookies in requests
 });
 
-// Request interceptor for adding auth token and handling requests
+// Request interceptor for handling requests
 api.interceptors.request.use(
   (config) => {
-    const token = getToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // No need to manually add the token
+    // The HTTP-only cookie will be sent automatically with withCredentials: true
     return config;
   },
   (error) => {

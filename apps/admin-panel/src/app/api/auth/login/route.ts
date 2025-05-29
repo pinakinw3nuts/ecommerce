@@ -27,53 +27,72 @@ export async function POST(request: Request) {
 
     const { email, password } = validationResult.data;
 
-    // Call admin-specific login endpoint
-    const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/admin/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email,
-        password
-      }),
-    });
+    // Set up timeout for the request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-    const data = await response.json();
+    try {
+      // Call admin-specific login endpoint
+      const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/admin/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password
+        }),
+        signal: controller.signal,
+        cache: 'no-store' // Ensure we don't use cached responses
+      });
 
-    if (!response.ok) {
-      return NextResponse.json(
-        { message: data.message || 'Authentication failed' },
-        { status: response.status }
-      );
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return NextResponse.json(
+          { message: data.message || 'Authentication failed' },
+          { status: response.status }
+        );
+      }
+
+      // Create the response
+      const res = NextResponse.json({
+        token: data.accessToken,
+        refreshToken: data.refreshToken,
+        user: data.user
+      });
+
+      // Set the token in an HTTP-only cookie
+      cookies().set('admin_token', data.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 15 * 60, // 15 minutes (match token expiration)
+        path: '/',
+      });
+
+      // Store refresh token in a separate cookie with longer expiration
+      cookies().set('admin_refresh_token', data.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+        path: '/',
+      });
+
+      return res;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return NextResponse.json(
+          { message: 'Login request timed out. Please try again.' },
+          { status: 408 }
+        );
+      }
+      throw error;
     }
-
-    // Create the response
-    const res = NextResponse.json({
-      token: data.accessToken,
-      refreshToken: data.refreshToken,
-      user: data.user
-    });
-
-    // Set the token in an HTTP-only cookie
-    cookies().set('admin_token', data.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 15 * 60, // 15 minutes (match token expiration)
-      path: '/',
-    });
-
-    // Store refresh token in a separate cookie with longer expiration
-    cookies().set('admin_refresh_token', data.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-      path: '/',
-    });
-
-    return res;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(

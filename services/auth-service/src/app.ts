@@ -1,5 +1,8 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import helmet from '@fastify/helmet';
 import Redis from 'ioredis';
 import { User, UserRole, UserStatus } from './entities/user.entity';
 import { AuthService } from './services/auth.service';
@@ -76,7 +79,15 @@ async function ensureAdminUser() {
 export default async function createApp() {
   // Create Fastify instance
   const app = fastify({
-    logger
+    logger,
+    trustProxy: true,
+    ajv: {
+      customOptions: {
+        removeAdditional: 'all',
+        coerceTypes: true,
+        useDefaults: true
+      }
+    }
   });
 
   // Register CORS
@@ -84,27 +95,73 @@ export default async function createApp() {
     origin: configTyped.cors.origin,
     credentials: true
   });
-
-  // Initialize Redis connection
-  const redis = new Redis({
-    host: configTyped.redis.host,
-    port: configTyped.redis.port,
-    password: configTyped.redis.password,
-    db: configTyped.redis.db,
-    retryStrategy: (times: number) => {
-      const delay = Math.min(times * 50, 2000);
-      logger.info({ times, delay }, 'Redis reconnection attempt');
-      return delay;
+  
+  // Register Helmet for security headers
+  await app.register(helmet);
+  
+  // Register Swagger
+  await app.register(swagger, {
+    swagger: {
+      info: {
+        title: 'Auth Service API',
+        description: 'Authentication and Authorization Service API Documentation',
+        version: '1.0.0'
+      },
+      host: `${configTyped.host}:${configTyped.port}`,
+      schemes: ['http', 'https'],
+      consumes: ['application/json'],
+      produces: ['application/json'],
+      tags: [
+        { name: 'Authentication', description: 'Authentication related endpoints' },
+        { name: 'Users', description: 'User management endpoints' }
+      ]
     }
   });
 
-  redis.on('error', (error: Error) => {
-    logger.error(error, 'Redis connection error');
+  // Register Swagger UI
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: {
+      docExpansion: 'list',
+      deepLinking: true
+    }
   });
 
-  redis.on('connect', () => {
-    logger.info('Redis connected successfully');
-  });
+  // Initialize Redis connection (with fallback for development)
+  let redis: Redis | null = null;
+  
+  try {
+    // Only try to connect to Redis in production or if explicitly enabled
+    if (configTyped.isProduction || process.env.ENABLE_REDIS === 'true') {
+      redis = new Redis({
+        host: configTyped.redis.host,
+        port: configTyped.redis.port,
+        password: configTyped.redis.password,
+        db: configTyped.redis.db,
+        retryStrategy: (times: number) => {
+          const delay = Math.min(times * 50, 2000);
+          logger.info({ times, delay }, 'Redis reconnection attempt');
+          return delay;
+        }
+      });
+
+      redis.on('error', (error: Error) => {
+        logger.error(error, 'Redis connection error');
+      });
+
+      redis.on('connect', () => {
+        logger.info('Redis connected successfully');
+      });
+    } else {
+      logger.warn('Redis is disabled in development mode. Rate limiting and caching will not work.');
+    }
+  } catch (error) {
+    logger.error(error, 'Failed to initialize Redis');
+    // Continue without Redis in development
+    if (configTyped.isProduction) {
+      throw error; // Re-throw in production
+    }
+  }
 
   // Initialize database connection
   try {
@@ -126,7 +183,7 @@ export default async function createApp() {
       if (!instance) {
         switch (name) {
           case 'authService':
-            return new AuthService(AppDataSource.getRepository(User)) as T;
+            return new AuthService(AppDataSource.getRepository(User), redis as Redis) as T;
           case 'dataSource':
             return AppDataSource as T;
           case 'redis':
@@ -145,7 +202,7 @@ export default async function createApp() {
   // Register routes
   await app.register(async (fastify) => {
     await registerAuthRoutes(fastify, AppDataSource);
-  }, { prefix: '/api/auth' });
+  }, { prefix: '/api' });
 
   // Ensure admin user exists
   await ensureAdminUser();
@@ -161,7 +218,9 @@ export default async function createApp() {
 
   // Cleanup on app close
   app.addHook('onClose', async () => {
-    await redis.quit();
+    if (redis) {
+      await redis.quit();
+    }
     await AppDataSource.destroy();
   });
 
