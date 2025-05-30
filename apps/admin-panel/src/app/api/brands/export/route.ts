@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 // Mock brands data (same as in the main brands route)
 const mockBrands = Array.from({ length: 50 }, (_, i) => ({
   id: `brand-${i + 1}`,

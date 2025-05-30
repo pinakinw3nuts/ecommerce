@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import http from 'http';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 interface UserData {
   id: string;
   name: string;
@@ -92,7 +97,7 @@ function makeRequest(url: string, options: { method?: string; headers?: any; bod
 export async function GET(request: NextRequest) {
   try {
     // Get the admin token
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -213,7 +218,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -255,7 +260,7 @@ export async function PATCH(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {

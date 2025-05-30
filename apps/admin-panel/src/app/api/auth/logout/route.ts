@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 export async function POST() {
   try {
     // Clear access token cookie

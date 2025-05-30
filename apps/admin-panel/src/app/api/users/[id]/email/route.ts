@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
+export async function POST(request: NextRequest, context: { params: { id: string } }) {
   try {
-    const userId = params.id;
+    const userId = context.params.id;
 
     // In a real app, you would:
     // 1. Get the user's email from the database

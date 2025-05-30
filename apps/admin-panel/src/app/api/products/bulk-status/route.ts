@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { bulkUpdateProductStatus } from '@/services/products';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 export async function PATCH(request: Request) {
   try {
     const { productIds, status } = await request.json();

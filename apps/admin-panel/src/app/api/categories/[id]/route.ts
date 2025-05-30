@@ -2,17 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { makeRequest } from '../../../../lib/make-request';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace('localhost', '127.0.0.1') || 'http://127.0.0.1:3003';
 
 // GET /api/categories/[id] - Get a single category
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, context: { params: { id: string } }) {
   try {
     console.log('Getting category with ID:', params.id);
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -79,13 +81,10 @@ export async function GET(
 }
 
 // PUT /api/categories/[id] - Update a category
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, context: { params: { id: string } }) {
   try {
     console.log('Updating category with ID:', params.id);
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -165,13 +164,10 @@ export async function PUT(
 }
 
 // DELETE /api/categories/[id] - Delete a category
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
   try {
     console.log('Deleting category with ID:', params.id);
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {

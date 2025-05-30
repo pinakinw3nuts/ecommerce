@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { PRODUCT_SERVICE_URL } from '@/lib/constants';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const apiUrl = new URL('/api/v1/coupons/', PRODUCT_SERVICE_URL);

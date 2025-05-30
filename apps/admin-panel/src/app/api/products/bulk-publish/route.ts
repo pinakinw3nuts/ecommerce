@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 // Mock data - will be replaced with database calls
 const mockProducts = [
   {

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'info';
@@ -19,6 +19,12 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [mounted, setMounted] = useState(false);
+
+  // Only show toasts after component has mounted on the client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const showToast = useCallback((message: string, type: ToastType) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -51,23 +57,25 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {/* Toast Container */}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`animate-slide-in-right flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg ${getToastBgColor(toast.type)}`}
-          >
-            <span>{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="ml-2 rounded-lg p-1 hover:bg-white/20"
+      {/* Toast Container - only render on client */}
+      {mounted && (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`animate-slide-in-right flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg ${getToastBgColor(toast.type)}`}
             >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
-      </div>
+              <span>{toast.message}</span>
+              <button
+                onClick={() => removeToast(toast.id)}
+                className="ml-2 rounded-lg p-1 hover:bg-white/20"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </ToastContext.Provider>
   );
 }

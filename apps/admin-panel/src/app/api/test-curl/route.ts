@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 const execAsync = promisify(exec);
 
 export async function GET(request: Request) {

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
+export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
   try {
-    const userId = params.id;
+    const userId = context.params.id;
     const { status } = await request.json();
 
     // In a real app, you would update the user in your database

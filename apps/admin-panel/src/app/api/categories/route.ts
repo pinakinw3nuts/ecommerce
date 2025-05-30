@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { makeRequest } from '../../../lib/make-request';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace('localhost', '127.0.0.1') || 'http://127.0.0.1:3003';
 
@@ -9,7 +14,7 @@ const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace
 export async function GET(request: NextRequest) {
   console.log('Categories API called at:', new Date().toISOString());
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -97,7 +102,7 @@ export async function GET(request: NextRequest) {
 // POST /api/categories - Create a new category
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -161,7 +166,7 @@ export async function POST(request: NextRequest) {
 // PATCH /api/categories - Bulk update categories
 export async function PATCH(request: NextRequest) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {

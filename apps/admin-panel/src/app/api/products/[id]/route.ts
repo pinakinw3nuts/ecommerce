@@ -2,16 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { makeRequest, prepareDateFields } from '../../../../lib/make-request';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace('localhost', '127.0.0.1') || 'http://127.0.0.1:3003';
 
 // GET /api/products/[id] - Get a single product
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, context: { params: { id: string } }) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -21,7 +23,7 @@ export async function GET(
       );
     }
 
-    const productId = params.id;
+    const productId = context.params.id;
     console.log(`Fetching product with ID: ${productId}`);
 
     // Use the admin endpoint for fetching products
@@ -136,12 +138,9 @@ export async function GET(
 }
 
 // PUT /api/products/[id] - Update a product
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, context: { params: { id: string } }) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -151,7 +150,7 @@ export async function PUT(
       );
     }
 
-    const productId = params.id;
+    const productId = context.params.id;
     console.log(`Updating product with ID: ${productId}`);
     
     const productData = await request.json();
@@ -310,12 +309,9 @@ export async function PUT(
 }
 
 // DELETE /api/products/[id] - Delete a product
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -325,7 +321,7 @@ export async function DELETE(
       );
     }
 
-    const productId = params.id;
+    const productId = context.params.id;
     console.log(`Deleting product with ID: ${productId}`);
 
     // Use the admin endpoint for deleting products

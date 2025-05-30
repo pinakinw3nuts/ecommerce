@@ -2,15 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { makeRequest } from '@/lib/make-request';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace('localhost', '127.0.0.1') || 'http://127.0.0.1:3003';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -20,7 +23,7 @@ export async function PUT(
       );
     }
 
-    const couponId = params.id;
+    const couponId = context.params.id;
     const couponData = await request.json();
     
     // Ensure isActive is explicitly set as a boolean if present
@@ -87,10 +90,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -100,7 +103,7 @@ export async function DELETE(
       );
     }
 
-    const couponId = params.id;
+    const couponId = context.params.id;
 
     const response = await makeRequest(
       `${PRODUCT_SERVICE_URL}/api/v1/admin/coupons/${couponId}`,

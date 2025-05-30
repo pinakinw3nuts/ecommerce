@@ -22,7 +22,7 @@ function isPublicPath(pathname: string): boolean {
 
 // Auth check middleware
 async function authCheck(pathname: string) {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const token = cookieStore.get('admin_token');
   
   // If we're on a public path, no need to check auth
@@ -51,13 +51,14 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   // Get the current pathname from the request
-  const pathname = new URL(cookies().get('next-url')?.value || '/', 'http://localhost').pathname;
+  const cookieStore = await cookies();
+  const pathname = new URL(cookieStore.get('next-url')?.value || '/', 'http://localhost').pathname;
   
   // If it's a public path, return the minimal layout
   if (isPublicPath(pathname)) {
     return (
       <html lang="en">
-        <body className={`${inter.className} bg-gray-50`}>
+        <body className={`${inter.className} bg-gray-50`} suppressHydrationWarning>
           <div className="min-h-screen flex items-center justify-center">
             <ToastProvider>
               {children}
@@ -78,7 +79,7 @@ export default async function RootLayout({
   // Return the full layout with sidebar and header for authenticated pages
   return (
     <html lang="en" className="h-full">
-      <body className={`${inter.className} h-full`}>
+      <body className={`${inter.className} h-full`} suppressHydrationWarning>
         <ToastProvider>
           <LoadingProvider>
             <div className="flex min-h-screen bg-gray-50">

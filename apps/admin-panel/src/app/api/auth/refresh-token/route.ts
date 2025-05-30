@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:3001';
 
 export async function POST() {

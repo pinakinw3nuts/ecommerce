@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { exportProducts } from '@/services/products';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 export async function POST(request: Request) {
   try {
     const filters = await request.json();

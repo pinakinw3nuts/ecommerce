@@ -102,7 +102,7 @@ function getClientAuthToken() {
 
 // Server-side function to get auth token from cookies
 async function getServerAuthToken() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   return cookieStore.get('admin_token')?.value;
 }
 

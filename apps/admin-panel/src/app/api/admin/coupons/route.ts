@@ -3,6 +3,11 @@ import { cookies } from 'next/headers';
 import { makeRequest } from '@/lib/make-request';
 import { PRODUCT_SERVICE_URL, USER_SERVICE_URL } from '@/lib/constants';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 // Handle CORS preflight requests
 export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, {
@@ -38,7 +43,7 @@ interface BackendCoupon {
 export async function GET(request: NextRequest) {
   console.log('Admin Coupons API called at:', new Date().toISOString());
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {
@@ -265,7 +270,7 @@ async function refreshToken(refreshToken: string) {
 export async function POST(request: NextRequest) {
   console.log('POST /api/admin/coupons called');
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
     const refreshTokenCookie = cookieStore.get('admin_refresh_token');
 

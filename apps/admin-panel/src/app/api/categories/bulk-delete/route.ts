@@ -3,10 +3,15 @@ import { cookies } from 'next/headers';
 import { mockCategories } from '@/lib/mock/categories';
 import type { Category } from '@/lib/mock/categories';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 export async function POST(request: NextRequest) {
   try {
     console.log('Processing bulk delete request');
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
     if (!token) {

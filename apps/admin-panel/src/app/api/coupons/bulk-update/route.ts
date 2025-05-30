@@ -3,12 +3,15 @@ import { cookies } from 'next/headers';
 import { makeRequest } from '@/lib/make-request';
 import { PRODUCT_SERVICE_URL } from '@/lib/constants';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL_FIXED = PRODUCT_SERVICE_URL.replace('localhost', '127.0.0.1');
 
 // Helper function to get a valid authorization header
-const getValidAuthHeader = () => {
-  const cookieStore = cookies();
+const getValidAuthHeader = async () => {
+  const cookieStore = await cookies();
   const token = cookieStore.get('admin_token');
 
   if (!token) {
@@ -39,7 +42,7 @@ async function makeLocalRequest(url: string, options: RequestInit = {}) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = getValidAuthHeader();
+    const authHeader = await getValidAuthHeader();
 
     if (!authHeader.includes('Bearer')) {
       return NextResponse.json(

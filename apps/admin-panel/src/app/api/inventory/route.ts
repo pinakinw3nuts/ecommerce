@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 // Mock data for testing
 const mockProducts = Array.from({ length: 50 }, (_, i) => ({
   id: `prod_${i + 1}`,

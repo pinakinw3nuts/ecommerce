@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import crypto from 'crypto';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 // Validation schema for password reset request
 const resetRequestSchema = z.object({
   email: z.string().email('Invalid email address'),

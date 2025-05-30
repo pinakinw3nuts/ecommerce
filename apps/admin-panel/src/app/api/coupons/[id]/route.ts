@@ -3,12 +3,15 @@ import { cookies } from 'next/headers';
 import { makeRequest } from '@/lib/make-request';
 import { PRODUCT_SERVICE_URL } from '@/lib/constants';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 // Use IPv4 explicitly to avoid IPv6 issues
 const PRODUCT_SERVICE_URL_FIXED = PRODUCT_SERVICE_URL.replace('localhost', '127.0.0.1');
 
 // Helper function to get a valid authorization header
-const getValidAuthHeader = () => {
-  const cookieStore = cookies();
+const getValidAuthHeader = async () => {
+  const cookieStore = await cookies();
   const token = cookieStore.get('admin_token');
 
   if (!token) {
@@ -55,13 +58,10 @@ const getMockCoupon = (id: string) => ({
   "updatedAt": new Date().toISOString()
 });
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, context: { params: { id: string } }) {
   try {
-    const { id } = params;
-    const authHeader = getValidAuthHeader();
+    const { id } = context.params;
+    const authHeader = await getValidAuthHeader();
 
     if (!authHeader.includes('Bearer')) {
       return NextResponse.json(
@@ -124,13 +124,10 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, context: { params: { id: string } }) {
   try {
-    const { id } = params;
-    const authHeader = getValidAuthHeader();
+    const { id } = context.params;
+    const authHeader = await getValidAuthHeader();
 
     if (!authHeader.includes('Bearer')) {
       return NextResponse.json(
@@ -201,13 +198,10 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
   try {
-    const { id } = params;
-    const authHeader = getValidAuthHeader();
+    const { id } = context.params;
+    const authHeader = await getValidAuthHeader();
 
     if (!authHeader.includes('Bearer')) {
       return NextResponse.json(

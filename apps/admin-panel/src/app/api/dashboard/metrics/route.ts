@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 // Mock data generator functions
 function generateTrendPercentage(): number {
   return Number((Math.random() * 30 - 10).toFixed(1)); // Random number between -10 and +20

@@ -2,6 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { useLoadingState } from '@/hooks/useLoadingState';
+import { useState, useEffect } from 'react';
 
 interface LoadingOverlayProps {
   message?: string;
@@ -9,8 +10,14 @@ interface LoadingOverlayProps {
 
 export default function LoadingOverlay({ message = 'Loading...' }: LoadingOverlayProps) {
   const { isLoading } = useLoadingState();
+  const [mounted, setMounted] = useState(false);
   
-  if (!isLoading) return null;
+  // Only show loading overlay after component has mounted on the client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  if (!mounted || !isLoading) return null;
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75">

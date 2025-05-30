@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 // Validation schema
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),

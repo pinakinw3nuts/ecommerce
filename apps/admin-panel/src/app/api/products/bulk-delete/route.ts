@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { bulkDeleteProducts } from '@/services/products';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+
+
 export async function POST(request: Request) {
   try {
     const { productIds } = await request.json();
