@@ -16,7 +16,8 @@ import {
   ChevronsUpDown,
   Ban,
   Filter,
-  Search
+  Search,
+  ImageIcon
 } from 'lucide-react';
 import Table from '@/components/Table';
 import { Button } from '@/components/ui/Button';
@@ -543,12 +544,18 @@ export default function ProductsPage() {
       cell: ({ row }: { row: Product }) => (
         <div className="flex items-center gap-3">
           <div className="relative h-12 w-12 overflow-hidden rounded-lg">
-            <Image
-              src={row.image}
-              alt={row.name}
-              fill
-              className="object-cover"
-            />
+            {row.image && row.image.trim() !== '' ? (
+              <Image
+                src={row.image}
+                alt={row.name}
+                fill
+                className="object-cover"
+              />
+            ) : (
+              <div className="h-full w-full bg-gray-200 flex items-center justify-center">
+                <ImageIcon className="h-6 w-6 text-gray-400" />
+              </div>
+            )}
           </div>
           <div>
             <div className="font-medium">{row.name}</div>
