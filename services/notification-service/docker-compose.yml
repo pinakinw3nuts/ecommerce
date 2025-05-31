@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3014:3014"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-jwt-secret-at-least-32-characters-long
+      - EMAIL_FROM=noreply@example.com
+      - NOTIFY_MODE=log
+      - CORS_ORIGINS=http://localhost:3000
+    volumes:
+      - ./src:/app/src
+      - ./dist:/app/dist
+    depends_on:
+      - redis
+    command: npm run dev
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+
+volumes:
+  redis-data: 

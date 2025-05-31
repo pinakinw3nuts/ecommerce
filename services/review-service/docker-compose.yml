@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  review-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: review-service
+    ports:
+      - "3014:3014"
+    environment:
+      - NODE_ENV=development
+      - PORT=3014
+      - HOST=0.0.0.0
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/reviews
+      - JWT_SECRET=local_development_secret
+      - LOG_LEVEL=debug
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      - postgres
+    networks:
+      - review-network
+    command: npm run dev
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: review-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=reviews
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - review-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  review-network:
+    driver: bridge
+
+volumes:
+  postgres-data: 

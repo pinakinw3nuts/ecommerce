@@ -29,7 +29,51 @@ const serviceRoutes: Record<string, ServiceConfig> = {
     url: config.services.product,
     timeout: 10000, // Longer timeout for product catalog
   },
-  // Add more service routes as needed
+  '/api/cart': {
+    name: 'cart-service',
+    url: config.services.cart,
+    timeout: 5000,
+  },
+  '/api/checkout': {
+    name: 'checkout-service',
+    url: config.services.checkout,
+    timeout: 15000, // Longer timeout for checkout process
+  },
+  '/api/orders': {
+    name: 'order-service',
+    url: config.services.order,
+    timeout: 10000,
+  },
+  '/api/payments': {
+    name: 'payment-service',
+    url: config.services.payment,
+    timeout: 15000, // Longer timeout for payment processing
+  },
+  '/api/shipping': {
+    name: 'shipping-service',
+    url: config.services.shipping,
+    timeout: 8000,
+  },
+  '/api/inventory': {
+    name: 'inventory-service',
+    url: config.services.inventory,
+    timeout: 5000,
+  },
+  '/api/company': {
+    name: 'company-service',
+    url: config.services.company,
+    timeout: 5000,
+  },
+  '/api/pricing': {
+    name: 'pricing-service',
+    url: config.services.pricing,
+    timeout: 5000,
+  },
+  '/api/admin': {
+    name: 'admin-service',
+    url: config.services.admin,
+    timeout: 10000,
+  },
 };
 
 /**

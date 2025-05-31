@@ -1,0 +1,54 @@
+{
+  "name": "notification-service",
+  "version": "1.0.0",
+  "description": "Email, SMS, and push notification service for e-commerce platform",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui",
+    "lint": "eslint 'src/**/*.ts'",
+    "format": "prettier --write 'src/**/*.ts'",
+    "test:webhook": "ts-node src/scripts/test-webhook.ts",
+    "retry:failed": "ts-node src/scripts/retry-failed-jobs.ts",
+    "send:test-email": "ts-node src/scripts/send-test-email.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^8.3.0",
+    "@fastify/jwt": "^9.1.0",
+    "@fastify/swagger": "^8.9.1",
+    "@fastify/swagger-ui": "^1.9.3",
+    "axios": "^1.5.0",
+    "bullmq": "^4.9.0",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.22.2",
+    "ioredis": "^5.3.2",
+    "nodemailer": "^6.9.5",
+    "pino": "^8.15.1",
+    "pino-pretty": "^10.2.0",
+    "uuid": "^9.0.0",
+    "zod": "^3.22.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.6.0",
+    "@types/nodemailer": "^6.4.9",
+    "@types/uuid": "^9.0.3",
+    "@typescript-eslint/eslint-plugin": "^6.6.0",
+    "@typescript-eslint/parser": "^6.6.0",
+    "@vitest/coverage-v8": "^3.1.4",
+    "@vitest/ui": "^3.1.4",
+    "eslint": "^8.49.0",
+    "prettier": "^3.0.3",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.2.2",
+    "vitest": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

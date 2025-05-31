@@ -15,13 +15,53 @@ const proxyRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // Product Service Routes
   fastify.all('/api/products/*', forwardHandler);
 
+  // Cart Service Routes
+  fastify.all('/api/cart/*', forwardHandler);
+
+  // Checkout Service Routes
+  fastify.all('/api/checkout/*', forwardHandler);
+
+  // Order Service Routes
+  fastify.all('/api/orders/*', forwardHandler);
+
+  // Payment Service Routes
+  fastify.all('/api/payments/*', forwardHandler);
+
+  // Shipping Service Routes
+  fastify.all('/api/shipping/*', forwardHandler);
+
+  // Inventory Service Routes
+  fastify.all('/api/inventory/*', forwardHandler);
+
+  // Company Service Routes
+  fastify.all('/api/company/*', forwardHandler);
+
+  // Pricing Service Routes
+  fastify.all('/api/pricing/*', forwardHandler);
+
+  // Admin Service Routes
+  fastify.all('/api/admin/*', forwardHandler);
+
   // Health check for proxy routes
   fastify.get('/api/status', async (_request, reply) => {
     return reply.send({
       status: 'ok',
       timestamp: new Date().toISOString(),
       service: 'api-gateway',
-      routes: ['/api/auth/*', '/api/users/*', '/api/products/*']
+      routes: [
+        '/api/auth/*', 
+        '/api/users/*', 
+        '/api/products/*',
+        '/api/cart/*',
+        '/api/checkout/*',
+        '/api/orders/*',
+        '/api/payments/*',
+        '/api/shipping/*',
+        '/api/inventory/*',
+        '/api/company/*',
+        '/api/pricing/*',
+        '/api/admin/*'
+      ]
     });
   });
 
