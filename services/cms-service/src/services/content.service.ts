@@ -1,5 +1,5 @@
 import { Repository, FindOptionsWhere, Between, FindOptionsOrder, IsNull, Not, Like, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
-import { AppDataSource } from '../database';
+import { AppDataSource } from '../config/dataSource';
 import { ContentBlock, ContentBlockType, CreateContentBlockInput, UpdateContentBlockInput } from '../entities/ContentBlock';
 import { ContentRevision, CreateContentRevisionInput } from '../entities/ContentRevision';
 import { logger } from '../utils/logger';

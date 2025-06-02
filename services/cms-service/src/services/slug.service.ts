@@ -1,5 +1,5 @@
 import { Repository } from 'typeorm';
-import { AppDataSource } from '../database';
+import { AppDataSource } from '../config/dataSource';
 import { ContentBlock, ContentBlockType } from '../entities/ContentBlock';
 import { slugify, makeSlugUnique } from '../utils/slugify';
 import { logger } from '../utils/logger';

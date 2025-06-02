@@ -1,5 +1,5 @@
 import { FastifyRequest } from 'fastify';
-import { JwtUser } from '../middleware/authGuard';
+import { JwtUser } from './fastify';
 
 /**
  * Interface for requests that have been authenticated
@@ -26,7 +26,7 @@ export enum UserRole {
  * @returns True if the user has the specified role
  */
 export function hasRole(user: JwtUser, role: UserRole): boolean {
-  return user.roles.includes(role);
+  return user.roles?.includes(role) ?? false;
 }
 
 /**
@@ -36,5 +36,5 @@ export function hasRole(user: JwtUser, role: UserRole): boolean {
  * @returns True if the user has any of the specified roles
  */
 export function hasAnyRole(user: JwtUser, roles: UserRole[]): boolean {
-  return roles.some(role => user.roles.includes(role));
+  return roles.some(role => user.roles?.includes(role) ?? false);
 } 

@@ -6,13 +6,13 @@ import { logger } from '../utils/logger';
 logger.debug('Initializing controllers');
 
 // Declare controller variables
-let contentControllerInstance: ContentController;
+let contentControllerInstance: typeof ContentController;
 let widgetControllerInstance: WidgetController;
 
 try {
   // Initialize controller instances
   logger.debug('Creating ContentController instance');
-  contentControllerInstance = new ContentController();
+  contentControllerInstance = ContentController; // ContentController is already an instance
   logger.debug('ContentController initialized successfully');
   
   logger.debug('Creating WidgetController instance');

@@ -1,29 +1,25 @@
+import { env } from './config/env';
 import { buildApp } from './app';
-import { config } from './config';
+import { AppDataSource } from './config/dataSource';
 import { logger } from './utils/logger';
-import { AppDataSource } from './database';
 
-/**
- * Start the server and handle graceful shutdown
- */
-async function startServer() {
+export async function startServer(): Promise<void> {
   try {
+    // Initialize database connection
+    await AppDataSource.initialize();
+    logger.info('Database connection established successfully');
+
+    // Build and start the app
     const app = await buildApp();
     
     // Start listening
     await app.listen({ 
-      port: config.port,
-      host: config.host
+      port: env.PORT,
+      host: env.HOST
     });
     
-    logger.info(`🚀 Server started on ${config.host}:${config.port}`);
-    logger.info(`📚 API documentation available at http://${config.host}:${config.port}/documentation`);
-    
-    // Log all registered routes in development
-    if (!config.isProduction) {
-      const routes = app.printRoutes();
-      logger.debug(`Registered routes:\n${routes}`);
-    }
+    logger.info(`🚀 CMS service running on port ${env.PORT}`);
+    logger.info(`📚 API documentation available at http://${env.HOST}:${env.PORT}/documentation`);
     
     // Handle graceful shutdown
     const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
@@ -86,5 +82,12 @@ async function startServer() {
   }
 }
 
-// Start the server
-startServer(); 
+// Start the server if this file is run directly
+if (require.main === module) {
+  startServer().catch(error => {
+    logger.error('Failed to start server:', { 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+    process.exit(1);
+  });
+} 

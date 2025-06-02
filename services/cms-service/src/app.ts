@@ -5,8 +5,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import jwt from 'jsonwebtoken';
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { config } from './config';
-import { AppDataSource } from './database';
+import { env } from './config/env';
 import { logger } from './utils/logger';
 import { contentRoutes } from './routes/content.routes';
 import { widgetRoutes } from './routes/widget.routes';
@@ -19,8 +18,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   try {
     // Create Fastify instance
     const app = fastify({
-      logger: config.isProduction ? false : {
-        level: config.logLevel,
+      logger: env.NODE_ENV !== 'production' ? {
+        level: env.LOG_LEVEL,
         transport: {
           target: 'pino-pretty',
           options: {
@@ -28,25 +27,13 @@ export async function buildApp(): Promise<FastifyInstance> {
             ignore: 'pid,hostname',
           }
         }
-      }
+      } : false
     });
 
     try {
-      // Initialize database connection
-      await AppDataSource.initialize();
-      logger.info('Database connection established successfully');
-    } catch (error) {
-      logger.error('Failed to initialize database connection', { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      throw error;
-    }
-
-    // Register plugins
-    try {
+      // Register plugins
       await app.register(helmet, {
-        contentSecurityPolicy: config.isProduction
+        contentSecurityPolicy: env.NODE_ENV === 'production'
       });
       logger.debug('Helmet plugin registered successfully');
     } catch (error) {
@@ -59,7 +46,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     try {
       await app.register(cors, {
-        origin: config.corsOrigins,
+        origin: env.CORS_ORIGINS,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
         credentials: true
       });
@@ -81,7 +68,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         }
         
         const token = authHeader.replace('Bearer ', '');
-        const decoded = jwt.verify(token, config.jwtSecret) as JwtUser;
+        const decoded = jwt.verify(token, env.JWT_SECRET) as JwtUser;
         
         // Assign the decoded user to the request
         request.user = decoded;
@@ -126,12 +113,14 @@ export async function buildApp(): Promise<FastifyInstance> {
       throw error;
     }
 
-    // Register routes directly like in the order service
+    // Register public routes
     try {
-      await app.register(widgetRoutes, { prefix: '/api/v1/widget' });
-      logger.debug('Widget routes registered successfully');
+      await app.register(async (publicApp) => {
+        await publicApp.register(widgetRoutes, { prefix: '/widget' });
+        logger.debug('Public widget routes registered successfully');
+      }, { prefix: '/api/v1' });
     } catch (error) {
-      logger.error('Failed to register widget routes', {
+      logger.error('Failed to register public routes', {
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined
       });
@@ -193,9 +182,15 @@ export async function buildApp(): Promise<FastifyInstance> {
       reply.status(500).send({
         success: false,
         message: 'Internal Server Error',
-        error: config.isProduction ? 'An unexpected error occurred' : (error instanceof Error ? error.message : 'Unknown error')
+        error: env.NODE_ENV !== 'production' ? (error instanceof Error ? error.message : 'Unknown error') : 'An unexpected error occurred'
       });
     });
+
+    // Log all registered routes in development
+    if (env.NODE_ENV !== 'production') {
+      const routes = app.printRoutes();
+      logger.debug(`Registered routes:\n${routes}`);
+    }
 
     return app;
   } catch (error) {

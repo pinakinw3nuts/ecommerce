@@ -1,52 +1,78 @@
 import { FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
 import { verify } from 'jsonwebtoken';
-import { config } from '../config';
+import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
 /**
- * JWT user interface
+ * Interface representing the decoded JWT user data
  */
 export interface JwtUser {
   id: string;
   email: string;
   roles: string[];
-  iat: number;
-  exp: number;
+  name?: string;
+  exp?: number;
+  iat?: number;
+  [key: string]: unknown;
 }
 
 /**
  * Authentication middleware for Fastify
- * Verifies JWT token and attaches user to request
+ * Verifies JWT token from Authorization header
  */
-export function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction): void {
+export function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) {
   try {
     const authHeader = req.headers.authorization;
     
     if (!authHeader) {
-      reply.code(401).send({ message: 'No authorization header provided' });
-      return done(new Error('No authorization header provided'));
+      logger.warn('Authentication failed: No authorization header');
+      reply.status(401).send({
+        success: false,
+        message: 'Authentication required',
+        error: 'UNAUTHORIZED'
+      });
+      return;
     }
-
-    const token = authHeader.split(' ')[1];
+    
+    // Extract token from header (Bearer <token>)
+    const token = authHeader.replace('Bearer ', '');
     
     if (!token) {
-      reply.code(401).send({ message: 'No token provided' });
-      return done(new Error('No token provided'));
+      logger.warn('Authentication failed: Empty token');
+      reply.status(401).send({
+        success: false,
+        message: 'Authentication token required',
+        error: 'UNAUTHORIZED'
+      });
+      return;
     }
-
+    
     try {
-      const decoded = verify(token, config.jwtSecret) as JwtUser;
+      const decoded = verify(token, env.JWT_SECRET) as JwtUser;
       (req as any).user = decoded;
       done();
     } catch (error) {
-      logger.error('Token verification failed', { error });
-      reply.code(401).send({ message: 'Invalid token' });
-      return done(new Error('Invalid token'));
+      logger.warn('Authentication failed: Invalid token', { 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+      
+      reply.status(401).send({
+        success: false,
+        message: 'Invalid or expired authentication token',
+        error: 'UNAUTHORIZED'
+      });
     }
   } catch (error) {
-    logger.error('Auth middleware error', { error });
-    reply.code(500).send({ message: 'Internal server error' });
-    return done(error instanceof Error ? error : new Error('Internal server error'));
+    logger.error('Error in authentication middleware', { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
+    reply.status(500).send({
+      success: false,
+      message: 'Internal server error during authentication',
+      error: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
@@ -73,7 +99,7 @@ export function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHa
 export function requireRoles(requiredRoles: string[]) {
   return (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction): void => {
     const contextLogger = logger.child({ context: 'requireRoles' });
-    const user = (req as any).user;
+    const user = (req as any).user as JwtUser;
     
     if (!user) {
       reply.code(401).send({ message: 'Authentication required' });
