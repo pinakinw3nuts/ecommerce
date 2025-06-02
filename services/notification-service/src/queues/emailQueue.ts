@@ -1,7 +1,7 @@
-import { Queue, QueueOptions, Job, JobsOptions } from 'bullmq';
+import { Queue, QueueOptions, Job, JobsOptions, ConnectionOptions } from 'bullmq';
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../utils/logger';
-import { redisConnection } from '../utils/redis';
+import { redisConnection, MockRedis } from '../utils/redis';
 import { config } from '../config';
 import { 
   logNotificationSending,
@@ -41,11 +41,16 @@ export interface EmailJobData {
  */
 const QUEUE_NAME = 'email-queue';
 
+// Determine if we should use mock queue
+const useMockQueue = config.useMockRedis;
+
 /**
  * Queue configuration
  */
 const queueOptions: QueueOptions = {
-  connection: redisConnection,
+  connection: redisConnection instanceof MockRedis 
+    ? undefined 
+    : redisConnection as unknown as ConnectionOptions,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -64,6 +69,7 @@ const queueOptions: QueueOptions = {
 // Mock implementation for development mode
 class MockEmailQueue {
   private jobs: Map<string, { id: string, data: EmailJobData, status: string }> = new Map();
+  private initialized: boolean = false;
   
   constructor() {
     logger.warn('Using mock email queue - emails will be logged but not sent');
@@ -83,10 +89,12 @@ class MockEmailQueue {
   }
   
   async close(): Promise<void> {
+    this.initialized = false;
     logger.info('[MOCK] Email queue closed');
   }
   
   async waitUntilReady(): Promise<void> {
+    this.initialized = true;
     logger.info('[MOCK] Email queue ready');
   }
   
@@ -121,8 +129,8 @@ class MockEmailQueue {
 let emailQueue: Queue<EmailJobData> | MockEmailQueue;
 
 try {
-  if (config.isDevelopment && process.env.USE_MOCK_REDIS === 'true') {
-    emailQueue = new MockEmailQueue() as any;
+  if (useMockQueue) {
+    emailQueue = new MockEmailQueue();
   } else {
     emailQueue = new Queue<EmailJobData>(QUEUE_NAME, queueOptions);
   }
@@ -130,7 +138,7 @@ try {
   logger.error(`Error creating email queue: ${error}`);
   if (config.isDevelopment) {
     logger.warn('Falling back to mock email queue in development mode');
-    emailQueue = new MockEmailQueue() as any;
+    emailQueue = new MockEmailQueue();
   } else {
     throw error;
   }
@@ -192,16 +200,31 @@ export async function queueEmail(data: EmailJobData): Promise<string> {
  * Function to get a job by ID
  */
 export async function getEmailJob(jobId: string): Promise<Job<EmailJobData> | null> {
-  const job = await emailQueue.getJob(jobId);
-  return job || null;
+  try {
+    const job = await emailQueue.getJob(jobId);
+    return job || null;
+  } catch (error) {
+    logger.error(`Error getting email job ${jobId}: ${error}`);
+    if (config.isDevelopment) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 /**
  * Close the queue connections
  */
 export async function closeEmailQueue(): Promise<void> {
-  await emailQueue.close();
-  logger.info('Email queue connections closed');
+  try {
+    await emailQueue.close();
+    logger.info('Email queue connections closed');
+  } catch (error) {
+    logger.error(`Error closing email queue: ${error}`);
+    if (!config.isDevelopment) {
+      throw error;
+    }
+  }
 }
 
 /**
@@ -214,7 +237,14 @@ export async function initializeEmailQueue(): Promise<void> {
     logger.info('Email queue initialized successfully');
   } catch (error) {
     logger.error(`Error initializing email queue: ${error}`);
-    throw error;
+    if (config.isDevelopment) {
+      logger.warn('Falling back to mock email queue after initialization failure');
+      emailQueue = new MockEmailQueue();
+      await emailQueue.waitUntilReady();
+      logger.info('Mock email queue initialized as fallback');
+    } else {
+      throw error;
+    }
   }
 }
 

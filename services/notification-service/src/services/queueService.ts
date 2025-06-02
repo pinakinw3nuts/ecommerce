@@ -1,7 +1,11 @@
 import { Queue, Worker, QueueEvents } from 'bullmq';
 import logger from '../utils/logger';
 import { emailQueue, initializeEmailQueue, closeEmailQueue } from '../queues/emailQueue';
+import { MockRedis } from '../utils/redis';
 import { config } from '../config';
+
+// Determine if we should use mock queue
+const useMockQueue = config.useMockRedis;
 
 /**
  * Initialize all queues and their event listeners
@@ -11,11 +15,20 @@ export async function initializeQueues(): Promise<void> {
     logger.info('Initializing notification queues...');
     
     // Initialize email queue
-    await initializeEmailQueue();
-    
-    // Set up event listeners for the email queue if not in mock mode
-    if (!(process.env.USE_MOCK_REDIS === 'true' && config.isDevelopment)) {
-      setupQueueEventListeners(emailQueue as Queue, 'email');
+    try {
+      await initializeEmailQueue();
+      
+      // Set up event listeners for the email queue if not in mock mode
+      if (!useMockQueue && emailQueue instanceof Queue) {
+        setupQueueEventListeners(emailQueue as Queue, 'email');
+      }
+    } catch (error) {
+      // In development mode, continue even if queue initialization fails
+      if (config.isDevelopment) {
+        logger.warn('Email queue initialization failed in development mode - continuing with limited functionality');
+      } else {
+        throw error;
+      }
     }
     
     logger.info('Notification queues initialized successfully');
@@ -24,7 +37,12 @@ export async function initializeQueues(): Promise<void> {
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
     });
-    throw error;
+    
+    if (config.isDevelopment) {
+      logger.warn('Failed to initialize queues in development mode - continuing with limited functionality');
+    } else {
+      throw error;
+    }
   }
 }
 
@@ -34,7 +52,7 @@ export async function initializeQueues(): Promise<void> {
 function setupQueueEventListeners(queue: Queue, queueName: string): void {
   try {
     // Skip in development mode with mock Redis
-    if (process.env.USE_MOCK_REDIS === 'true' && config.isDevelopment) {
+    if (useMockQueue) {
       logger.info(`Skipping queue event listeners setup for ${queueName} in mock mode`);
       return;
     }
@@ -222,7 +240,7 @@ export async function getQueueMetrics(): Promise<{
  */
 export async function retryFailedJobs(queueName: 'email'): Promise<number> {
   try {
-    let queue: Queue;
+    let queue: any;
     
     // Get the appropriate queue
     switch (queueName) {
@@ -247,6 +265,10 @@ export async function retryFailedJobs(queueName: 'email'): Promise<number> {
     logger.error(`Failed to retry failed jobs for ${queueName} queue:`, {
       error: error instanceof Error ? error.message : 'Unknown error',
     });
+    
+    if (config.isDevelopment) {
+      return 0;
+    }
     throw error;
   }
 }
@@ -278,7 +300,14 @@ export async function closeQueues(): Promise<void> {
     logger.info('Closing notification queues...');
     
     // Close email queue components
-    await closeEmailQueue();
+    try {
+      await closeEmailQueue();
+    } catch (error) {
+      logger.error(`Error closing email queue: ${error}`);
+      if (!config.isDevelopment) {
+        throw error;
+      }
+    }
     
     // Add other queue closures here as they are created
     
@@ -287,6 +316,9 @@ export async function closeQueues(): Promise<void> {
     logger.error('Failed to close queues:', {
       error: error instanceof Error ? error.message : 'Unknown error',
     });
-    throw error;
+    
+    if (!config.isDevelopment) {
+      throw error;
+    }
   }
 } 

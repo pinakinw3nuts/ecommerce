@@ -8,7 +8,7 @@ import {
 } from '../models/NotificationLog';
 import { NotificationLogRepository } from '../repositories/NotificationLogRepository';
 import { InMemoryNotificationLogRepository } from '../repositories/InMemoryNotificationLogRepository';
-import { logger } from '../utils/logger';
+import logger from '../utils/logger';
 import { config } from '../config';
 
 // Default repository is in-memory, but this could be swapped with a database implementation

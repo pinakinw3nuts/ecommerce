@@ -1,0 +1,55 @@
+{
+  "name": "cms-service",
+  "version": "1.0.0",
+  "description": "CMS microservice for e-commerce platform",
+  "main": "dist/server.js",
+  "scripts": {
+    "start": "node -r module-alias/register dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/server.ts",
+    "build": "tsc && tsc-alias",
+    "lint": "eslint . --ext .ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typeorm": "typeorm-ts-node-commonjs -r tsconfig-paths/register"
+  },
+  "_moduleAliases": {
+    "@": "dist"
+  },
+  "dependencies": {
+    "@fastify/cors": "^8.3.0",
+    "@fastify/helmet": "^11.1.0",
+    "@fastify/jwt": "^9.1.0",
+    "@fastify/rate-limit": "^8.0.3",
+    "@fastify/swagger": "^8.8.0",
+    "@fastify/swagger-ui": "^1.10.1",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.24.3",
+    "jsonwebtoken": "^9.0.2",
+    "module-alias": "^2.2.3",
+    "pg": "^8.11.3",
+    "pino": "^8.16.2",
+    "pino-pretty": "^10.2.3",
+    "reflect-metadata": "^0.1.13",
+    "slugify": "^1.6.6",
+    "typeorm": "^0.3.17",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.4",
+    "@types/node": "^20.8.10",
+    "@types/pg": "^8.10.7",
+    "@types/supertest": "^2.0.15",
+    "@typescript-eslint/eslint-plugin": "^6.9.1",
+    "@typescript-eslint/parser": "^6.9.1",
+    "@vitest/coverage-v8": "^3.1.4",
+    "eslint": "^8.52.0",
+    "supertest": "^6.3.3",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "tsc-alias": "^1.8.8",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.2.2",
+    "vitest": "^3.1.4"
+  }
+}

@@ -8,6 +8,7 @@ export interface Config {
   isTest: boolean;
   isProduction: boolean;
   redisUrl: string;
+  useMockRedis: boolean;
   jwtSecret: string;
   serviceTokens: string[];
   emailFrom: string;
@@ -55,6 +56,7 @@ const envSchema = z.object({
   
   // Redis configuration
   REDIS_URL: z.string().url().optional().default('redis://localhost:6379'),
+  USE_MOCK_REDIS: z.enum(['true', 'false']).optional().default('false'),
   
   // Authentication
   JWT_SECRET: z.string().min(16).optional().default('development-jwt-secret-key-minimum-16-chars'),
@@ -84,6 +86,9 @@ const envSchema = z.object({
 // Extract and validate environment variables
 const env = envSchema.parse(process.env);
 
+// Determine if we should use mock Redis
+const useMockRedis = env.NODE_ENV === 'development' && env.USE_MOCK_REDIS === 'true';
+
 // Configuration object
 const config: Config = {
   port: env.PORT,
@@ -93,6 +98,7 @@ const config: Config = {
   isProduction: env.NODE_ENV === 'production',
   
   redisUrl: env.REDIS_URL,
+  useMockRedis,
   
   jwtSecret: env.JWT_SECRET,
   serviceTokens: env.SERVICE_TOKENS,

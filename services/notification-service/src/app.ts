@@ -5,20 +5,17 @@ import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import { config } from './config';
 import logger from './utils/logger';
-import { initializeQueues } from './services/queueService';
 import { healthRoutes } from './routes/health.routes';
 import { notificationRoutes } from './routes/notification.routes';
-import { testRoutes } from './routes/test.routes';
 import { notificationLogRoutes } from './routes/notification-logs.routes';
 import { serviceAuthGuard } from './middleware/serviceAuthGuard';
 import { webhookRoutes } from './routes/webhook.routes';
 
 /**
- * Build and configure the Fastify application
+ * Create and configure a Fastify instance
  */
-export async function buildApp(): Promise<FastifyInstance> {
-  // Create Fastify instance with logging configuration
-  const app = fastify({
+function createFastifyInstance(): FastifyInstance {
+  return fastify({
     logger: {
       level: config.isDevelopment ? 'debug' : 'info',
       transport: config.isDevelopment ? {
@@ -28,59 +25,70 @@ export async function buildApp(): Promise<FastifyInstance> {
           ignore: 'pid,hostname',
         }
       } : undefined
-    }
-  });
-
-  try {
-    // Initialize queues
-    try {
-      await initializeQueues();
-      logger.info('Queue system initialized');
-    } catch (error) {
-      if (config.isDevelopment) {
-        logger.warn('Queue system initialization failed in development mode - continuing with limited functionality', {
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      } else {
-        throw error;
+    },
+    // Disable strict mode for schema validation to allow 'example' keyword
+    ajv: {
+      customOptions: {
+        strict: false,
+        strictSchema: false
       }
-    }
+    },
+    // Add reasonable timeout values
+    connectionTimeout: 30000, // 30 seconds
+    // Disable request logging to reduce noise during development
+    disableRequestLogging: config.isDevelopment
+  });
+}
 
-    // Register JWT authentication plugin
-    await app.register(fastifyJwt, {
-      secret: config.jwtSecret
-    });
+/**
+ * Register core plugins with Fastify
+ */
+async function registerCorePlugins(app: FastifyInstance): Promise<void> {
+  // Register JWT authentication plugin
+  logger.debug('Registering JWT plugin...');
+  await app.register(fastifyJwt, {
+    secret: config.jwtSecret
+  });
+  logger.debug('JWT plugin registered successfully');
 
-    // Register service auth guard globally - this checks for service tokens
-    // before the JWT check happens in route-specific auth guards
-    app.addHook('preHandler', serviceAuthGuard);
+  // Register service auth guard globally
+  logger.debug('Adding service auth guard...');
+  app.addHook('preHandler', serviceAuthGuard);
+  logger.debug('Service auth guard added successfully');
 
-    // Register CORS plugin
-    await app.register(fastifyCors, {
-      origin: config.corsOrigins === '*' ? '*' : config.corsOrigins
-    });
+  // Register CORS plugin
+  logger.debug('Registering CORS plugin...');
+  await app.register(fastifyCors, {
+    origin: config.corsOrigins === '*' ? '*' : config.corsOrigins
+  });
+  logger.debug('CORS plugin registered successfully');
+}
 
-    // Register Swagger documentation plugins
-    await app.register(fastifySwagger, {
-      swagger: {
-        info: {
-          title: 'Notification Service API',
-          description: 'API for sending and managing notifications',
-          version: '1.0.0'
-        },
-        externalDocs: {
-          url: 'https://swagger.io',
-          description: 'Find more info here'
-        },
-        host: 'localhost:3014',
-        schemes: ['http', 'https'],
-        consumes: ['application/json'],
-        produces: ['application/json'],
-        securityDefinitions: {
+/**
+ * Register documentation plugins
+ */
+async function registerDocumentationPlugins(app: FastifyInstance): Promise<void> {
+  // Register Swagger documentation plugins
+  logger.debug('Registering Swagger plugins...');
+  await app.register(fastifySwagger, {
+    openapi: {
+      info: {
+        title: 'Notification Service API',
+        description: 'API for sending and managing notifications',
+        version: '1.0.0'
+      },
+      servers: [
+        {
+          url: `http://${process.platform === 'win32' ? 'localhost' : '0.0.0.0'}:${config.port}`,
+          description: 'Development server'
+        }
+      ],
+      components: {
+        securitySchemes: {
           bearerAuth: {
-            type: 'apiKey',
-            name: 'Authorization',
-            in: 'header'
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT'
           },
           serviceAuth: {
             type: 'apiKey',
@@ -89,44 +97,129 @@ export async function buildApp(): Promise<FastifyInstance> {
           }
         }
       }
-    });
-
-    await app.register(fastifySwaggerUi, {
-      routePrefix: '/documentation'
-    });
-
-    // Register routes
-    await app.register(notificationRoutes, { prefix: '/api/notifications' });
-    await app.register(notificationLogRoutes, { prefix: '/api/notification-logs' });
-    await app.register(webhookRoutes, { prefix: '/api/webhooks' });
-    
-    // Register health routes
-    await app.register(healthRoutes);
-    
-    // Register test routes only in non-production environments
-    if (config.isDevelopment || config.environment === 'test' || config.environment === 'staging') {
-      logger.warn('Test routes enabled - these should not be exposed in production');
-      await app.register(testRoutes, { prefix: '/api/test' });
     }
+  });
+  logger.debug('Swagger plugin registered successfully');
 
-    // Global error handler
-    app.setErrorHandler((error, request, reply) => {
-      logger.error('Unhandled error:', {
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        } : error,
-        url: request.url,
-        method: request.method
-      });
+  logger.debug('Registering Swagger UI plugin...');
+  await app.register(fastifySwaggerUi, {
+    routePrefix: '/documentation',
+    uiConfig: {
+      docExpansion: 'list',
+      deepLinking: true
+    },
+    uiHooks: {
+      onRequest: function (request, reply, next) { next() },
+      preHandler: function (request, reply, next) { next() }
+    },
+    staticCSP: true,
+    transformStaticCSP: (header) => header
+  });
+  logger.debug('Swagger UI plugin registered successfully');
+}
 
-      reply.status(500).send({
-        message: 'Internal Server Error',
-        error: config.isDevelopment ? error.message : 'An unexpected error occurred'
+/**
+ * Register route handlers
+ */
+async function registerRoutes(app: FastifyInstance): Promise<void> {
+  // Register health routes first (simplest route)
+  logger.debug('Registering health routes...');
+  await app.register(healthRoutes);
+  logger.debug('Health routes registered successfully');
+  
+  // Register API routes
+  try {
+    logger.debug('Registering notification routes...');
+    await app.register(notificationRoutes, { prefix: '/api/notifications' });
+    logger.debug('Notification routes registered successfully');
+  } catch (error) {
+    logger.error('Failed to register notification routes', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    throw error;
+  }
+  
+  try {
+    logger.debug('Registering notification log routes...');
+    await app.register(notificationLogRoutes, { prefix: '/api/notification-logs' });
+    logger.debug('Notification log routes registered successfully');
+  } catch (error) {
+    logger.error('Failed to register notification log routes', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    throw error;
+  }
+  
+  try {
+    logger.debug('Registering webhook routes...');
+    await app.register(webhookRoutes, { prefix: '/api/webhooks' });
+    logger.debug('Webhook routes registered successfully');
+  } catch (error) {
+    logger.error('Failed to register webhook routes', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    throw error;
+  }
+  
+  // Register test routes only in development or test environments
+  if (config.isDevelopment || config.environment === 'test') {
+    try {
+      const { testRoutes } = await import('./routes/test.routes');
+      logger.warn('Test routes enabled - these should not be exposed in production');
+      logger.debug('Registering test routes...');
+      await app.register(testRoutes, { prefix: '/api/test' });
+      logger.debug('Test routes registered successfully');
+    } catch (error) {
+      logger.error('Failed to register test routes', {
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
+      // Don't fail the entire application if test routes can't be registered
+      logger.warn('Continuing without test routes');
+    }
+  }
+}
+
+/**
+ * Set up global error handler
+ */
+function setupErrorHandler(app: FastifyInstance): void {
+  logger.debug('Setting up global error handler...');
+  app.setErrorHandler((error, request, reply) => {
+    logger.error('Unhandled error:', {
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : error,
+      url: request.url,
+      method: request.method
     });
 
+    reply.status(500).send({
+      message: 'Internal Server Error',
+      error: config.isDevelopment ? error.message : 'An unexpected error occurred'
+    });
+  });
+  logger.debug('Global error handler set up successfully');
+}
+
+/**
+ * Build and configure the Fastify application
+ */
+export async function buildApp(): Promise<FastifyInstance> {
+  try {
+    logger.debug('Creating Fastify instance...');
+    const app = createFastifyInstance();
+    
+    // Set error handler early
+    setupErrorHandler(app);
+    
+    logger.debug('Registering application plugins...');
+    await registerCorePlugins(app);
+    await registerDocumentationPlugins(app);
+    await registerRoutes(app);
+
+    logger.debug('Fastify application built successfully');
     return app;
   } catch (error) {
     logger.error('Failed to build application:', {

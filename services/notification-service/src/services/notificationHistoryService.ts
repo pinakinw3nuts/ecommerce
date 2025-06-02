@@ -11,7 +11,7 @@ import {
   recordFailedAttempt,
   queryNotificationLogs
 } from './notificationLogService';
-import { logger } from '../utils/logger';
+import logger from '../utils/logger';
 
 /**
  * Interface for creating a notification history entry

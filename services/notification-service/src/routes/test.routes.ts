@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { logger } from '../utils/logger';
+import logger from '../utils/logger';
 import { combinedAuthGuard } from '../middleware/combinedAuthGuard';
 import { roleGuard } from '../middleware/roleGuard';
 import { validateRequest } from '../middleware/validateRequest';

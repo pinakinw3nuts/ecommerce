@@ -1,5 +1,5 @@
 import { queueEmail } from '../queues/emailQueue';
-import { logger } from '../utils/logger';
+import logger from '../utils/logger';
 import { NotificationEvents } from '../constants';
 import { NotificationStatus } from '../models/NotificationLog';
 import { templates } from '../templates';
