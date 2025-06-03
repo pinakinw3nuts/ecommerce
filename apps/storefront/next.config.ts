@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   images: {
-    domains: ['localhost', 'via.placeholder.com', 'picsum.photos'],
+    domains: ['localhost', 'via.placeholder.com', 'picsum.photos', 'images.unsplash.com'],
   },
   webpack: (config) => {
     config.resolve.alias = {

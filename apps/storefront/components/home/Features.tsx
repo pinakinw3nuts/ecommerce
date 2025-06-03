@@ -40,19 +40,32 @@ export default function Features() {
       opacity: 1,
       transition: {
         staggerChildren: 0.1,
+        delayChildren: 0.3,
       },
     },
   };
 
   const item = {
     hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0 },
+    show: { 
+      opacity: 1, 
+      y: 0,
+      transition: {
+        duration: 0.5,
+      }
+    },
   };
 
   return (
-    <section className="py-12 md:py-20" aria-labelledby="features-heading">
+    <section className="py-12 md:py-20 bg-muted/30" aria-labelledby="features-heading">
       <div className="container mx-auto px-4 max-w-[1440px]">
-        <div className="text-center mb-12">
+        <motion.div 
+          className="text-center mb-12"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+        >
           <h2 
             id="features-heading" 
             className="text-2xl md:text-3xl font-bold mb-3"
@@ -60,12 +73,12 @@ export default function Features() {
             Why Shop With Us?
           </h2>
           <p className="text-gray-500 max-w-2xl mx-auto">
-            We go the extra mile to deliver world-class shopping experience.
+            We go the extra mile to deliver a world-class shopping experience.
           </p>
-        </div>
+        </motion.div>
 
         <motion.div 
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 gap-y-8"
           variants={container}
           initial="hidden"
           whileInView="show"
@@ -73,9 +86,9 @@ export default function Features() {
         >
           {features.map((feature, index) => (
             <motion.div key={index} variants={item}>
-              <Card className="h-full hover:shadow-md transition-shadow">
+              <Card className="h-full hover:shadow-md transition-shadow border-primary/10">
                 <div className="p-6 flex flex-col items-center text-center">
-                  <div className="text-primary mb-4">
+                  <div className="text-primary mb-4 bg-primary/5 p-3 rounded-full">
                     {feature.icon}
                   </div>
                   <h3 className="font-medium text-lg mb-2">{feature.title}</h3>

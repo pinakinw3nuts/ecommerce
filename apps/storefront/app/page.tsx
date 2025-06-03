@@ -1,5 +1,13 @@
 import { Metadata } from 'next';
 import axios from 'axios';
+import Hero from '@components/home/Hero';
+import Features from '@components/home/Features';
+import Testimonials from '../components/sections/Testimonials';
+import ProductHighlights from '@components/home/ProductHighlights';
+import NewsletterSignup from '@components/home/NewsletterSignup';
+import Footer from '../components/layout/Footer';
+import FeaturedCategories from '../components/sections/FeaturedCategories';
+import PromoBanner from '../components/sections/PromoBanner';
 
 type CMSBlock = {
   type: string;
@@ -68,84 +76,63 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div style={{
-      maxWidth: 'var(--max-width)',
-      margin: '0 auto',
-      padding: 'var(--spacing-6) var(--spacing-4)',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '3rem'
-    }}>
-      {cmsBlocks.map((block, idx) => {
-        if (block.type === 'banner') {
-          return (
-            <div key={idx} style={{
-              width: '100%',
-              overflow: 'hidden',
-              borderRadius: '0.375rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
-            }}>
-              <img src={block.content.imageUrl} alt={block.content.alt} style={{
-                width: '100%',
-                height: 'auto'
-              }} />
-            </div>
-          );
-        }
-        if (block.type === 'text') {
-          return (
-            <div key={idx} style={{
-              textAlign: 'center',
-              fontSize: '1.125rem',
-              color: 'var(--text-color)',
-              opacity: 0.7
-            }}>
-              {block.content.text}
-            </div>
-          );
-        }
-        return null;
-      })}
+    <>
+      <Hero />
+      <Features />
+      <PromoBanner />
+      <Testimonials />
+      <ProductHighlights />
+      <FeaturedCategories />
+      
+      <div className="max-w-[1440px] mx-auto px-4 py-12">
+        {cmsBlocks.map((block, idx) => {
+          if (block.type === 'banner') {
+            return (
+              <div key={idx} className="w-full overflow-hidden rounded-md shadow-sm mb-12">
+                <img 
+                  src={block.content.imageUrl} 
+                  alt={block.content.alt} 
+                  className="w-full h-auto"
+                />
+              </div>
+            );
+          }
+          if (block.type === 'text') {
+            return (
+              <div key={idx} className="text-center text-lg text-gray-600 mb-12">
+                {block.content.text}
+              </div>
+            );
+          }
+          return null;
+        })}
 
-      <section>
-        <h2 style={{
-          fontSize: '1.5rem',
-          fontWeight: '600',
-          marginBottom: '1rem'
-        }}>Featured Products</h2>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-          gap: '1.5rem'
-        }}>
-          {featuredProducts.map((product) => (
-            <a key={product.id} href={`/products/${product.slug}`} style={{
-              border: '1px solid var(--border-color)',
-              padding: '1rem',
-              borderRadius: '0.375rem',
-              textDecoration: 'none',
-              color: 'inherit',
-              transition: 'box-shadow 0.2s ease'
-            }}>
-              <img src={product.image} alt={product.name} style={{
-                width: '100%',
-                height: '12rem',
-                objectFit: 'cover',
-                borderRadius: '0.25rem',
-                marginBottom: '0.5rem'
-              }} />
-              <div style={{
-                fontSize: '0.875rem',
-                fontWeight: '500'
-              }}>{product.name}</div>
-              <div style={{
-                color: 'var(--text-color)',
-                opacity: 0.7
-              }}>${product.price}</div>
-            </a>
-          ))}
-        </div>
-      </section>
-    </div>
+        <section className="mt-12">
+          <h2 className="text-2xl font-semibold mb-6">Featured Products</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {featuredProducts.map((product) => (
+              <a 
+                key={product.id} 
+                href={`/products/${product.slug}`} 
+                className="group border border-gray-200 rounded-lg p-4 transition-shadow hover:shadow-md"
+              >
+                <div className="aspect-square overflow-hidden rounded-md mb-3">
+                  <img 
+                    src={product.image} 
+                    alt={product.name} 
+                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                  />
+                </div>
+                <h3 className="font-medium">{product.name}</h3>
+                <p className="text-gray-600">${product.price}</p>
+              </a>
+            ))}
+          </div>
+        </section>
+      </div>
+      
+      <NewsletterSignup />
+      <Footer />
+    </>
   );
 }
