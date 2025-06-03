@@ -1,0 +1,7 @@
+Sitemap: https://mystore.com/sitemap.xml
+User-agent: *
+Allow: /
+
+# Disallow admin and api routes
+Disallow: /api/
+Disallow: /admin/ 

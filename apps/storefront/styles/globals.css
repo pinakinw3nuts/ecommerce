@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --background-color: theme(colors.white);
+  --text-color: theme(colors.gray.900);
+  --border-color: theme(colors.gray.200);
+  --hover-color: theme(colors.black);
+  --max-width: 80rem; /* 1280px - equivalent to max-w-7xl */
+  --spacing-4: 1rem; /* px-4 */
+  --spacing-6: 1.5rem; /* py-6 */
+  --spacing-8: 2rem; /* mt-8 */
+}
+
+html,
+body {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+} 
