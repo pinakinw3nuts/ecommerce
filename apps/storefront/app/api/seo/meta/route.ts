@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 // Mock SEO data based on slug
 const seoData = {
@@ -153,11 +152,82 @@ const seoData = {
 };
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const slug = searchParams.get('slug');
-
-  // Return data for requested slug or default to home
-  const data = slug && slug in seoData ? seoData[slug as keyof typeof seoData] : seoData.home;
-
-  return NextResponse.json(data);
+  try {
+    // Get slug from query params
+    const searchParams = request.nextUrl.searchParams;
+    const slug = searchParams.get('slug');
+    
+    if (!slug) {
+      return NextResponse.json(
+        { error: 'Slug parameter is required' },
+        { status: 400 }
+      );
+    }
+    
+    // In a real app, you would fetch SEO data from a database
+    // Here we're creating mock SEO data based on the slug
+    const productName = slug
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+    
+    // Determine category based on slug
+    let category = 'product';
+    if (slug.includes('shirt') || slug.includes('tee') || slug.includes('sweater') || slug.includes('jacket')) {
+      category = 'clothing';
+    } else if (slug.includes('phone') || slug.includes('laptop') || slug.includes('headphone') || slug.includes('speaker')) {
+      category = 'electronics';
+    } else if (slug.includes('chair') || slug.includes('table') || slug.includes('sofa') || slug.includes('bed')) {
+      category = 'home furnishings';
+    } else if (slug.includes('watch') || slug.includes('glasses') || slug.includes('bag')) {
+      category = 'accessories';
+    } else if (slug.includes('cream') || slug.includes('lotion') || slug.includes('makeup')) {
+      category = 'beauty';
+    }
+    
+    // Generate meta title
+    const title = `${productName} | Premium ${category.charAt(0).toUpperCase() + category.slice(1)} | Shopfinity`;
+    
+    // Generate meta description
+    const descriptions = [
+      `Shop our premium quality ${productName.toLowerCase()}. Made with high-quality materials and designed for comfort and style. Free shipping on orders over $50.`,
+      `Discover our ${productName.toLowerCase()}, perfect for any occasion. Premium ${category} with exceptional craftsmanship and style. Shop now with free returns.`,
+      `Premium ${productName.toLowerCase()} now available at Shopfinity. Discover the difference in quality and comfort. Fast shipping and 30-day returns.`,
+      `Explore our best-selling ${productName.toLowerCase()}. Crafted from premium materials for lasting quality. Shop with confidence - free shipping & returns.`,
+    ];
+    
+    const description = descriptions[Math.floor(Math.random() * descriptions.length)];
+    
+    // Generate canonical URL
+    const canonicalUrl = `https://shopfinity.example.com/products/${slug}`;
+    
+    // Generate JSON-LD for rich snippets
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: productName,
+      description: description,
+      image: `https://shopfinity.example.com/images/products/${slug}.jpg`,
+      url: canonicalUrl,
+      offers: {
+        '@type': 'Offer',
+        priceCurrency: 'USD',
+        price: Math.floor(Math.random() * 150) + 19.99,
+        availability: 'https://schema.org/InStock',
+      },
+    };
+    
+    return NextResponse.json({
+      title,
+      description,
+      canonicalUrl,
+      jsonLd: JSON.stringify(jsonLd),
+    });
+  } catch (error) {
+    console.error('Error generating SEO metadata:', error);
+    return NextResponse.json(
+      { error: 'Failed to generate SEO metadata' },
+      { status: 500 }
+    );
+  }
 } 

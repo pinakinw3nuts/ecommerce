@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -13,12 +14,127 @@ import {
   MenuIcon,
   ChevronDownIcon
 } from '../icons';
+import { useCart } from '@/contexts/CartContext';
+import { useWishlist } from '@/contexts/WishlistContext';
+
+// Define the categories to match sidebar categories
+const searchCategories = [
+  { id: 'all', name: 'All Categories' },
+  { id: 'clothing', name: 'Clothing' },
+  { id: 'electronics', name: 'Electronics' },
+  { id: 'home', name: 'Home & Kitchen' },
+  { id: 'accessories', name: 'Accessories' },
+  { id: 'beauty', name: 'Beauty' },
+];
 
 export default function Header() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [cartCount, setCartCount] = useState(3);
-  const [wishlistCount, setWishlistCount] = useState(0);
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchCategory, setSearchCategory] = useState('all');
+  const { itemCount: cartItemCount } = useCart();
+  const { itemCount: wishlistItemCount } = useWishlist();
+
+  // Extract category and search from URL on initial load and when URL changes
+  useEffect(() => {
+    const categoryParam = searchParams.get('category');
+    const searchParam = searchParams.get('search');
+    
+    if (searchParam) {
+      setSearchQuery(searchParam);
+      console.log(`Header: Setting search query from URL: "${searchParam}"`);
+    }
+    
+    if (categoryParam) {
+      const matchedCategory = searchCategories.find(
+        cat => cat.id.toLowerCase() === categoryParam.toLowerCase()
+      );
+      if (matchedCategory) {
+        setSearchCategory(matchedCategory.id);
+        console.log(`Header: Setting category from URL: "${matchedCategory.id}"`);
+      }
+    }
+  }, [searchParams]);
+
+  const handleSearch = (e: FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      // Get the category ID to use in the URL
+      const categoryId = searchCategory === 'all' ? '' : searchCategory;
+      
+      // Create new URLSearchParams object
+      const params = new URLSearchParams();
+      
+      // If we have a search query, add it to the URL
+      if (searchQuery.trim()) {
+        params.set('search', searchQuery.trim());
+      }
+      
+      // Add category if selected
+      if (categoryId) {
+        params.set('category', categoryId);
+      }
+      
+      // Reset to page 1 when searching
+      params.set('page', '1');
+      
+      // Log the search attempt
+      console.log('Header Search:', {
+        query: searchQuery.trim() || '(no query)',
+        category: categoryId || 'all',
+        fullParams: params.toString(),
+        url: `/products?${params.toString()}`
+      });
+      
+      // Check if we have any parameters, otherwise go to base products page
+      const queryString = params.toString();
+      const url = queryString ? `/products?${queryString}` : '/products';
+      
+      // Navigate to products page with search parameters
+      // Use window.location for a full page refresh to ensure proper state reset
+      window.location.href = url;
+    } catch (error) {
+      console.error('Search error:', error);
+    }
+  };
+
+  // Handle direct category selection from dropdown (without search)
+  const handleCategoryChange = (newCategory: string) => {
+    setSearchCategory(newCategory);
+    
+    // If no search query, apply the category filter immediately
+    if (!searchQuery.trim()) {
+      // Create new URLSearchParams object
+      const params = new URLSearchParams();
+      
+      // Add category if not "all"
+      if (newCategory !== 'all') {
+        params.set('category', newCategory);
+      }
+      
+      // Reset to page 1
+      params.set('page', '1');
+      
+      // Log the category selection
+      console.log('Header Category Selection:', {
+        category: newCategory,
+        fullParams: params.toString(),
+        url: `/products?${params.toString()}`
+      });
+      
+      // Check if we have any parameters, otherwise go to base products page
+      const queryString = params.toString();
+      const url = queryString ? `/products?${queryString}` : '/products';
+      
+      // Navigate to products page with the category parameter
+      window.location.href = url;
+    }
+  };
 
   return (
     <header className="w-full">
@@ -82,29 +198,40 @@ export default function Header() {
 
             {/* Search Bar */}
             <div className="flex-grow hidden md:block">
-              <div className="flex w-full max-w-xl mx-auto">
+              <form onSubmit={handleSearch} className="flex w-full max-w-xl mx-auto border border-gray-300 rounded-md overflow-hidden">
                 <div className="relative flex flex-grow">
                   <input
                     type="text"
-                    placeholder="Searching for..."
-                    className="w-full py-2 pl-4 pr-12 border border-gray-300 rounded-l-md focus:outline-none"
+                    placeholder="Search for products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full py-2 pl-4 pr-12 border-0 focus:outline-none focus:ring-0"
                   />
-                  <button className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400">
+                  <button 
+                    type="submit"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label="Search"
+                  >
                     <SearchIcon className="h-5 w-5" />
                   </button>
                 </div>
-                <div className="relative">
-                  <select className="h-full py-2 px-4 border-y border-r border-gray-300 bg-white text-gray-700 appearance-none rounded-r-md focus:outline-none">
-                    <option>All Categories</option>
-                    <option>Fashion</option>
-                    <option>Electronics</option>
-                    <option>Home & Garden</option>
+                <div className="relative border-l border-gray-300">
+                  <select 
+                    className="h-full py-2 px-4 bg-white text-gray-700 appearance-none focus:outline-none cursor-pointer pr-8"
+                    value={searchCategory}
+                    onChange={(e) => handleCategoryChange(e.target.value)}
+                  >
+                    {searchCategories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
                     <ChevronDownIcon className="h-4 w-4 text-gray-400" />
                   </div>
                 </div>
-              </div>
+              </form>
             </div>
 
             {/* Icons */}
@@ -114,17 +241,17 @@ export default function Header() {
               </Link>
               <Link href="/wishlist" className="relative text-gray-600 hover:text-[#D23F57] transition-colors">
                 <HeartIcon className="h-6 w-6" />
-                {wishlistCount > 0 && (
+                {wishlistItemCount > 0 && (
                   <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-[#D23F57]">
-                    {wishlistCount}
+                    {wishlistItemCount}
                   </Badge>
                 )}
               </Link>
               <Link href="/cart" className="relative text-gray-600 hover:text-[#D23F57] transition-colors">
                 <CartIcon className="h-6 w-6" />
-                {cartCount > 0 && (
+                {cartItemCount > 0 && (
                   <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-[#D23F57]">
-                    {cartCount}
+                    {cartItemCount}
                   </Badge>
                 )}
               </Link>
@@ -163,26 +290,69 @@ export default function Header() {
               {categoryMenuOpen && (
                 <div className="absolute z-10 w-56 bg-white shadow-lg rounded-md border border-gray-200 mt-1">
                   <ul className="py-2">
-                    <li>
-                      <Link href="/category/fashion" className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]">
-                        Fashion
+                    <li key="all">
+                      <Link 
+                        href="#" 
+                        className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          console.log('All categories selected from header dropdown');
+                          
+                          // Navigate programmatically instead of using direct href
+                          const url = new URL('/products', window.location.origin);
+                          
+                          // Reset page to 1 when changing category
+                          url.searchParams.set('page', '1');
+                          
+                          // Log the constructed URL
+                          console.log(`Navigating to: ${url.toString()}`);
+                          
+                          // Navigate to the URL
+                          window.location.href = url.toString();
+                          
+                          // Close the menu
+                          setCategoryMenuOpen(false);
+                        }}
+                      >
+                        All Categories
                       </Link>
                     </li>
-                    <li>
-                      <Link href="/category/electronics" className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]">
-                        Electronics
-                      </Link>
-                    </li>
-                    <li>
-                      <Link href="/category/home" className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]">
-                        Home & Garden
-                      </Link>
-                    </li>
-                    <li>
-                      <Link href="/category/beauty" className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]">
-                        Beauty
-                      </Link>
-                    </li>
+                    {searchCategories.map(category => (
+                      category.id !== 'all' && (
+                        <li key={category.id}>
+                          <Link 
+                            href="#" 
+                            className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              console.log(`Header category selected: ${category.id}`);
+                              
+                              // Navigate programmatically instead of using direct href
+                              const url = new URL('/products', window.location.origin);
+                              
+                              // Add category parameter
+                              if (category.id !== 'all') {
+                                url.searchParams.set('category', category.id);
+                              }
+                              
+                              // Reset page to 1 when changing category
+                              url.searchParams.set('page', '1');
+                              
+                              // Log the constructed URL
+                              console.log(`Navigating to: ${url.toString()}`);
+                              
+                              // Navigate to the URL
+                              window.location.href = url.toString();
+                              
+                              // Close the menu
+                              setCategoryMenuOpen(false);
+                            }}
+                          >
+                            {category.name}
+                          </Link>
+                        </li>
+                      )
+                    ))}
                   </ul>
                 </div>
               )}
@@ -261,16 +431,40 @@ export default function Header() {
           <div className="container mx-auto px-4">
             {/* Mobile Search */}
             <div className="mb-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search for products..."
-                  className="w-full py-2 pl-4 pr-10 border border-gray-300 rounded-md focus:outline-none"
-                />
-                <button className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400">
-                  <SearchIcon className="h-5 w-5" />
-                </button>
-              </div>
+              <form onSubmit={handleSearch} className="flex border border-gray-300 rounded-md overflow-hidden">
+                <div className="relative flex-grow">
+                  <input
+                    type="text"
+                    placeholder="Search for products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full py-2 pl-4 pr-10 border-0 focus:outline-none focus:ring-0"
+                  />
+                  <button 
+                    type="submit"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label="Search"
+                  >
+                    <SearchIcon className="h-5 w-5" />
+                  </button>
+                </div>
+                <div className="relative border-l border-gray-300">
+                  <select 
+                    className="h-full py-2 px-4 bg-white text-gray-700 appearance-none focus:outline-none cursor-pointer pr-8"
+                    value={searchCategory}
+                    onChange={(e) => handleCategoryChange(e.target.value)}
+                  >
+                    {searchCategories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
+                    <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+                  </div>
+                </div>
+              </form>
             </div>
             
             {/* Mobile Navigation */}
@@ -285,26 +479,71 @@ export default function Header() {
                 </button>
                 {categoryMenuOpen && (
                   <ul className="pl-4 mt-2 space-y-2">
-                    <li>
-                      <Link href="/category/fashion" className="block py-1 text-gray-600 hover:text-[#D23F57]">
-                        Fashion
+                    <li key="all">
+                      <Link 
+                        href="#" 
+                        className="block py-1 text-gray-600 hover:text-[#D23F57]"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          console.log('All categories selected from mobile menu');
+                          
+                          // Navigate programmatically instead of using direct href
+                          const url = new URL('/products', window.location.origin);
+                          
+                          // Reset page to 1 when changing category
+                          url.searchParams.set('page', '1');
+                          
+                          // Log the constructed URL
+                          console.log(`Navigating to: ${url.toString()}`);
+                          
+                          // Navigate to the URL
+                          window.location.href = url.toString();
+                          
+                          // Close both menus
+                          setMobileMenuOpen(false);
+                          setCategoryMenuOpen(false);
+                        }}
+                      >
+                        All Categories
                       </Link>
                     </li>
-                    <li>
-                      <Link href="/category/electronics" className="block py-1 text-gray-600 hover:text-[#D23F57]">
-                        Electronics
-                      </Link>
-                    </li>
-                    <li>
-                      <Link href="/category/home" className="block py-1 text-gray-600 hover:text-[#D23F57]">
-                        Home & Garden
-                      </Link>
-                    </li>
-                    <li>
-                      <Link href="/category/beauty" className="block py-1 text-gray-600 hover:text-[#D23F57]">
-                        Beauty
-                      </Link>
-                    </li>
+                    {searchCategories.map(category => (
+                      category.id !== 'all' && (
+                        <li key={category.id}>
+                          <Link 
+                            href="#" 
+                            className="block py-1 text-gray-600 hover:text-[#D23F57]"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              console.log(`Mobile menu category selected: ${category.id}`);
+                              
+                              // Navigate programmatically instead of using direct href
+                              const url = new URL('/products', window.location.origin);
+                              
+                              // Add category parameter
+                              if (category.id !== 'all') {
+                                url.searchParams.set('category', category.id);
+                              }
+                              
+                              // Reset page to 1 when changing category
+                              url.searchParams.set('page', '1');
+                              
+                              // Log the constructed URL
+                              console.log(`Navigating to: ${url.toString()}`);
+                              
+                              // Navigate to the URL
+                              window.location.href = url.toString();
+                              
+                              // Close both menus
+                              setMobileMenuOpen(false);
+                              setCategoryMenuOpen(false);
+                            }}
+                          >
+                            {category.name}
+                          </Link>
+                        </li>
+                      )
+                    ))}
                   </ul>
                 )}
               </li>

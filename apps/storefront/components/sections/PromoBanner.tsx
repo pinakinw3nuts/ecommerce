@@ -5,15 +5,21 @@ import { Button } from '../ui/Button';
 export function PromoBanner() {
   // For animation, wrap section in <motion.section ...> if framer-motion is installed
   return (
-    <section
-      className="w-full bg-primary text-white py-12 px-4 flex items-center justify-center"
-      // as={motion.section} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} viewport={{ once: true }}
-    >
-      <div className="max-w-2xl w-full text-center flex flex-col items-center gap-4">
-        <h2 className="text-3xl sm:text-4xl font-extrabold mb-2">Summer Sale – Up to 50% Off</h2>
-        <p className="text-lg opacity-90 mb-6">Limited time only. Don't miss out on our hottest deals!</p>
-        <Button asChild size="lg" className="px-8 py-3 text-base font-semibold">
-          <Link href="/products">Shop Now</Link>
+    <section className="w-full py-16 px-4 flex flex-col items-center justify-center bg-gray-50">
+      <div className="max-w-4xl w-full text-center flex flex-col items-center">
+        <div className="bg-[#4285F4] text-white py-6 px-8 mb-4 w-full md:w-auto">
+          <h2 className="text-3xl sm:text-4xl font-bold">Summer Sale – Up to 50% Off</h2>
+        </div>
+        
+        <div className="bg-[#4285F4] text-white py-2 px-6 mb-8">
+          <p className="text-lg">Limited time only. Don't miss out on our hottest deals!</p>
+        </div>
+        
+        <Button 
+          asChild 
+          className="bg-black text-white hover:bg-black/90 px-8 py-3 rounded-none"
+        >
+          <Link href="/products?sale=true">Shop Now</Link>
         </Button>
       </div>
     </section>

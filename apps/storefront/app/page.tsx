@@ -1,13 +1,14 @@
 import { Metadata } from 'next';
 import axios from 'axios';
-import Hero from '@components/home/Hero';
-import Features from '@components/home/Features';
-import Testimonials from '../components/sections/Testimonials';
-import ProductHighlights from '@components/home/ProductHighlights';
+import Image from 'next/image';
+import HeroSection from '@components/home/Hero';
+import CategoryHighlights from '@components/home/CategoryHighlights';
+import ProductGrid from '@components/home/ProductGrid';
+import DealsBanner from '@components/home/DealsBanner';
 import NewsletterSignup from '@components/home/NewsletterSignup';
-import Footer from '../components/layout/Footer';
+import Testimonials from '@components/sections/Testimonials';
+import PromoBanner from '@components/sections/PromoBanner';
 import FeaturedCategories from '../components/sections/FeaturedCategories';
-import PromoBanner from '../components/sections/PromoBanner';
 
 type CMSBlock = {
   type: string;
@@ -27,32 +28,15 @@ const serverApi = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api',
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  try {
-    const { data } = await serverApi.get('/seo/meta?slug=home');
-    return {
-      title: data.title,
-      description: data.description,
-      alternates: { canonical: data.canonicalUrl },
-      openGraph: {
-        title: data.title,
-        description: data.description,
-        url: data.canonicalUrl,
-      },
-    };
-  } catch (error) {
-    console.error('Error fetching SEO metadata:', error);
-    return {
-      title: 'MyStore – Home',
-      description: 'Welcome to MyStore!',
-    };
-  }
-}
+export const metadata: Metadata = {
+  title: 'MyStore – Modern Fashion E-commerce',
+  description: 'Discover the latest trends in fashion with our exclusive collection.',
+};
 
 async function fetchCMS(): Promise<CMSBlock[]> {
   try {
     const { data } = await serverApi.get('/cms/home');
-    return data.blocks;
+    return data.blocks || [];
   } catch (error) {
     console.error('Error fetching CMS data:', error);
     return [];
@@ -62,6 +46,10 @@ async function fetchCMS(): Promise<CMSBlock[]> {
 async function fetchFeaturedProducts(): Promise<Product[]> {
   try {
     const { data } = await serverApi.get('/products?featured=true&limit=4');
+    if (!data || !data.products) {
+      console.log('Products API returned unexpected data structure:', data);
+      return [];
+    }
     return data.products;
   } catch (error) {
     console.error('Error fetching featured products:', error);
@@ -70,18 +58,23 @@ async function fetchFeaturedProducts(): Promise<Product[]> {
 }
 
 export default async function HomePage() {
-  const [cmsBlocks, featuredProducts] = await Promise.all([
+  // Use Promise.allSettled to ensure the page renders even if one API fails
+  const [cmsResult, productsResult] = await Promise.allSettled([
     fetchCMS(),
     fetchFeaturedProducts(),
   ]);
+  
+  const cmsBlocks = cmsResult.status === 'fulfilled' ? cmsResult.value : [];
+  const featuredProducts = productsResult.status === 'fulfilled' ? productsResult.value : [];
 
   return (
     <>
-      <Hero />
-      <Features />
+      <HeroSection />
+      <CategoryHighlights />
+      <ProductGrid />
+      <DealsBanner />
       <PromoBanner />
       <Testimonials />
-      <ProductHighlights />
       <FeaturedCategories />
       
       <div className="max-w-[1440px] mx-auto px-4 py-12">
@@ -89,11 +82,14 @@ export default async function HomePage() {
           if (block.type === 'banner') {
             return (
               <div key={idx} className="w-full overflow-hidden rounded-md shadow-sm mb-12">
-                <img 
-                  src={block.content.imageUrl} 
-                  alt={block.content.alt} 
-                  className="w-full h-auto"
-                />
+                <div className="relative w-full h-64">
+                  <Image 
+                    src={block.content.imageUrl || '/api/placeholder'} 
+                    alt={block.content.alt || 'Banner image'} 
+                    fill
+                    className="object-cover"
+                  />
+                </div>
               </div>
             );
           }
@@ -116,15 +112,16 @@ export default async function HomePage() {
                 href={`/products/${product.slug}`} 
                 className="group border border-gray-200 rounded-lg p-4 transition-shadow hover:shadow-md"
               >
-                <div className="aspect-square overflow-hidden rounded-md mb-3">
-                  <img 
-                    src={product.image} 
+                <div className="relative aspect-square overflow-hidden rounded-md mb-3">
+                  <Image 
+                    src={product.image || '/api/placeholder'} 
                     alt={product.name} 
-                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                    fill
+                    className="object-cover transition-transform group-hover:scale-105"
                   />
                 </div>
                 <h3 className="font-medium">{product.name}</h3>
-                <p className="text-gray-600">${product.price}</p>
+                <p className="text-gray-600">${product.price.toFixed(2)}</p>
               </a>
             ))}
           </div>
@@ -132,7 +129,6 @@ export default async function HomePage() {
       </div>
       
       <NewsletterSignup />
-      <Footer />
     </>
   );
 }

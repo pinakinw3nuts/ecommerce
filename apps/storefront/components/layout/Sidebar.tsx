@@ -56,6 +56,26 @@ const ratings = [
   { id: 'r1', label: '1 Star & Up', value: 1 },
 ];
 
+// Function to handle category navigation
+const handleCategoryNavigation = (categorySlug: string) => {
+  console.log(`Sidebar category selected: ${categorySlug}`);
+  
+  // Navigate programmatically instead of using direct href
+  const url = new URL('/products', window.location.origin);
+  
+  // Add category parameter
+  url.searchParams.set('category', categorySlug);
+  
+  // Reset page to 1 when changing category
+  url.searchParams.set('page', '1');
+  
+  // Log the constructed URL
+  console.log(`Navigating to: ${url.toString()}`);
+  
+  // Navigate to the URL
+  window.location.href = url.toString();
+};
+
 const CategoryItem = ({ category, level = 0 }: { category: CategoryType; level?: number }) => {
   const [expanded, setExpanded] = useState(false);
   const hasChildren = category.children && category.children.length > 0;
@@ -64,7 +84,11 @@ const CategoryItem = ({ category, level = 0 }: { category: CategoryType; level?:
     <div className="mb-1">
       <div className="flex items-center justify-between py-2">
         <Link
-          href={`/category/${category.slug}`}
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            handleCategoryNavigation(category.slug);
+          }}
           className={`hover:text-primary transition-colors ${
             level > 0 ? 'pl-4 text-sm text-gray-600' : 'font-medium text-gray-800'
           }`}
@@ -149,7 +173,13 @@ export default function Sidebar() {
       </div>
 
       {/* Clear Filters Button */}
-      <button className="w-full border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 py-2.5 rounded-md font-medium transition-colors shadow-sm">
+      <button 
+        className="w-full border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 py-2.5 rounded-md font-medium transition-colors shadow-sm"
+        onClick={() => {
+          // Navigate to products page without filters
+          window.location.href = '/products';
+        }}
+      >
         Clear All Filters
       </button>
     </div>
