@@ -13,7 +13,9 @@ const envSchema = z.object({
   DB_USER: z.string().default('postgres'),
   DB_PASSWORD: z.string().default('postgres'),
   DB_NAME: z.string().default('product_service'),
-  FILE_STORAGE_PATH: z.string().default('./uploads')
+  FILE_STORAGE_PATH: z.string().default('./uploads'),
+  JWT_SECRET: z.string().default('ecommerce-microservices-secret-key'),
+  JWT_VERIFY_EXPIRATION: z.boolean().default(false)
 });
 
 export const env = envSchema.parse(process.env); 

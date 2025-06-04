@@ -1,7 +1,7 @@
 import { request } from 'undici';
 import { httpLogger as logger } from './logger';
 
-// Types for request and response
+// Define types for service requests and responses
 export interface ServiceRequest {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
   url: string;
@@ -41,19 +41,48 @@ export async function forwardRequest(serviceRequest: ServiceRequest): Promise<Se
       msg: 'Forwarding request to service',
       method,
       url,
-      headers,
+      hasBody: !!body,
     });
+
+    // Create a clean copy of headers, always omitting content-length to let undici calculate it
+    const cleanHeaders = { ...headers };
+    delete cleanHeaders['content-length'];
+    
+    // Convert body to string if it exists
+    let bodyData: string | undefined;
+    if (body) {
+      bodyData = JSON.stringify(body);
+      // Set the content-type if not already set
+      if (!cleanHeaders['content-type']) {
+        cleanHeaders['content-type'] = 'application/json';
+      }
+    }
 
     const response = await request(url, {
       method,
-      headers: headers as Record<string, string | string[]>,
-      body: body ? JSON.stringify(body) : undefined,
+      headers: cleanHeaders as Record<string, string | string[]>,
+      body: bodyData,
       bodyTimeout: timeout,
       headersTimeout: timeout,
       maxRedirections: 10,
     });
 
-    const responseBody = await response.body.json().catch(() => undefined);
+    // Try to parse the response body as JSON, but fall back to text or undefined
+    const responseBody = await response.body.json().catch(async () => {
+      try {
+        return await response.body.text();
+      } catch (e) {
+        return undefined;
+      }
+    });
+
+    logger.debug({
+      msg: 'Service response received',
+      method,
+      url,
+      status: response.statusCode,
+      responseBodyType: typeof responseBody,
+    });
 
     return {
       status: response.statusCode,

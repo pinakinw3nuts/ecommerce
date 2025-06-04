@@ -54,9 +54,25 @@ export class Server {
 
   /**
    * Start the server
+   * @param options Options for starting the server
    */
-  public async start(): Promise<void> {
+  public async start(options: { startAllServices?: boolean } = {}): Promise<void> {
     try {
+      // Start dependent services if requested
+      if (options.startAllServices) {
+        try {
+          logger.info('Starting all microservices...');
+          // Use absolute path for import
+          const scriptsPath = require.resolve('../../scripts/start-services');
+          const { startAllServices } = await import(scriptsPath);
+          await startAllServices();
+          logger.info('All microservices started successfully');
+        } catch (error) {
+          logger.error({ err: error }, 'Failed to start microservices');
+          // Continue starting the API gateway even if services fail
+        }
+      }
+
       await this.configureServer();
 
       const address = await this.server.listen({
@@ -76,11 +92,26 @@ export class Server {
 
   /**
    * Stop the server
+   * @param options Options for stopping the server
    */
-  public async stop(): Promise<void> {
+  public async stop(options: { stopAllServices?: boolean } = {}): Promise<void> {
     try {
       await this.server.close();
       logger.info('Server stopped successfully');
+
+      // Stop dependent services if requested
+      if (options.stopAllServices) {
+        try {
+          logger.info('Stopping all microservices...');
+          // Use absolute path for import
+          const scriptsPath = require.resolve('../../scripts/start-services');
+          const { stopAllServices } = await import(scriptsPath);
+          stopAllServices();
+          logger.info('All microservices stopped successfully');
+        } catch (error) {
+          logger.error({ err: error }, 'Failed to stop microservices');
+        }
+      }
     } catch (error) {
       logger.error({ err: error }, 'Failed to stop server');
       throw error;

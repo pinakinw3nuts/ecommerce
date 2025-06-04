@@ -6,41 +6,53 @@ const proxyRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // Log when routes are being registered
   logger.info('Registering proxy routes');
 
-  // Auth Service Routes
+  // Auth Service Routes - support both versioned and non-versioned paths
   fastify.all('/api/auth/*', forwardHandler);
+  fastify.all('/api/v:version/auth/*', forwardHandler);
 
   // User Service Routes
   fastify.all('/api/users/*', forwardHandler);
+  fastify.all('/api/v:version/users/*', forwardHandler);
 
   // Product Service Routes
   fastify.all('/api/products/*', forwardHandler);
+  fastify.all('/api/v:version/products/*', forwardHandler);
 
   // Cart Service Routes
   fastify.all('/api/cart/*', forwardHandler);
+  fastify.all('/api/v:version/cart/*', forwardHandler);
 
   // Checkout Service Routes
   fastify.all('/api/checkout/*', forwardHandler);
+  fastify.all('/api/v:version/checkout/*', forwardHandler);
 
   // Order Service Routes
   fastify.all('/api/orders/*', forwardHandler);
+  fastify.all('/api/v:version/orders/*', forwardHandler);
 
   // Payment Service Routes
   fastify.all('/api/payments/*', forwardHandler);
+  fastify.all('/api/v:version/payments/*', forwardHandler);
 
   // Shipping Service Routes
   fastify.all('/api/shipping/*', forwardHandler);
+  fastify.all('/api/v:version/shipping/*', forwardHandler);
 
   // Inventory Service Routes
   fastify.all('/api/inventory/*', forwardHandler);
+  fastify.all('/api/v:version/inventory/*', forwardHandler);
 
   // Company Service Routes
   fastify.all('/api/company/*', forwardHandler);
+  fastify.all('/api/v:version/company/*', forwardHandler);
 
   // Pricing Service Routes
   fastify.all('/api/pricing/*', forwardHandler);
+  fastify.all('/api/v:version/pricing/*', forwardHandler);
 
   // Admin Service Routes
   fastify.all('/api/admin/*', forwardHandler);
+  fastify.all('/api/v:version/admin/*', forwardHandler);
 
   // Health check for proxy routes
   fastify.get('/api/status', async (_request, reply) => {
@@ -49,18 +61,18 @@ const proxyRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       timestamp: new Date().toISOString(),
       service: 'api-gateway',
       routes: [
-        '/api/auth/*', 
-        '/api/users/*', 
-        '/api/products/*',
-        '/api/cart/*',
-        '/api/checkout/*',
-        '/api/orders/*',
-        '/api/payments/*',
-        '/api/shipping/*',
-        '/api/inventory/*',
-        '/api/company/*',
-        '/api/pricing/*',
-        '/api/admin/*'
+        '/api/auth/*', '/api/v:version/auth/*',
+        '/api/users/*', '/api/v:version/users/*',
+        '/api/products/*', '/api/v:version/products/*',
+        '/api/cart/*', '/api/v:version/cart/*',
+        '/api/checkout/*', '/api/v:version/checkout/*',
+        '/api/orders/*', '/api/v:version/orders/*',
+        '/api/payments/*', '/api/v:version/payments/*',
+        '/api/shipping/*', '/api/v:version/shipping/*',
+        '/api/inventory/*', '/api/v:version/inventory/*',
+        '/api/company/*', '/api/v:version/company/*',
+        '/api/pricing/*', '/api/v:version/pricing/*',
+        '/api/admin/*', '/api/v:version/admin/*'
       ]
     });
   });

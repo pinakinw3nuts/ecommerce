@@ -1,216 +1,214 @@
-# API Gateway Service
+# API Gateway for E-commerce Microservices
 
-A modern, TypeScript-based API Gateway service for the e-commerce microservices platform. Built with Fastify for high performance and reliability.
+This API Gateway serves as the entry point for all client requests to the e-commerce microservices platform.
 
 ## Features
 
-- 🚀 High-performance request forwarding with [undici](https://github.com/nodejs/undici)
-- 🔒 Built-in security with helmet and CORS
-- 🚦 Rate limiting with Redis support
-- 📝 Structured logging with Pino
-- 🏥 Health check endpoints
-- 🔍 Request tracing with request IDs
-- ⏱️ Response time tracking
-- 🔄 Graceful shutdown handling
+- Routes requests to appropriate microservices
+- Handles authentication and authorization
+- Rate limiting with Redis (falls back to in-memory when Redis is unavailable)
+- Request logging and monitoring
+- Error handling and standardization
 
-## Prerequisites
+## Services Architecture
 
-- Node.js >= 18.0.0
+The API Gateway routes requests to the following microservices:
+
+- **Auth Service** - Authentication and authorization (`/api/auth/*`)
+- **User Service** - User management (`/api/users/*`)
+- **Product Service** - Product catalog (`/api/products/*`)
+- **Cart Service** - Shopping cart management (`/api/cart/*`)
+- **Checkout Service** - Checkout process (`/api/checkout/*`)
+- **Order Service** - Order management (`/api/orders/*`)
+- **Payment Service** - Payment processing (`/api/payments/*`)
+- **Shipping Service** - Shipping options and tracking (`/api/shipping/*`)
+- **Inventory Service** - Inventory management (`/api/inventory/*`)
+- **Company Service** - Company information (`/api/company/*`)
+- **Pricing Service** - Pricing and discounts (`/api/pricing/*`)
+- **Admin Service** - Admin dashboard and operations (`/api/admin/*`)
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
 - pnpm
-- Docker and Docker Compose
-- Redis (optional, for rate limiting)
+- Redis (optional, falls back to in-memory store)
 
-## Quick Start
+### Installation
 
-### Using Docker
-
-1. Build and start the service:
 ```bash
-docker-compose up -d
-```
-
-2. View logs:
-```bash
-docker-compose logs -f api-gateway
-```
-
-3. Stop the service:
-```bash
-docker-compose down
-```
-
-### Local Development
-
-1. Install dependencies:
-```bash
+# Install dependencies
 pnpm install
+
+# Install dependencies for all microservices
+pnpm run install:deps
 ```
 
-2. Set up environment variables:
-```bash
-cp .env.example .env
-```
+### Running the API Gateway
 
-3. Start development server:
 ```bash
+# Development mode
 pnpm run dev
-```
 
-4. Build for production:
-```bash
+# Development mode without Redis (uses in-memory rate limiting)
+pnpm run dev:no-redis
+
+# Development mode on a different port (default: 3030)
+pnpm run dev:port [port]
+# Example: pnpm run dev:port 3333
+
+# Production mode
 pnpm run build
 pnpm start
 ```
 
-## Configuration
+### Starting All Microservices
 
-Environment variables:
-
-```env
-# Server
-PORT=3000
-HOST=0.0.0.0
-
-# Rate Limiting
-RATE_LIMIT_MAX=100
-RATE_LIMIT_WINDOW_MS=60000
-REDIS_URL=redis://localhost:6379
-
-# CORS
-CORS_ORIGINS=http://localhost:3000
-
-# Microservices
-AUTH_SERVICE_URL=http://auth-service:3001
-USER_SERVICE_URL=http://user-service:3002
-PRODUCT_SERVICE_URL=http://product-service:3003
-```
-
-## API Endpoints
-
-### Health Check
+To start all available microservices and the API Gateway:
 
 ```bash
-# Basic health check
-curl http://localhost:3000/health
-
-# Detailed health metrics
-curl http://localhost:3000/health/details
+pnpm run dev:all
 ```
 
-Example response:
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-01-20T10:30:00.000Z",
-  "uptime": 3600,
-  "service": "api-gateway",
-  "memory": {
-    "heapUsed": 50,
-    "heapTotal": 100,
-    "external": 10,
-    "rss": 150
-  },
-  "version": "1.0.0"
-}
-```
-
-### Service Routes
-
-The gateway forwards requests to the following services:
-
-- Authentication Service: `/api/auth/*`
-- User Service: `/api/users/*`
-- Product Service: `/api/products/*`
-
-Example requests:
+### Service Management
 
 ```bash
-# Auth service
-curl http://localhost:3000/api/auth/login
+# Check which services are running
+pnpm run check:services
 
-# User service
-curl http://localhost:3000/api/users/profile
+# Start a specific service
+pnpm run ensure:service <service-name>
+# Example: pnpm run ensure:service auth-service
 
-# Product service
-curl http://localhost:3000/api/products/list
+# Start all microservices without the API gateway
+pnpm run start:services
+
+# Install dependencies for a specific service
+pnpm run install:deps <service-name>
+# Example: pnpm run install:deps auth-service
 ```
-
-## Testing
-
-### Unit Tests
-
-```bash
-# Run all tests
-pnpm test
-
-# Watch mode
-pnpm run test:watch
-```
-
-### Manual Testing
-
-1. Test health endpoint:
-```bash
-curl http://localhost:3000/health
-```
-
-2. Test rate limiting:
-```bash
-# Send multiple requests quickly
-for i in {1..150}; do 
-  curl -I http://localhost:3000/api/products/list
-done
-```
-
-3. Test request tracing:
-```bash
-curl -H "x-request-id: test-123" http://localhost:3000/api/users/profile
-```
-
-## Monitoring
-
-The service exposes several metrics and headers for monitoring:
-
-- `x-response-time`: Response time in milliseconds
-- `x-request-id`: Unique request identifier
-- Health metrics at `/health/details`
 
 ## Development
 
-### Available Scripts
+### Environment Variables
 
-- `pnpm run dev`: Start development server with hot reload
-- `pnpm run build`: Build for production
-- `pnpm start`: Start production server
-- `pnpm run lint`: Run ESLint
-- `pnpm run lint:fix`: Fix linting issues
-- `pnpm test`: Run tests
-- `pnpm run typecheck`: Check types
+Create a `.env` file in the project root with the following variables:
 
-### Directory Structure
+```env
+# Server configuration
+PORT=3000
+NODE_ENV=development
 
+# Rate limiting
+RATE_LIMIT_MAX=100
+RATE_LIMIT_WINDOW_MS=900000
+
+# Redis (optional)
+REDIS_URL=redis://localhost:6379
+
+# CORS
+CORS_ORIGINS=*
+
+# Service URLs (for Docker)
+AUTH_SERVICE_URL=http://auth-service:3001
+USER_SERVICE_URL=http://user-service:3002
+PRODUCT_SERVICE_URL=http://product-service:3003
+CART_SERVICE_URL=http://cart-service:3004
+CHECKOUT_SERVICE_URL=http://checkout-service:3005
+ORDER_SERVICE_URL=http://order-service:3006
+PAYMENT_SERVICE_URL=http://payment-service:3007
+SHIPPING_SERVICE_URL=http://shipping-service:3008
+INVENTORY_SERVICE_URL=http://inventory-service:3009
+COMPANY_SERVICE_URL=http://company-service:3010
+PRICING_SERVICE_URL=http://pricing-service:3011
+ADMIN_SERVICE_URL=http://admin-service:3012
 ```
-src/
-├── config/         # Configuration and environment variables
-├── controllers/    # Request handlers
-├── middlewares/    # Custom middlewares
-├── routes/         # Route definitions
-├── utils/         # Utility functions
-└── types/         # TypeScript type definitions
+
+### Development Mode
+
+In development mode, the API Gateway automatically uses `localhost` URLs with the appropriate ports instead of the Docker service names.
+
+## API Documentation
+
+### Health Check
+
+- `GET /health` - Basic health check
+- `GET /health/details` - Detailed health status with metrics
+
+### Service Status
+
+- `GET /api/status` - Get status of all registered API routes
+
+## Scripts
+
+- `pnpm run dev` - Start the API Gateway in development mode
+- `pnpm run dev:no-redis` - Start the API Gateway without Redis (in-memory rate limiting)
+- `pnpm run dev:port [port]` - Start the API Gateway on a different port (default: 3030)
+- `pnpm run dev:all` - Start all available microservices and the API Gateway
+- `pnpm run start:services` - Start all available microservices without the API Gateway
+- `pnpm run check:services` - Check which services are currently running
+- `pnpm run check:gateway` - Check if the API Gateway is running and find processes using its port
+- `pnpm run check:redis` - Check Redis connection status
+- `pnpm run ensure:service <service-name>` - Start a specific service if it's not running
+- `pnpm run install:deps [service-name]` - Install dependencies for all services or a specific service
+- `pnpm run diagnose` - Interactive script to diagnose and fix common issues
+- `pnpm run build` - Build the project
+- `pnpm run start` - Start the API Gateway in production mode
+- `pnpm run start:all` - Start all microservices and the API Gateway in production mode
+
+## Troubleshooting
+
+### Redis Connection Issues
+
+If Redis is unavailable, the API Gateway will automatically fall back to using an in-memory store for rate limiting. This is suitable for development but not recommended for production.
+
+You can check Redis connection status with:
+
+```bash
+pnpm run check:redis
 ```
 
-## Contributing
+If you don't need Redis, you can start the API Gateway without it:
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```bash
+pnpm run dev:no-redis
+```
 
-## License
+### Service Dependency Issues
 
-ISC
+If services fail to start due to missing dependencies, install them with:
 
-## Support
+```bash
+pnpm run install:deps
+```
 
-For support, please open an issue in the repository. 
+For a specific service:
+
+```bash
+pnpm run install:deps <service-name>
+```
+
+### Service Connection Issues
+
+When a microservice is unavailable, the API Gateway will return a 503 Service Unavailable response. Check the logs for more details about which service is failing.
+
+You can check which services are running:
+
+```bash
+pnpm run check:services
+```
+
+To start a specific service:
+
+```bash
+pnpm run ensure:service <service-name>
+```
+
+### Path Routing Issues
+
+If you're getting 404 errors, ensure that:
+
+1. The service is running (use `pnpm run check:services`)
+2. The path you're requesting is correctly mapped in the API Gateway
+3. The target service has a route that matches the path being forwarded 

@@ -113,6 +113,40 @@ export function handleServiceError(error: unknown, requestId?: string): ErrorRes
       };
     }
 
+    // Connection errors (ECONNREFUSED, ENOTFOUND, etc.)
+    if ('code' in error && typeof error.code === 'string') {
+      if (error.code === 'ECONNREFUSED') {
+        return {
+          status: 503,
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'The target service is not running or refusing connections',
+          timestamp,
+          requestId,
+        };
+      }
+      
+      if (error.code === 'ENOTFOUND') {
+        return {
+          status: 503,
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'The target service hostname cannot be resolved',
+          timestamp,
+          requestId,
+        };
+      }
+    }
+
+    // Content length mismatch error
+    if (error.name === 'RequestContentLengthMismatchError') {
+      return {
+        status: 400,
+        code: 'BAD_REQUEST',
+        message: 'Invalid request body or content length',
+        timestamp,
+        requestId,
+      };
+    }
+
     // Service errors
     if (error.name === 'ServiceError') {
       return {

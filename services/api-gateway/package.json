@@ -4,15 +4,26 @@
   "description": "API Gateway for E-commerce Microservices",
   "main": "dist/index.js",
   "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only --exit-child --watch src src/index.ts",
+    "dev:no-redis": "node scripts/start-without-redis.js",
+    "dev:port": "node scripts/start-on-port.js",
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node-dev --respawn --transpile-only --exit-child --watch src src/index.ts",
+    "start:all": "node dist/scripts/start-with-services.js",
+    "dev:all": "node scripts/start-with-services.js",
+    "start:services": "ts-node scripts/start-services.ts",
+    "check:services": "node scripts/check-services.js",
+    "check:gateway": "node scripts/check-api-gateway.js",
+    "check:redis": "node scripts/check-redis.js",
+    "ensure:service": "node scripts/ensure-service.js",
+    "install:deps": "node scripts/install-dependencies.js",
+    "diagnose": "node scripts/diagnose-and-fix.js",
     "clean": "rimraf dist",
     "prebuild": "npm run clean",
-    "lint": "eslint 'src/**/*.ts'",
-    "lint:fix": "eslint 'src/**/*.ts' --fix",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
     "test": "vitest run",
-    "test:watch": "vitest watch",
+    "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
@@ -30,6 +41,7 @@
     "@fastify/rate-limit": "^8.0.3",
     "dotenv": "^16.3.1",
     "fastify": "^4.24.3",
+    "ioredis": "^5.6.1",
     "module-alias": "^2.2.3",
     "pino": "^8.16.2",
     "pino-pretty": "^10.2.3",
@@ -47,6 +59,7 @@
     "eslint-plugin-prettier": "^5.0.1",
     "prettier": "^3.1.0",
     "rimraf": "^5.0.5",
+    "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.2",
     "vitest": "^0.34.6"
@@ -63,4 +76,4 @@
   "engines": {
     "node": ">=18.0.0"
   }
-} 
+}

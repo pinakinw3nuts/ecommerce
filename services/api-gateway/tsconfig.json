@@ -37,9 +37,10 @@
       "@middlewares/*": ["src/middlewares/*"],
       "@routes/*": ["src/routes/*"],
       "@utils/*": ["src/utils/*"],
-      "@types/*": ["src/types/*"]
+      "@types/*": ["src/types/*"],
+      "@scripts/*": ["scripts/*"]
     },
-    "rootDir": "src",
+    "rootDir": ".",
     "outDir": "dist",
 
     // Source Maps
@@ -60,7 +61,8 @@
     "preserveConstEnums": true
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "scripts/**/*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -1,0 +1,304 @@
+version: '3.8'
+
+services:
+  # API Gateway - Development Mode
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/api-gateway:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Auth Service - Development Mode
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/auth-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # User Service - Development Mode
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/user-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Product Service - Development Mode
+  product-service:
+    build:
+      context: ./services/product-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/product-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Cart Service - Development Mode
+  cart-service:
+    build:
+      context: ./services/cart-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/cart-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Checkout Service - Development Mode
+  checkout-service:
+    build:
+      context: ./services/checkout-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/checkout-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Order Service - Development Mode
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/order-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Payment Service - Development Mode
+  payment-service:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/payment-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Shipping Service - Development Mode
+  shipping-service:
+    build:
+      context: ./services/shipping-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/shipping-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Inventory Service - Development Mode
+  inventory-service:
+    build:
+      context: ./services/inventory-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/inventory-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Company Service - Development Mode
+  company-service:
+    build:
+      context: ./services/company-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/company-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Pricing Service - Development Mode
+  pricing-service:
+    build:
+      context: ./services/pricing-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/pricing-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Admin Service - Development Mode
+  admin-service:
+    build:
+      context: ./services/admin-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/admin-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Wishlist Service - Development Mode
+  wishlist-service:
+    build:
+      context: ./services/wishlist-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/wishlist-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Review Service - Development Mode
+  review-service:
+    build:
+      context: ./services/review-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/review-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # Notification Service - Development Mode
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/notification-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+
+  # CMS Service - Development Mode
+  cms-service:
+    build:
+      context: ./services/cms-service
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./services/cms-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - PAYLOAD_CONFIG_PATH=dist/payload.config.js
+    restart: unless-stopped
+
+  # Storefront - Next.js Frontend Development Mode
+  storefront:
+    build:
+      context: ./apps/storefront
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./apps/storefront:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3000/api
+    restart: unless-stopped
+
+  # Admin Panel - Next.js Frontend Development Mode
+  admin-panel:
+    build:
+      context: ./apps/admin-panel
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./apps/admin-panel:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3000/api
+    restart: unless-stopped
+
+  # Development tools
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: ecom-pgadmin
+    ports:
+      - "8080:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=admin123
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - ecom-network
+
+  # Redis Commander - Redis UI
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: ecom-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - ecom-network
+
+volumes:
+  pgadmin_data:
+    name: ecom-pgadmin-data 
