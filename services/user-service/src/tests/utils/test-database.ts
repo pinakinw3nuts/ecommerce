@@ -11,7 +11,8 @@ export async function createTestDataSource(): Promise<DataSource> {
     database: process.env.TEST_DB_DATABASE || 'user_service_test',
     entities: [User, Address, LoyaltyProgramEnrollment],
     synchronize: true, // Only for testing
-    dropSchema: true // Clean state for each test run
+    dropSchema: true, // Clean state for each test run
+    logging: false // Disable query logging
   })
 
   await dataSource.initialize()

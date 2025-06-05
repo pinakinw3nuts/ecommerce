@@ -67,7 +67,7 @@ export const authGuard = (options: AuthGuardOptions = {}): preHandlerHookHandler
       request.user = verificationResult.payload;
 
     } catch (error) {
-      authLogger.error(error, 'Auth guard error');
+      authLogger.error('Auth guard error');
       return reply.status(500).send({
         status: 'error',
         code: 'AUTH_ERROR',

@@ -29,11 +29,8 @@ export const validateRequest = (schemas: ValidationSchemas) => {
           request.body = await schemas.body.parseAsync(request.body);
         } catch (error) {
           if (error instanceof ZodError) {
-            validationLogger.warn({
-              path: request.url,
-              body: request.body,
-              errors: error.errors
-            }, 'Request body validation failed');
+            // Only log path for failed validations
+            validationLogger.warn(`Request body validation failed: ${request.url}`);
 
             return reply.status(400).send({
               status: 'error',
@@ -51,11 +48,8 @@ export const validateRequest = (schemas: ValidationSchemas) => {
           request.query = await schemas.querystring.parseAsync(request.query);
         } catch (error) {
           if (error instanceof ZodError) {
-            validationLogger.warn({
-              path: request.url,
-              query: request.query,
-              errors: error.errors
-            }, 'Query parameters validation failed');
+            // Only log path for failed validations
+            validationLogger.warn(`Query parameters validation failed: ${request.url}`);
 
             return reply.status(400).send({
               status: 'error',
@@ -73,11 +67,8 @@ export const validateRequest = (schemas: ValidationSchemas) => {
           request.params = await schemas.params.parseAsync(request.params);
         } catch (error) {
           if (error instanceof ZodError) {
-            validationLogger.warn({
-              path: request.url,
-              params: request.params,
-              errors: error.errors
-            }, 'URL parameters validation failed');
+            // Only log path for failed validations
+            validationLogger.warn(`URL parameters validation failed: ${request.url}`);
 
             return reply.status(400).send({
               status: 'error',
@@ -90,7 +81,7 @@ export const validateRequest = (schemas: ValidationSchemas) => {
       }
 
     } catch (error) {
-      validationLogger.error({ error }, 'Unexpected error during request validation');
+      validationLogger.error('Unexpected error during request validation');
       return reply.status(500).send({
         status: 'error',
         message: 'Internal server error during validation'

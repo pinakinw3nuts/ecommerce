@@ -26,14 +26,14 @@ export async function POST(request: NextRequest, context: { params: { id: string
     const body = await request.json();
     
     // Log the request body for debugging
-    console.log(`POST /api/products/attributes/${params.id}/status - Request body:`, body);
+    console.log(`POST /api/products/attributes/${context.params.id}/status - Request body:`, body);
     
     // Ensure the isActive value is a boolean
     const isActive = Boolean(body.isActive);
-    console.log(`Setting attribute ${params.id} status to: ${isActive}`);
+    console.log(`Setting attribute ${context.params.id} status to: ${isActive}`);
     
     // Use the dedicated status endpoint
-    const statusUrl = `${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/${params.id}/status`;
+    const statusUrl = `${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/${context.params.id}/status`;
     console.log(`Using dedicated status endpoint: ${statusUrl}`);
     
     // Make sure to explicitly send a boolean value
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
     return NextResponse.json(data);
     
   } catch (error) {
-    console.error(`Error updating attribute status ${params.id}:`, error);
+    console.error(`Error updating attribute status ${context.params.id}:`, error);
     return NextResponse.json(
       { message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
       { status: 500 }

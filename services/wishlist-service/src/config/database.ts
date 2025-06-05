@@ -16,7 +16,7 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url: config.databaseUrl,
   synchronize: !config.isProduction, // Auto-create schema in dev/test
-  logging: config.isDevelopment,
+  logging: false,
   entities: [
     Wishlist
   ],

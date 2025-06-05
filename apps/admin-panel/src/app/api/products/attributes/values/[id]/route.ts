@@ -26,7 +26,7 @@ export async function PUT(request: NextRequest, context: { params: { id: string 
     const body = await request.json();
     
     // Forward request to product service with correct API path for admin operations
-    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/values/${params.id}`, {
+    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/values/${context.params.id}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token.value}`,
@@ -46,7 +46,7 @@ export async function PUT(request: NextRequest, context: { params: { id: string 
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error(`Error updating attribute value ${params.id}:`, error);
+    console.error(`Error updating attribute value ${context.params.id}:`, error);
     return NextResponse.json(
       { message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
@@ -68,7 +68,7 @@ export async function DELETE(request: NextRequest, context: { params: { id: stri
     }
     
     // Forward request to product service with correct API path for admin operations
-    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/values/${params.id}`, {
+    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/values/${context.params.id}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token.value}`,
@@ -86,7 +86,7 @@ export async function DELETE(request: NextRequest, context: { params: { id: stri
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error(`Error deleting attribute value ${params.id}:`, error);
+    console.error(`Error deleting attribute value ${context.params.id}:`, error);
     return NextResponse.json(
       { message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
       { status: 500 }

@@ -1,5 +1,5 @@
 import { Repository, DataSource } from 'typeorm';
-import { hash } from 'bcrypt';
+import { hash  } from 'bcryptjs';
 import { User, UserStatus, Address, LoyaltyProgramEnrollment, LoyaltyTier, UserRole } from '../entities';
 import logger from '../utils/logger';
 import { CreateUserInput, UpdateUserInput } from '../schemas/user.schema';

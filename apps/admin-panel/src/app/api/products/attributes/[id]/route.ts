@@ -23,7 +23,7 @@ export async function GET(request: NextRequest, context: { params: { id: string 
     }
 
     // Forward request to product service with correct API path
-    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/attributes/${params.id}`, {
+    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/attributes/${context.params.id}`, {
       headers: {
         'Authorization': `Bearer ${token.value}`,
         'Content-Type': 'application/json',
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest, context: { params: { id: string 
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error(`Error fetching attribute ${params.id}:`, error);
+    console.error(`Error fetching attribute ${context.params.id}:`, error);
     return NextResponse.json(
       { message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
@@ -66,7 +66,7 @@ export async function PUT(request: NextRequest, context: { params: { id: string 
     const body = await request.json();
     
     // Log the request body for debugging
-    console.log(`PUT /api/products/attributes/${params.id} - Request body:`, {
+    console.log(`PUT /api/products/attributes/${context.params.id} - Request body:`, {
       ...body,
       isActive: body.isActive,
       isFilterable: body.isFilterable,
@@ -74,7 +74,7 @@ export async function PUT(request: NextRequest, context: { params: { id: string 
     });
     
     // First get the current attribute data to ensure we have all required fields
-    const getResponse = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/attributes/${params.id}`, {
+    const getResponse = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/attributes/${context.params.id}`, {
       headers: {
         'Authorization': `Bearer ${token.value}`,
         'Content-Type': 'application/json',
@@ -114,7 +114,7 @@ export async function PUT(request: NextRequest, context: { params: { id: string 
     console.log(`Merged data for update:`, mergedData);
     
     // Forward request to product service with correct API path for admin operations
-    const fullUrl = `${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/${params.id}`;
+    const fullUrl = `${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/${context.params.id}`;
     console.log(`PUT ${fullUrl} - Sending payload:`, JSON.stringify(mergedData));
     
     const response = await fetch(fullUrl, {
@@ -139,7 +139,7 @@ export async function PUT(request: NextRequest, context: { params: { id: string 
     console.log(`PUT ${fullUrl} - Success response:`, data);
     return NextResponse.json(data);
   } catch (error) {
-    console.error(`Error updating attribute ${params.id}:`, error);
+    console.error(`Error updating attribute ${context.params.id}:`, error);
     return NextResponse.json(
       { message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
@@ -161,7 +161,7 @@ export async function DELETE(request: NextRequest, context: { params: { id: stri
     }
     
     // Forward request to product service with correct API path for admin operations
-    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/${params.id}`, {
+    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/${context.params.id}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token.value}`,
@@ -179,7 +179,7 @@ export async function DELETE(request: NextRequest, context: { params: { id: stri
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error(`Error deleting attribute ${params.id}:`, error);
+    console.error(`Error deleting attribute ${context.params.id}:`, error);
     return NextResponse.json(
       { message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
       { status: 500 }

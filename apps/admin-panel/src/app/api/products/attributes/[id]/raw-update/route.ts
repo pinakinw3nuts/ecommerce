@@ -26,10 +26,10 @@ export async function POST(request: NextRequest, context: { params: { id: string
     const body = await request.json();
     
     // Log the request body for debugging
-    console.log(`POST /api/products/attributes/${params.id}/raw-update - Request body:`, body);
+    console.log(`POST /api/products/attributes/${context.params.id}/raw-update - Request body:`, body);
     
     // Try to use a special raw update endpoint if available
-    const rawUpdateUrl = `${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/${params.id}/raw-update`;
+    const rawUpdateUrl = `${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/${context.params.id}/raw-update`;
     console.log(`Trying raw update endpoint: ${rawUpdateUrl}`);
     
     // Forward the request to the backend
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
     return NextResponse.json(data);
     
   } catch (error) {
-    console.error(`Error with raw update for attribute ${params.id}:`, error);
+    console.error(`Error with raw update for attribute ${context.params.id}:`, error);
     return NextResponse.json(
       { message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
       { status: 500 }

@@ -68,8 +68,23 @@ pnpm start
 To start all available microservices and the API Gateway:
 
 ```bash
-pnpm run dev:all
+pnpm dev:all
 ```
+
+This command:
+1. Checks for available services in the `/services` directory
+2. Starts all available services in order of priority
+3. Starts the API Gateway
+4. Provides periodic status updates of all services (every 60 seconds)
+5. Allows interactive commands via terminal
+
+#### Interactive Commands
+
+While running `pnpm dev:all`, you can type these commands in the terminal:
+
+- `status` or `check` - Show the current status of all services
+- `help` - Display available commands
+- `exit` or `quit` - Shut down all services and exit
 
 ### Service Management
 
@@ -148,10 +163,15 @@ In development mode, the API Gateway automatically uses `localhost` URLs with th
 - `pnpm run dev:all` - Start all available microservices and the API Gateway
 - `pnpm run start:services` - Start all available microservices without the API Gateway
 - `pnpm run check:services` - Check which services are currently running
+- `pnpm run status` - Display comprehensive status of all services with performance metrics and diagnostics
 - `pnpm run check:gateway` - Check if the API Gateway is running and find processes using its port
 - `pnpm run check:redis` - Check Redis connection status
 - `pnpm run ensure:service <service-name>` - Start a specific service if it's not running
 - `pnpm run install:deps [service-name]` - Install dependencies for all services or a specific service
+- `pnpm run install:all` - Install dependencies for all services and apps in the platform
+- `pnpm run rebuild:bcrypt` - Rebuild the bcrypt module for all services that use it
+- `pnpm run switch:bcryptjs` - Switch services from bcrypt to bcryptjs (pure JS implementation)
+- `pnpm run fix:ports` - Detect and fix port conflicts between services
 - `pnpm run diagnose` - Interactive script to diagnose and fix common issues
 - `pnpm run build` - Build the project
 - `pnpm run start` - Start the API Gateway in production mode
@@ -174,6 +194,50 @@ If you don't need Redis, you can start the API Gateway without it:
 ```bash
 pnpm run dev:no-redis
 ```
+
+### Native Module Issues (bcrypt)
+
+If you encounter errors related to bcrypt native modules, such as:
+
+```
+Error: Cannot find module '...bcrypt_lib.node'
+```
+
+You have two options:
+
+1. Rebuild the bcrypt module for all services with:
+
+```bash
+pnpm run rebuild:bcrypt
+```
+
+2. Switch from bcrypt to bcryptjs (recommended for cross-platform development):
+
+```bash
+pnpm run switch:bcryptjs
+```
+
+bcryptjs is a pure JavaScript implementation that doesn't require native dependencies and works across all platforms.
+
+### Port Conflicts
+
+If you see errors like:
+
+```
+Error starting server: listen EADDRINUSE: address already in use 0.0.0.0:3006
+```
+
+This means another process is already using the port that a service is trying to use. You can fix these conflicts with:
+
+```bash
+pnpm run fix:ports
+```
+
+This will:
+1. Detect which ports are in use
+2. Identify which services have conflicts
+3. Automatically reassign ports to avoid conflicts
+4. Update configuration files with the new ports
 
 ### Service Dependency Issues
 
@@ -212,3 +276,11 @@ If you're getting 404 errors, ensure that:
 1. The service is running (use `pnpm run check:services`)
 2. The path you're requesting is correctly mapped in the API Gateway
 3. The target service has a route that matches the path being forwarded 
+
+If services are not starting properly, you can use the following steps to diagnose and fix issues:
+
+1. Run `pnpm run status` to see detailed status of all services with diagnostics
+2. Run `pnpm run install:all` to install dependencies for all services
+3. Check if PostgreSQL is running and properly configured
+4. Ensure that there are no port conflicts
+5. Check individual service logs for specific errors 

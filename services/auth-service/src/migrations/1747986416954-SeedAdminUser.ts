@@ -1,5 +1,5 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
-import { hash } from "bcrypt";
+import { hash  } from 'bcryptjs';
 
 export class SeedAdminUser1747986416954 implements MigrationInterface {
     name = 'SeedAdminUser1747986416954'

@@ -80,10 +80,10 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('Making request with token:', token.value);
-    console.log('Full request URL:', `${PRODUCT_SERVICE_URL}/api/v1/brands?${queryParams.toString()}`);
+    console.log('Full request URL:', `${PRODUCT_SERVICE_URL}/api/v1/admin/brands?${queryParams.toString()}`);
     
     const response = await makeRequest(
-      `${PRODUCT_SERVICE_URL}/api/v1/brands?${queryParams.toString()}`,
+      `${PRODUCT_SERVICE_URL}/api/v1/admin/brands?${queryParams.toString()}`,
       {
         headers: {
           'Authorization': `Bearer ${token.value}`,
@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const response = await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/brands`, {
+    const response = await makeRequest(`${PRODUCT_SERVICE_URL}/api/v1/admin/brands`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token.value}`,

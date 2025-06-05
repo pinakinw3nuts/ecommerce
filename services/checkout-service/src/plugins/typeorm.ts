@@ -25,7 +25,7 @@ const TypeormPlugin: FastifyPluginAsync = fp(async (fastify: FastifyInstance) =>
       url: config.database.url,
       entities: [CheckoutSession],
       synchronize: config.isDevelopment, // Disable in production
-      logging: config.isDevelopment
+      logging: false // Disable query logging
     });
 
     await dataSource.initialize();

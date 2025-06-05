@@ -16,7 +16,7 @@ const apiGatewayDir = path.resolve(scriptDir, '..');
 // Root directory
 const rootDir = path.resolve(apiGatewayDir, '../..');
 
-// Service configuration
+// Service configuration with standardized ports
 const services = [
   { name: 'api-gateway', port: 3000 },
   { name: 'auth-service', port: 3001 },
@@ -31,29 +31,57 @@ const services = [
   { name: 'company-service', port: 3010 },
   { name: 'pricing-service', port: 3011 },
   { name: 'admin-service', port: 3012 },
+  { name: 'wishlist-service', port: 3013 },
+  { name: 'review-service', port: 3014 },
+  { name: 'notification-service', port: 3015 },
+  { name: 'cms-service', port: 3016 },
+];
+
+// Apps configuration
+const apps = [
+  { name: 'storefront', port: 3100 },
+  { name: 'admin-panel', port: 3200 },
 ];
 
 /**
- * Check if a service is running
+ * Check if a directory exists
+ */
+function directoryExists(serviceName) {
+  if (serviceName === 'api-gateway') {
+    // Special case for API gateway
+    return fs.existsSync(apiGatewayDir);
+  } else if (serviceName === 'storefront' || serviceName === 'admin-panel') {
+    // Apps are in a different directory
+    const appPath = path.join(rootDir, 'apps', serviceName);
+    return fs.existsSync(appPath);
+  }
+  
+  // Check the direct path in services directory
+  const servicePath = path.join(rootDir, 'services', serviceName);
+  return fs.existsSync(servicePath);
+}
+
+/**
+ * Check if a service is running by checking if its port is in use
  */
 function isServiceRunning(port) {
   return new Promise((resolve) => {
-    const req = http.get({
-      hostname: 'localhost',
-      port,
-      path: '/health',
-      timeout: 1000,
-    }, (res) => {
-      resolve(res.statusCode === 200);
+    // Simple TCP connection test to check if port is in use
+    const socket = require('net').createConnection(port, 'localhost');
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      resolve(false); // Timeout - assume service is not running
+    }, 1000);
+    
+    socket.on('connect', () => {
+      clearTimeout(timeout);
+      socket.destroy();
+      resolve(true); // Connection successful - service is running
     });
     
-    req.on('error', () => {
-      resolve(false);
-    });
-    
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(false);
+    socket.on('error', () => {
+      clearTimeout(timeout);
+      resolve(false); // Connection error - service is not running
     });
   });
 }
@@ -94,34 +122,61 @@ function getProcessInfo(port) {
 }
 
 /**
- * Check all services
+ * Check all services and apps
  */
-async function checkServices() {
-  console.log('\n\n');
-  console.log('Service'.padEnd(20), 'Port'.padEnd(10), 'Status'.padEnd(20), 'Process Info');
-  console.log('----------------------------------------------------------------------');
+async function checkServices(options = {}) {
+  const allEntities = [...services, ...apps];
+  const results = { services: [], apps: [] };
   
-  const results = await Promise.all(services.map(async (service) => {
-    const isRunning = await isServiceRunning(service.port);
+  console.log('\n\n');
+  console.log('Service/App'.padEnd(25), 'Port'.padEnd(10), 'Status'.padEnd(15), 'Available'.padEnd(15), 'Process Info');
+  console.log('--------------------------------------------------------------------------------');
+  
+  // Check services
+  for (const entity of allEntities) {
+    const exists = directoryExists(entity.name);
+    const isRunning = await isServiceRunning(entity.port);
     const status = isRunning ? 'RUNNING' : 'NOT RUNNING';
-    const processInfo = isRunning ? getProcessInfo(service.port) : '';
+    const availability = exists ? 'AVAILABLE' : 'NOT FOUND';
+    const processInfo = isRunning ? getProcessInfo(entity.port) : '';
     
     console.log(
-      service.name.padEnd(20),
-      String(service.port).padEnd(10),
-      status.padEnd(20),
+      entity.name.padEnd(25),
+      String(entity.port).padEnd(10),
+      status.padEnd(15),
+      availability.padEnd(15),
       processInfo
     );
     
-    return { service, isRunning };
-  }));
+    const result = { name: entity.name, port: entity.port, isRunning, exists };
+    
+    if (entity.name === 'storefront' || entity.name === 'admin-panel') {
+      results.apps.push(result);
+    } else {
+      results.services.push(result);
+    }
+  }
   
-  const runningCount = results.filter(r => r.isRunning).length;
+  const runningServices = results.services.filter(r => r.isRunning).length;
+  const totalAvailableServices = results.services.filter(r => r.exists).length;
   
-  console.log('\n----------------------------------------------------------------------');
-  console.log(`Summary: ${runningCount} of ${services.length} services running`);
+  const runningApps = results.apps.filter(r => r.isRunning).length;
+  const totalAvailableApps = results.apps.filter(r => r.exists).length;
+  
+  console.log('\n--------------------------------------------------------------------------------');
+  console.log(`Services Summary: ${runningServices} of ${totalAvailableServices} available services running`);
+  console.log(`Apps Summary: ${runningApps} of ${totalAvailableApps} available apps running`);
   console.log('\n');
+  
+  return results;
 }
 
-// Run the check
-checkServices(); 
+// Run the check if this script is executed directly
+if (require.main === module) {
+  checkServices();
+}
+
+// Export the function for use in other scripts
+module.exports = {
+  checkServices
+}; 

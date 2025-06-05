@@ -4,7 +4,7 @@ import { DataSource } from 'typeorm'
 import { createServer } from '../server'
 import { User, UserRole, UserStatus } from '../entities'
 import { createTestDataSource } from './utils/test-database'
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 
 // Create a stub function for generateToken that just returns a string
 const generateToken = (_user: any) => 'test-token';

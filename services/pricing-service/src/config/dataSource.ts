@@ -18,7 +18,7 @@ export const AppDataSource = new DataSource({
   entities: [entitiesPath],
   migrations: [migrationsPath],
   synchronize: env.NODE_ENV === 'development' && env.TYPEORM_SYNCHRONIZE === 'true',
-  logging: env.TYPEORM_LOGGING === 'true',
+  logging: false,
   ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 

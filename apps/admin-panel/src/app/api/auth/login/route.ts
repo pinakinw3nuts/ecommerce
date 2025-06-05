@@ -13,7 +13,13 @@ const loginSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:3001';
+// Configure service URL, default to direct service connection if gateway not available
+const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://127.0.0.1:3000';
+const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://127.0.0.1:3001';
+
+// Use API gateway when available, fallback to direct service connection
+const AUTH_ENDPOINT = `${API_GATEWAY_URL}/api/auth/admin/login`;
+const DIRECT_AUTH_ENDPOINT = `${AUTH_SERVICE_URL}/api/auth/admin/login`;
 
 export async function POST(request: Request) {
   try {
@@ -37,19 +43,38 @@ export async function POST(request: Request) {
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
     try {
-      // Call admin-specific login endpoint
-      const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/admin/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password
-        }),
-        signal: controller.signal,
-        cache: 'no-store' // Ensure we don't use cached responses
-      });
+      // Try API gateway first, if it fails, we'll try direct connection in the catch block
+      let response;
+      try {
+        // Call admin-specific login endpoint through API gateway
+        response = await fetch(AUTH_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            password
+          }),
+          signal: controller.signal,
+          cache: 'no-store' // Ensure we don't use cached responses
+        });
+      } catch (gatewayError) {
+        console.log('API Gateway connection failed, trying direct service connection');
+        // Fallback to direct service connection
+        response = await fetch(DIRECT_AUTH_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            password
+          }),
+          signal: controller.signal,
+          cache: 'no-store' // Ensure we don't use cached responses
+        });
+      }
 
       clearTimeout(timeoutId);
 
@@ -70,7 +95,7 @@ export async function POST(request: Request) {
       });
 
       // Set the token in an HTTP-only cookie
-      cookies().set('admin_token', data.accessToken, {
+      res.cookies.set('admin_token', data.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
@@ -79,7 +104,7 @@ export async function POST(request: Request) {
       });
 
       // Store refresh token in a separate cookie with longer expiration
-      cookies().set('admin_refresh_token', data.refreshToken, {
+      res.cookies.set('admin_refresh_token', data.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',

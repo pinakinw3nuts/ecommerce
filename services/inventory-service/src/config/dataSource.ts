@@ -12,7 +12,7 @@ export const dataSource = new DataSource({
   password: env.DB_PASSWORD,
   database: env.DB_DATABASE,
   synchronize: env.NODE_ENV === 'development',
-  logging: env.NODE_ENV === 'development',
+  logging: false,
   entities: [Inventory, InventoryMovement, Location],
   migrations: ['src/migrations/*.ts'],
   subscribers: ['src/subscribers/*.ts'],

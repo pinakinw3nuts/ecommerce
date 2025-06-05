@@ -11,7 +11,7 @@ export const AppDataSource = new DataSource({
   url: config.databaseUrl,
   synchronize: false, // Disable auto-synchronization
   dropSchema: false, // Disable auto-drop
-  logging: true,
+  logging: false, // Disable query logging
   entities: [Cart, CartItem],
   migrations: ['src/migrations/*.ts'],
   subscribers: [],

@@ -202,6 +202,122 @@ export const couponController = {
   },
 
   registerProtectedRoutes: async (fastify: FastifyInstance) => {
+    // Add GET routes for admin access
+    fastify.get('/', {
+      schema: {
+        tags: ['coupons'],
+        summary: 'List all coupons (admin access)',
+        querystring: {
+          type: 'object',
+          properties: {
+            skip: { type: 'number' },
+            take: { type: 'number' },
+            isActive: { type: 'boolean' },
+            includeExpired: { type: 'boolean' },
+            discountType: { type: 'string', enum: ['PERCENTAGE', 'FIXED'] },
+            valueMin: { type: 'number' },
+            valueMax: { type: 'number' },
+            sortBy: { type: 'string' },
+            sortOrder: { type: 'string', enum: ['ASC', 'DESC', 'asc', 'desc'] }
+          }
+        },
+        response: {
+          200: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                code: { type: 'string' },
+                name: { type: 'string' },
+                description: { type: 'string' },
+                discountAmount: { type: 'number' },
+                discountType: { type: 'string', enum: ['PERCENTAGE', 'FIXED'] },
+                startDate: { type: 'string', format: 'date-time' },
+                endDate: { type: 'string', format: 'date-time' },
+                isActive: { type: 'boolean' },
+                minimumPurchaseAmount: { type: 'number' },
+                usageLimit: { type: 'number' },
+                usageCount: { type: 'number' },
+                perUserLimit: { type: 'number' },
+                isFirstPurchaseOnly: { type: 'boolean' },
+                createdAt: { type: 'string', format: 'date-time' },
+                updatedAt: { type: 'string', format: 'date-time' }
+              }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{
+        Querystring: {
+          skip?: number;
+          take?: number;
+          isActive?: boolean;
+          includeExpired?: boolean;
+          discountType?: 'PERCENTAGE' | 'FIXED';
+          valueMin?: number;
+          valueMax?: number;
+          sortBy?: string;
+          sortOrder?: 'ASC' | 'DESC' | 'asc' | 'desc';
+        }
+      }>, reply) => {
+        console.log('GET /coupons (admin) - Query params:', request.query);
+        const coupons = await couponService.listCoupons(request.query);
+        console.log('GET /coupons (admin) - Found coupons count:', coupons.length);
+        return reply.send(coupons);
+      }
+    });
+
+    fastify.get('/:id', {
+      schema: {
+        tags: ['coupons'],
+        summary: 'Get a coupon by ID (admin access)',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Coupon ID' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              code: { type: 'string' },
+              name: { type: 'string' },
+              description: { type: 'string' },
+              discountAmount: { type: 'number' },
+              discountType: { type: 'string', enum: ['PERCENTAGE', 'FIXED'] },
+              startDate: { type: 'string', format: 'date-time' },
+              endDate: { type: 'string', format: 'date-time' },
+              isActive: { type: 'boolean' },
+              minimumPurchaseAmount: { type: 'number' },
+              usageLimit: { type: 'number' },
+              usageCount: { type: 'number' },
+              perUserLimit: { type: 'number' },
+              isFirstPurchaseOnly: { type: 'boolean' },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+        const coupon = await couponService.getCouponById(request.params.id);
+        if (!coupon) {
+          return reply.code(404).send({ message: 'Coupon not found' });
+        }
+        return reply.send(coupon);
+      }
+    });
+
     fastify.post('/', {
       schema: {
         tags: ['coupons'],

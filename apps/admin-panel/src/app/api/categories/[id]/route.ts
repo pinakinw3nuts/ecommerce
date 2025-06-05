@@ -13,7 +13,7 @@ const PRODUCT_SERVICE_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL?.replace
 // GET /api/categories/[id] - Get a single category
 export async function GET(request: NextRequest, context: { params: { id: string } }) {
   try {
-    console.log('Getting category with ID:', params.id);
+    console.log('Getting category with ID:', context.params.id);
     const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, context: { params: { id: string 
     }
 
     // Use the categories endpoint for fetching a single category
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/categories/${params.id}`;
+    const url = `${PRODUCT_SERVICE_URL}/api/v1/categories/${context.params.id}`;
     console.log('Full request URL:', url);
     
     const response = await makeRequest(url, {
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest, context: { params: { id: string 
 // PUT /api/categories/[id] - Update a category
 export async function PUT(request: NextRequest, context: { params: { id: string } }) {
   try {
-    console.log('Updating category with ID:', params.id);
+    console.log('Updating category with ID:', context.params.id);
     const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
@@ -106,7 +106,7 @@ export async function PUT(request: NextRequest, context: { params: { id: string 
     console.log('Formatted update data:', formattedData);
 
     // Use the admin endpoint for updating categories
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/categories/${params.id}`;
+    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/categories/${context.params.id}`;
     console.log('Full request URL:', url);
     
     const response = await makeRequest(url, {
@@ -166,7 +166,7 @@ export async function PUT(request: NextRequest, context: { params: { id: string 
 // DELETE /api/categories/[id] - Delete a category
 export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
   try {
-    console.log('Deleting category with ID:', params.id);
+    console.log('Deleting category with ID:', context.params.id);
     const cookieStore = await cookies();
     const token = cookieStore.get('admin_token');
 
@@ -178,7 +178,7 @@ export async function DELETE(request: NextRequest, context: { params: { id: stri
     }
 
     // Use the admin endpoint for deleting categories
-    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/categories/${params.id}`;
+    const url = `${PRODUCT_SERVICE_URL}/api/v1/admin/categories/${context.params.id}`;
     console.log('Full request URL:', url);
     
     const response = await makeRequest(url, {

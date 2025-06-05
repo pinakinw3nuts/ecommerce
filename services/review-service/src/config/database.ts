@@ -13,7 +13,7 @@ export const AppDataSource = new DataSource({
   url: config.databaseUrl,
   entities: [Review, ProductRating],
   synchronize: config.isDevelopment, // Auto-create schema in development
-  logging: config.isDevelopment,
+  logging: false,
   migrations: ['dist/migrations/*.js'],
   ssl: config.isProduction ? {
     rejectUnauthorized: false

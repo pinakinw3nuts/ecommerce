@@ -116,7 +116,7 @@ export async function GET(request: NextRequest, context: { params: { id: string 
       );
     }
 
-    const response = await makeRequest(`${USER_SERVICE_URL}/api/v1/users/${params.id}`, {
+    const response = await makeRequest(`${USER_SERVICE_URL}/api/v1/users/${context.params.id}`, {
       headers: {
         'Authorization': `Bearer ${token.value}`,
         'Content-Type': 'application/json',
@@ -170,7 +170,7 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
 
     const userData = await request.json();
 
-    const response = await makeRequest(`${USER_SERVICE_URL}/api/v1/users/${params.id}`, {
+    const response = await makeRequest(`${USER_SERVICE_URL}/api/v1/users/${context.params.id}`, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${token.value}`,
@@ -224,7 +224,7 @@ export async function DELETE(request: NextRequest, context: { params: { id: stri
       );
     }
 
-    const response = await makeRequest(`${USER_SERVICE_URL}/api/v1/users/${params.id}`, {
+    const response = await makeRequest(`${USER_SERVICE_URL}/api/v1/users/${context.params.id}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token.value}`,

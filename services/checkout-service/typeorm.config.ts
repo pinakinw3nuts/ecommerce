@@ -16,7 +16,7 @@ const dataSource = new DataSource({
   migrations: ['src/migrations/*.ts'],
   migrationsRun: false,
   synchronize: false,
-  logging: true,
+  logging: false,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 

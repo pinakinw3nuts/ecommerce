@@ -15,7 +15,8 @@ export async function createTestDatabase() {
     database: config.database.name + '_test',
     entities: [Order, OrderNote],
     synchronize: true,
-    dropSchema: true
+    dropSchema: true,
+    logging: false
   });
 
   await testDataSource.initialize();

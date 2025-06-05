@@ -4,7 +4,7 @@ import fs from 'fs';
 import net from 'net';
 
 // Configuration - Fix the path to point to the correct root directory
-const rootDir = path.resolve(__dirname, '../..');
+const rootDir = path.resolve(__dirname, '../../..');
 
 interface ServiceConfig {
   name: string;
@@ -50,7 +50,66 @@ const serviceConfig: ServiceConfig[] = [
     port: 3006,
     command: 'dev',
   },
-  // Add other services as needed
+  {
+    name: 'payment-service',
+    priority: 5,
+    port: 3007,
+    command: 'dev',
+  },
+  {
+    name: 'shipping-service',
+    priority: 5,
+    port: 3008,
+    command: 'dev',
+  },
+  {
+    name: 'inventory-service',
+    priority: 6,
+    port: 3009,
+    command: 'dev',
+  },
+  {
+    name: 'company-service',
+    priority: 6,
+    port: 3010,
+    command: 'dev',
+  },
+  {
+    name: 'pricing-service',
+    priority: 7,
+    port: 3011,
+    command: 'dev',
+  },
+  {
+    name: 'admin-service',
+    priority: 7,
+    port: 3012,
+    command: 'dev',
+  },
+  {
+    name: 'wishlist-service',
+    priority: 8,
+    port: 3013,
+    command: 'dev',
+  },
+  {
+    name: 'review-service',
+    priority: 8,
+    port: 3014,
+    command: 'dev',
+  },
+  {
+    name: 'notification-service',
+    priority: 9,
+    port: 3015,
+    command: 'dev',
+  },
+  {
+    name: 'cms-service',
+    priority: 9,
+    port: 3016,
+    command: 'dev',
+  },
 ];
 
 // Sort services by priority
@@ -58,13 +117,15 @@ const sortedServices = [...serviceConfig].sort((a, b) => a.priority - b.priority
 
 // Store child processes to manage them
 const serviceProcesses: Record<string, ChildProcess> = {};
+// Track service status
+const serviceStatus: Record<string, 'starting' | 'running' | 'failed' | 'not-found'> = {};
 
 /**
  * Check if a service directory exists
  */
 function serviceExists(serviceName: string): boolean {
-  // Check directly in the services directory
-  const servicePath = path.join(rootDir, serviceName);
+  // Check in the services directory
+  const servicePath = path.join(rootDir, 'services', serviceName);
   
   // Log the path we're checking for debugging
   console.log(`Checking for service at: ${servicePath}`);
@@ -97,26 +158,70 @@ async function isPortInUse(port: number): Promise<boolean> {
 }
 
 /**
+ * Verify if service is running by making a TCP connection
+ */
+async function isServiceResponding(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Simple TCP connection test to check if port is in use
+    const socket = net.createConnection(port, 'localhost');
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      resolve(false); // Timeout - assume service is not running
+    }, 1000);
+    
+    socket.on('connect', () => {
+      clearTimeout(timeout);
+      socket.destroy();
+      resolve(true); // Connection successful - service is running
+    });
+    
+    socket.on('error', () => {
+      clearTimeout(timeout);
+      resolve(false); // Connection error - service is not running
+    });
+  });
+}
+
+/**
  * Start a service
  */
 async function startService(service: ServiceConfig): Promise<boolean> {
   if (!serviceExists(service.name)) {
     console.log(`Service ${service.name} directory not found. Skipping.`);
+    serviceStatus[service.name] = 'not-found';
     return false;
   }
 
   // Check if port is already in use
   const portInUse = await isPortInUse(service.port);
   if (portInUse) {
-    console.log(`Port ${service.port} for ${service.name} is already in use. Service might be running already.`);
-    return true; // Consider it started
+    // Verify if it's our service responding on this port or something else
+    const isServiceRunning = await isServiceResponding(service.port);
+    if (isServiceRunning) {
+      console.log(`Service ${service.name} is already running on port ${service.port}.`);
+      serviceStatus[service.name] = 'running';
+      return true;
+    } else {
+      console.log(`Port ${service.port} for ${service.name} is in use by another process. Can't start service.`);
+      serviceStatus[service.name] = 'failed';
+      return false;
+    }
   }
 
   return new Promise((resolve) => {
     console.log(`Starting ${service.name}...`);
+    serviceStatus[service.name] = 'starting';
     
-    const serviceDir = path.join(rootDir, service.name);
+    const serviceDir = path.join(rootDir, 'services', service.name);
     
+    // Check if package.json exists in the service directory
+    if (!fs.existsSync(path.join(serviceDir, 'package.json'))) {
+      console.log(`No package.json found for ${service.name}. Skipping.`);
+      serviceStatus[service.name] = 'failed';
+      resolve(false);
+      return;
+    }
+
     // Use pnpm to start the service
     const child = spawn('pnpm', ['run', service.command], {
       cwd: serviceDir,
@@ -141,15 +246,36 @@ async function startService(service: ServiceConfig): Promise<boolean> {
     child.on('close', (code) => {
       if (code !== 0) {
         console.error(`${service.name} process exited with code ${code}`);
+        serviceStatus[service.name] = 'failed';
+      } else {
+        serviceStatus[service.name] = 'running';
       }
       delete serviceProcesses[service.name];
     });
     
-    // Wait a bit to ensure the service has started
-    setTimeout(() => {
-      console.log(`${service.name} started successfully.`);
-      resolve(true);
-    }, 3000);
+    // Wait to check if the service started properly
+    setTimeout(async () => {
+      // Update status based on whether port is in use and service is responding
+      const isPortActive = await isPortInUse(service.port);
+      if (isPortActive) {
+        const isResponding = await isServiceResponding(service.port);
+        if (isResponding) {
+          serviceStatus[service.name] = 'running';
+          console.log(`${service.name} started successfully.`);
+          resolve(true);
+        } else {
+          // Port is in use but service doesn't respond to health checks
+          // May still be a valid service but without a health endpoint
+          serviceStatus[service.name] = 'running';
+          console.log(`${service.name} started, but health check failed. Check if service is configured properly.`);
+          resolve(true);
+        }
+      } else {
+        serviceStatus[service.name] = 'failed';
+        console.error(`${service.name} failed to start.`);
+        resolve(false);
+      }
+    }, 5000);
   });
 }
 
@@ -166,7 +292,6 @@ export async function startAllServices(): Promise<void> {
     if (!priorityGroups[service.priority]) {
       priorityGroups[service.priority] = [];
     }
-    // Now we're sure priorityGroups[service.priority] exists
     priorityGroups[service.priority]!.push(service);
   });
   
@@ -183,7 +308,23 @@ export async function startAllServices(): Promise<void> {
     await Promise.all(services.map(service => startService(service)));
   }
   
-  console.log('All services started successfully.');
+  // Print a summary of services started
+  console.log('\nService start summary:');
+  console.log('--------------------');
+  for (const service of sortedServices) {
+    const status = serviceStatus[service.name] || 'unknown';
+    const statusDisplay = {
+      'running': '✅ RUNNING',
+      'starting': '⏳ STARTING',
+      'failed': '❌ FAILED',
+      'not-found': '⚠️ NOT FOUND',
+      'unknown': '❓ UNKNOWN',
+    }[status];
+    
+    console.log(`${service.name.padEnd(20)} - ${statusDisplay}`);
+  }
+  
+  console.log('\nServices startup complete. Check individual service logs for more details.');
 }
 
 /**
@@ -197,8 +338,16 @@ export function stopAllServices(): void {
     if (process) {
       console.log(`Stopping ${serviceName}...`);
       process.kill();
+      serviceStatus[serviceName] = 'failed'; // Mark as no longer running
     }
   });
+}
+
+/**
+ * Get the current status of all services
+ */
+export function getServiceStatus(): Record<string, 'starting' | 'running' | 'failed' | 'not-found'> {
+  return { ...serviceStatus };
 }
 
 // Handle process termination
@@ -222,4 +371,4 @@ if (require.main === module) {
   });
 }
 
-export { serviceProcesses }; 
+export { serviceProcesses, serviceConfig }; 

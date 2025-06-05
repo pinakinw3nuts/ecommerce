@@ -33,6 +33,56 @@ export default async function userRoutes(fastify: FastifyInstance) {
     return authGuard(request, reply);
   });
 
+  // Get current user profile
+  fastify.get('/me', {
+    schema: {
+      tags: ['users'],
+      summary: 'Get current user profile',
+      description: 'Retrieve the profile of the currently authenticated user',
+      security: [{ bearerAuth: [] }],
+      response: {
+        200: {
+          description: 'User profile retrieved successfully',
+          ...userResponseSchema
+        },
+        401: {
+          description: 'Unauthorized - Authentication required',
+          type: 'object',
+          properties: {
+            statusCode: { type: 'integer' },
+            error: { type: 'string' },
+            message: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, userController.getProfile.bind(userController));
+
+  // Get current user profile (versioned)
+  fastify.get('/v1/me', {
+    schema: {
+      tags: ['users'],
+      summary: 'Get current user profile (v1)',
+      description: 'Retrieve the profile of the currently authenticated user (API v1)',
+      security: [{ bearerAuth: [] }],
+      response: {
+        200: {
+          description: 'User profile retrieved successfully',
+          ...userResponseSchema
+        },
+        401: {
+          description: 'Unauthorized - Authentication required',
+          type: 'object',
+          properties: {
+            statusCode: { type: 'integer' },
+            error: { type: 'string' },
+            message: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, userController.getProfile.bind(userController));
+
   // Create user (public route)
   fastify.post('/users', {
     schema: {

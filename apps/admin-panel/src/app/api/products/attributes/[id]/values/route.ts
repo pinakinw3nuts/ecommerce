@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
     const body = await request.json();
     
     // Forward request to product service with correct API path for admin operations
-    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/${params.id}/values`, {
+    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/admin/attributes/${context.params.id}/values`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token.value}`,
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
     const data = await response.json();
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
-    console.error(`Error adding value to attribute ${params.id}:`, error);
+    console.error(`Error adding value to attribute ${context.params.id}:`, error);
     return NextResponse.json(
       { message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
       { status: 500 }

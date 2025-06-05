@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   env: {
-    PORT: '5001',
+    PORT: '3200',
   },
   output: 'standalone',
   typescript: {

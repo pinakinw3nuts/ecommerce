@@ -46,7 +46,7 @@ export const offerApi = {
     if (params.take) queryParams.append('take', params.take.toString());
     
     try {
-      const response = await fetch(`/api/coupons?${queryParams.toString()}`, {
+      const response = await fetch(`/api/v1/coupons?${queryParams.toString()}`, {
         headers: getAuthHeaders()
       });
       
@@ -69,7 +69,7 @@ export const offerApi = {
 
   // Get coupon by ID
   getCouponById: async (id: string): Promise<Coupon> => {
-    const response = await fetch(`/api/coupons/${id}`, {
+    const response = await fetch(`/api/v1/coupons/${id}`, {
       headers: getAuthHeaders()
     });
     return handleResponse(response);

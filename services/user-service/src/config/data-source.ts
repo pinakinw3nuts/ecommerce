@@ -15,7 +15,7 @@ export const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD || 'postgres',
   database: process.env.DB_NAME || 'ecommerce',
   synchronize: false,
-  logging: process.env.NODE_ENV === 'development',
+  logging: false,
   entities: [User, Address, LoyaltyProgramEnrollment],
   migrations: [path.join(__dirname, '..', 'migrations', '*.{ts,js}')],
   subscribers: [],
@@ -32,6 +32,7 @@ async function initializeDatabase() {
       username: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
       database: 'postgres', // Connect to default postgres database
+      logging: false, // Disable query logging
     });
 
     await tempDataSource.initialize();

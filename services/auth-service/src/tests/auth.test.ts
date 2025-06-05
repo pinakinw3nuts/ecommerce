@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { StartedPostgreSqlContainer, PostgreSqlContainer } from 'testcontainers';
 import { DataSource } from 'typeorm';
@@ -29,6 +30,7 @@ describe('Auth Routes', () => {
       database: container.getDatabase(),
       entities: [User],
       synchronize: true,
+      logging: false, // Disable query logging
     });
 
     await dataSource.initialize();

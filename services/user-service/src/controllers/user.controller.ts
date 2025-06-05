@@ -4,18 +4,12 @@ import { UserService } from '../services/user.service';
 import { UserStatus, UserRole, User } from '../entities/user.entity';
 import logger from '../utils/logger';
 import { validateRequest } from '../middlewares/validate-request';
-import { CurrentUser } from '../middlewares/auth';
+import { TokenPayload } from '../utils/jwt';
 
-// Extend the Request interface
-declare global {
-  namespace Express {
-    interface Request {
-      currentUser?: {
-        id: string;
-        email: string;
-        role?: string;
-      };
-    }
+// Extend the Request interface to include user property
+declare module 'fastify' {
+  interface FastifyRequest {
+    user: TokenPayload;
   }
 }
 
@@ -73,7 +67,12 @@ export class UserController {
    */
   async getProfile(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const user = await this.userService.getUserProfile(request.currentUser.id);
+      // Check if user exists in the request
+      if (!request.user?.userId) {
+        return reply.status(401).send({ message: 'Unauthorized - User not authenticated' });
+      }
+
+      const user = await this.userService.getUserProfile(request.user.userId);
       return reply.send(user);
     } catch (error) {
       logger.error(error, 'Failed to get user profile');
@@ -86,12 +85,12 @@ export class UserController {
    */
   async updateProfile(request: FastifyRequest, reply: FastifyReply) {
     try {
-      if (!request.currentUser?.id) {
+      if (!request.user?.userId) {
         return reply.status(401).send({ message: 'Unauthorized' });
       }
 
       const updatedUser = await this.userService.updateUserProfile(
-        request.currentUser.id,
+        request.user.userId,
         request.body
       );
       return reply.send(updatedUser);
@@ -106,7 +105,11 @@ export class UserController {
    */
   async enrollInLoyalty(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const enrollment = await this.userService.enrollInLoyaltyProgram(request.currentUser.id);
+      if (!request.user?.userId) {
+        return reply.status(401).send({ message: 'Unauthorized' });
+      }
+      
+      const enrollment = await this.userService.enrollInLoyaltyProgram(request.user.userId);
       return reply.send(enrollment);
     } catch (error) {
       logger.error(error, 'Failed to enroll user in loyalty program');
@@ -119,8 +122,12 @@ export class UserController {
    */
   async changeRole(request: FastifyRequest, reply: FastifyReply) {
     try {
+      if (!request.user?.userId) {
+        return reply.status(401).send({ message: 'Unauthorized' });
+      }
+      
       const { status } = request.body as { status: UserStatus };
-      const updatedUser = await this.userService.changeUserStatus(request.currentUser.id, status);
+      const updatedUser = await this.userService.changeUserStatus(request.user.userId, status);
       return reply.send(updatedUser);
     } catch (error) {
       logger.error(error, 'Failed to change user role');
@@ -130,12 +137,12 @@ export class UserController {
 
   async updatePreferences(request: FastifyRequest, reply: FastifyReply) {
     try {
-      if (!request.currentUser?.id) {
+      if (!request.user?.userId) {
         return reply.status(401).send({ message: 'Unauthorized' });
       }
 
       const updatedUser = await this.userService.updateUserPreferences(
-        request.currentUser.id,
+        request.user.userId,
         request.body
       );
       return reply.send(updatedUser);

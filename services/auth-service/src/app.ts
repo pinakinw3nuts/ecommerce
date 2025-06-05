@@ -9,7 +9,7 @@ import { AuthService } from './services/auth.service';
 import { registerAuthRoutes } from './routes/auth.routes';
 import { configTyped } from './config/env';
 import logger from './utils/logger';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { AppDataSource } from './config/data-source';
 
 interface DIContainer {
@@ -37,16 +37,11 @@ async function ensureAdminUser() {
         role: UserRole.ADMIN,
         email: 'admin@example.com'
       },
-      select: ['id', 'email', 'role', 'status'] // Add select to see the fields
+      select: ['id', 'email', 'role', 'status']
     });
 
     if (adminExists) {
-      logger.info({
-        userId: adminExists.id,
-        email: adminExists.email,
-        role: adminExists.role,
-        status: adminExists.status
-      }, 'Admin user already exists');
+      logger.info('Admin user already exists');
       return;
     }
 
@@ -63,15 +58,10 @@ async function ensureAdminUser() {
       isEmailVerified: true
     });
 
-    const savedUser = await userRepository.save(adminUser);
-    logger.info({
-      userId: savedUser.id,
-      email: savedUser.email,
-      role: savedUser.role,
-      status: savedUser.status
-    }, 'Admin user created successfully');
+    await userRepository.save(adminUser);
+    logger.info('Admin user created successfully');
   } catch (error) {
-    logger.error(error, 'Failed to ensure admin user exists');
+    logger.error('Failed to ensure admin user exists');
     throw error; // Re-throw to prevent app from starting if this fails
   }
 }
@@ -140,13 +130,12 @@ export default async function createApp() {
         db: configTyped.redis.db,
         retryStrategy: (times: number) => {
           const delay = Math.min(times * 50, 2000);
-          logger.info({ times, delay }, 'Redis reconnection attempt');
           return delay;
         }
       });
 
-      redis.on('error', (error: Error) => {
-        logger.error(error, 'Redis connection error');
+      redis.on('error', () => {
+        logger.error('Redis connection error');
       });
 
       redis.on('connect', () => {
@@ -156,7 +145,7 @@ export default async function createApp() {
       logger.warn('Redis is disabled in development mode. Rate limiting and caching will not work.');
     }
   } catch (error) {
-    logger.error(error, 'Failed to initialize Redis');
+    logger.error('Failed to initialize Redis');
     // Continue without Redis in development
     if (configTyped.isProduction) {
       throw error; // Re-throw in production
@@ -168,7 +157,7 @@ export default async function createApp() {
     await AppDataSource.initialize();
     logger.info('Database connection initialized');
   } catch (error) {
-    logger.error(error, 'Failed to initialize database connection');
+    logger.error('Failed to initialize database connection');
     throw error;
   }
 
@@ -208,8 +197,8 @@ export default async function createApp() {
   await ensureAdminUser();
 
   // Error handler
-  app.setErrorHandler((error, _request, reply) => {
-    logger.error(error);
+  app.setErrorHandler((_error, _request, reply) => {
+    logger.error('Internal server error');
     reply.status(500).send({
       status: 'error',
       message: 'Internal Server Error'
@@ -238,7 +227,7 @@ if (require.main === module) {
       });
       logger.info(`Server listening on ${configTyped.host}:${configTyped.port}`);
     } catch (err) {
-      logger.error(err);
+      logger.error('Server startup failed');
       process.exit(1);
     }
   };

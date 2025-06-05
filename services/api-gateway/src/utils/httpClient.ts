@@ -37,16 +37,45 @@ export async function forwardRequest(serviceRequest: ServiceRequest): Promise<Se
   const { method, url, headers = {}, body, timeout = 30000 } = serviceRequest;
 
   try {
+    // Special detailed logging for user service requests
+    const isUserServiceRequest = url.includes('user-service') || url.includes('3002');
+    if (isUserServiceRequest) {
+      logger.info({
+        msg: 'Forwarding request to user service',
+        method,
+        url,
+        headers: Object.keys(headers),
+        hasAuth: !!headers['authorization'],
+        authPrefix: headers['authorization'] ? headers['authorization'].toString().substring(0, 15) + '...' : 'none',
+        timeout,
+      });
+      
+      // Special handling for PATCH requests to user service
+      if (method === 'PATCH') {
+        logger.info({
+          msg: 'Special handling for user service PATCH request',
+          url,
+          bodyKeys: body ? Object.keys(body as object) : [],
+        });
+      }
+    }
+
+    // Log the full URL and headers for debugging
     logger.debug({
       msg: 'Forwarding request to service',
       method,
       url,
+      headers: Object.keys(headers),
+      hasAuth: !!headers['authorization'],
       hasBody: !!body,
+      bodyType: body ? typeof body : 'none',
+      timeout,
     });
 
     // Create a clean copy of headers, always omitting content-length to let undici calculate it
     const cleanHeaders = { ...headers };
     delete cleanHeaders['content-length'];
+    delete cleanHeaders['transfer-encoding']; // Remove transfer-encoding header to prevent errors
     
     // Convert body to string if it exists
     let bodyData: string | undefined;
@@ -56,6 +85,16 @@ export async function forwardRequest(serviceRequest: ServiceRequest): Promise<Se
       if (!cleanHeaders['content-type']) {
         cleanHeaders['content-type'] = 'application/json';
       }
+      
+      // Log the body for debugging (truncated for large bodies)
+      const bodyPreview = typeof bodyData === 'string' && bodyData.length > 100 
+        ? bodyData.substring(0, 100) + '...' 
+        : bodyData;
+      logger.debug({
+        msg: 'Request body preview',
+        bodyPreview,
+        contentType: cleanHeaders['content-type'],
+      });
     }
 
     const response = await request(url, {
@@ -68,21 +107,69 @@ export async function forwardRequest(serviceRequest: ServiceRequest): Promise<Se
     });
 
     // Try to parse the response body as JSON, but fall back to text or undefined
-    const responseBody = await response.body.json().catch(async () => {
+    let responseBody;
+    try {
+      responseBody = await response.body.json();
+      logger.debug({
+        msg: 'Response parsed as JSON',
+        status: response.statusCode,
+      });
+    } catch (jsonError) {
       try {
-        return await response.body.text();
-      } catch (e) {
-        return undefined;
+        responseBody = await response.body.text();
+        logger.debug({
+          msg: 'Response parsed as text',
+          status: response.statusCode,
+          textLength: responseBody ? responseBody.length : 0,
+        });
+      } catch (textError) {
+        responseBody = undefined;
+        logger.debug({
+          msg: 'Could not parse response body',
+          status: response.statusCode,
+        });
       }
-    });
+    }
 
-    logger.debug({
-      msg: 'Service response received',
-      method,
-      url,
-      status: response.statusCode,
-      responseBodyType: typeof responseBody,
-    });
+    // Special detailed logging for user service responses
+    if (isUserServiceRequest) {
+      logger.info({
+        msg: 'User service response received',
+        method,
+        url,
+        status: response.statusCode,
+        responseHeaders: Object.keys(response.headers),
+        responseBodySample: responseBody ? 
+          (typeof responseBody === 'string' ? 
+            (responseBody.length > 100 ? responseBody.substring(0, 100) + '...' : responseBody) 
+            : JSON.stringify(responseBody).substring(0, 100) + '...') 
+          : 'undefined',
+      });
+    }
+
+    // Log detailed information for error responses
+    if (response.statusCode >= 400) {
+      logger.error({
+        msg: 'Service returned error status',
+        method,
+        url,
+        status: response.statusCode,
+        responseHeaders: Object.keys(response.headers),
+        responseBody: responseBody ? 
+          (typeof responseBody === 'string' ? 
+            (responseBody.length > 200 ? responseBody.substring(0, 200) + '...' : responseBody) 
+            : JSON.stringify(responseBody).substring(0, 200) + '...') 
+          : 'undefined',
+      });
+    } else {
+      logger.debug({
+        msg: 'Service response received',
+        method,
+        url,
+        status: response.statusCode,
+        responseBodyType: typeof responseBody,
+      });
+    }
 
     return {
       status: response.statusCode,
@@ -95,6 +182,8 @@ export async function forwardRequest(serviceRequest: ServiceRequest): Promise<Se
       msg: 'Service request failed',
       method,
       url,
+      errorName: error instanceof Error ? error.name : 'Unknown',
+      errorMessage: error instanceof Error ? error.message : String(error),
     });
     throw error;
   }

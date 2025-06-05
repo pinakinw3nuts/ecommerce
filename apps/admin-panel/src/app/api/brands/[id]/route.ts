@@ -52,7 +52,7 @@ export async function GET(request: NextRequest, context: { params: { id: string 
 
     console.log('Making request with token:', token.value);
     const response = await makeRequest(
-      `${PRODUCT_SERVICE_URL}/api/v1/brands/${params.id}`,
+      `${PRODUCT_SERVICE_URL}/api/v1/admin/brands/${context.params.id}`,
       {
         headers: {
           'Authorization': `Bearer ${token.value}`,
@@ -130,7 +130,7 @@ export async function PUT(request: NextRequest, context: { params: { id: string 
     console.log('Updating brand with data:', brandData);
 
     const response = await makeRequest(
-      `${PRODUCT_SERVICE_URL}/api/v1/brands/${params.id}`,
+      `${PRODUCT_SERVICE_URL}/api/v1/admin/brands/${context.params.id}`,
       {
         method: 'PUT',
         headers: {
@@ -207,7 +207,7 @@ export async function DELETE(request: NextRequest, context: { params: { id: stri
     }
 
     const response = await makeRequest(
-      `${PRODUCT_SERVICE_URL}/api/v1/brands/${params.id}`,
+      `${PRODUCT_SERVICE_URL}/api/v1/admin/brands/${context.params.id}`,
       {
         method: 'DELETE',
         headers: {

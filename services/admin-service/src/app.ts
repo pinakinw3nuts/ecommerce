@@ -103,19 +103,10 @@ export async function buildApp(options: FastifyServerOptions = {}): Promise<Fast
 
   // Global error handler
   app.setErrorHandler((error, request, reply) => {
-    logger.error({
-      message: 'Unhandled error occurred',
-      error: {
-        message: error.message,
-        stack: error.stack,
-      },
-      request: {
-        method: request.method,
-        url: request.url,
-        params: request.params,
-        query: request.query,
-      },
-    });
+    // Only log server errors
+    if (!error.statusCode || error.statusCode >= 500) {
+      logger.error(`Server error: ${error.message}`);
+    }
 
     // Don't expose internal errors to the client
     const statusCode = error.statusCode || 500;

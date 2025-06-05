@@ -151,6 +151,95 @@ export const brandController = {
   },
 
   registerProtectedRoutes: async (fastify: FastifyInstance) => {
+    console.log('Registering protected brand routes');
+    
+    fastify.get('/', {
+      schema: {
+        tags: ['brands'],
+        summary: 'List all brands (protected)',
+        querystring: {
+          type: 'object',
+          properties: {
+            skip: { type: 'number' },
+            take: { type: 'number' },
+            isActive: { type: 'boolean' }
+          }
+        },
+        response: {
+          200: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                description: { type: 'string' },
+                logoUrl: { type: 'string' },
+                website: { type: 'string' },
+                isActive: { type: 'boolean' },
+                createdAt: { type: 'string', format: 'date-time' },
+                updatedAt: { type: 'string', format: 'date-time' }
+              }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{
+        Querystring: {
+          skip?: number;
+          take?: number;
+          isActive?: boolean;
+        }
+      }>, reply) => {
+        console.log('Admin brands GET / handler called');
+        const brands = await brandService.listBrands(request.query);
+        return reply.send(brands);
+      }
+    });
+    
+    fastify.get('/:id', {
+      schema: {
+        tags: ['brands'],
+        summary: 'Get a brand by ID (protected)',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Brand ID' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              description: { type: 'string' },
+              logoUrl: { type: 'string' },
+              website: { type: 'string' },
+              isActive: { type: 'boolean' },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+        console.log(`Admin brands GET /${request.params.id} handler called`);
+        const brand = await brandService.getBrandById(request.params.id);
+        if (!brand) {
+          return reply.code(404).send({ message: 'Brand not found' });
+        }
+        return reply.send(brand);
+      }
+    });
+
     fastify.post('/', {
       schema: {
         tags: ['brands'],
@@ -184,6 +273,7 @@ export const brandController = {
       },
       preHandler: validateRequest(brandSchema),
       handler: async (request: FastifyRequest<{ Body: z.infer<typeof brandSchema> }>, reply) => {
+        console.log('Admin brands POST / handler called');
         const brand = await brandService.createBrand(request.body);
         return reply.code(201).send(brand);
       }
@@ -237,6 +327,7 @@ export const brandController = {
         Params: { id: string };
         Body: Partial<z.infer<typeof brandSchema>>;
       }>, reply) => {
+        console.log(`Admin brands PUT /${request.params.id} handler called`);
         try {
           const brand = await brandService.updateBrand(request.params.id, request.body);
           return reply.send(brand);
@@ -271,6 +362,7 @@ export const brandController = {
         }
       },
       handler: async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+        console.log(`Admin brands DELETE /${request.params.id} handler called`);
         try {
           await brandService.deleteBrand(request.params.id);
           return reply.code(204).send();

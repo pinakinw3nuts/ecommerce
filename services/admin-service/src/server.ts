@@ -8,16 +8,15 @@ let server: FastifyInstance;
 
 // Graceful shutdown function
 async function closeGracefully(signal: string) {
-  logger.info(`Received signal to terminate: ${signal}`);
+  logger.info(`Shutting down: ${signal}`);
   
   try {
     if (server) {
       await server.close();
-      logger.info('HTTP server closed');
     }
     process.exit(0);
   } catch (error) {
-    logger.error('Error during graceful shutdown', error);
+    logger.error('Error during shutdown');
     process.exit(1);
   }
 }
@@ -33,11 +32,9 @@ const start = async () => {
     
     // Start listening
     await server.listen({ port: env.PORT, host: '0.0.0.0' });
-    logger.info(`🚀 Admin service running at http://localhost:${env.PORT}`);
-    logger.info(`📚 Documentation available at http://localhost:${env.PORT}/documentation`);
+    logger.info(`Admin service running at http://localhost:${env.PORT}`);
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    logger.error(`Error starting server: ${errorMessage}`);
+    logger.error(`Failed to start server`);
     process.exit(1);
   }
 };
@@ -46,11 +43,11 @@ const start = async () => {
 process.on('SIGINT', () => closeGracefully('SIGINT'));
 process.on('SIGTERM', () => closeGracefully('SIGTERM'));
 process.on('uncaughtException', (error) => {
-  logger.fatal('Uncaught exception:', error);
+  logger.fatal('Uncaught exception');
   closeGracefully('uncaughtException');
 });
 process.on('unhandledRejection', (reason) => {
-  logger.fatal('Unhandled rejection:', reason);
+  logger.fatal('Unhandled rejection');
   closeGracefully('unhandledRejection');
 });
 

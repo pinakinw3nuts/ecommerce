@@ -3,11 +3,11 @@ import { productRoutes } from './routes/product.routes';
 import { categoryRoutes } from './routes/category.routes';
 import { reviewRoutes } from './routes/review.routes';
 import { attributeRoutes } from './routes/attribute.routes';
+import { brandRoutes } from './routes/brand.routes';
 import { swaggerConfig, swaggerUiOptions } from './config/swagger';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import { authMiddleware } from './middlewares/auth';
-import { brandController } from './controllers/brand.controller';
 import { couponController } from './controllers/coupon.controller';
 import { tagController } from './controllers/tag.controller';
 import fastifyCors from '@fastify/cors';
@@ -66,9 +66,38 @@ export async function buildApp() {
     await publicApp.register(categoryRoutes, { prefix: '/categories' });
     await publicApp.register(reviewRoutes, { prefix: '/reviews' });
     await publicApp.register(attributeRoutes, { prefix: '/attributes' });
-    await publicApp.register(brandController.registerPublicRoutes, { prefix: '/brands' });
+    await publicApp.register(brandRoutes, { prefix: '/brands' });
     await publicApp.register(couponController.registerPublicRoutes, { prefix: '/coupons' });
     await publicApp.register(tagController.registerPublicRoutes, { prefix: '/tags' });
+    
+    // Also register protected routes for tags directly under /api/v1/tags for admin authentication
+    // This allows admin requests to work with both /api/v1/admin/tags and /api/v1/tags
+    console.log('Registering protected routes for tags at /api/v1/tags (for admin authentication)');
+    await publicApp.register(async (protectedTagsApp) => {
+      // Add auth decorator
+      protectedTagsApp.decorate('auth', true);
+      
+      // Add auth middleware
+      protectedTagsApp.addHook('preHandler', authMiddleware);
+      
+      // Register protected routes for tags
+      await protectedTagsApp.register(tagController.registerProtectedRoutes, { prefix: '' });
+    }, { prefix: '/tags' });
+    
+    // Also register protected routes for coupons directly under /api/v1/coupons for admin authentication
+    // This allows admin requests to work with both /api/v1/admin/coupons and /api/v1/coupons
+    console.log('Registering protected routes for coupons at /api/v1/coupons (for admin authentication)');
+    await publicApp.register(async (protectedCouponsApp) => {
+      // Add auth decorator
+      protectedCouponsApp.decorate('auth', true);
+      
+      // Add auth middleware
+      protectedCouponsApp.addHook('preHandler', authMiddleware);
+      
+      // Register protected routes for coupons
+      await protectedCouponsApp.register(couponController.registerProtectedRoutes, { prefix: '' });
+    }, { prefix: '/coupons' });
+    
     console.log('Public routes with v1 prefix registered successfully');
   }, { prefix: '/api/v1' });
 
@@ -83,13 +112,27 @@ export async function buildApp() {
     protectedApp.addHook('preHandler', authMiddleware);
     
     // Register protected routes with their specific prefixes
+    console.log('Registering protected routes for products at /api/v1/admin/products');
     await protectedApp.register(productRoutes, { prefix: '/products' });
+    
+    console.log('Registering protected routes for categories at /api/v1/admin/categories');
     await protectedApp.register(categoryRoutes, { prefix: '/categories' });
+    
+    console.log('Registering protected routes for reviews at /api/v1/admin/reviews');
     await protectedApp.register(reviewRoutes, { prefix: '/reviews' });
+    
+    console.log('Registering protected routes for attributes at /api/v1/admin/attributes');
     await protectedApp.register(attributeRoutes, { prefix: '/attributes' });
-    await protectedApp.register(brandController.registerProtectedRoutes, { prefix: '/brands' });
+    
+    console.log('Registering protected routes for brands at /api/v1/admin/brands');
+    await protectedApp.register(brandRoutes, { prefix: '/brands' });
+    
+    console.log('Registering protected routes for coupons at /api/v1/admin/coupons');
     await protectedApp.register(couponController.registerProtectedRoutes, { prefix: '/coupons' });
+    
+    console.log('Registering protected routes for tags at /api/v1/admin/tags');
     await protectedApp.register(tagController.registerProtectedRoutes, { prefix: '/tags' });
+    
     console.log('Protected routes with v1 prefix registered successfully');
   }, { prefix: '/api/v1/admin' });
 

@@ -7,18 +7,7 @@ let app: Awaited<ReturnType<typeof createApp>> | null = null;
 
 export async function startServer() {
   try {
-    logger.info({
-      service: 'auth-service',
-      version: '1.0.0',
-      module: 'server',
-      server: {
-        nodeEnv: process.env.NODE_ENV,
-        port: configTyped.port,
-        isDevelopment: configTyped.isDevelopment,
-        isProduction: configTyped.isProduction
-      },
-      nodeEnv: process.env.NODE_ENV
-    }, 'Starting Auth Service...');
+    logger.info('Starting Auth Service...');
     
     app = await createApp();
     await app.listen({ 
@@ -28,11 +17,7 @@ export async function startServer() {
     
     return app;
   } catch (error) {
-    logger.error({ 
-      service: 'auth-service',
-      version: '1.0.0',
-      err: error 
-    }, 'Failed to start server');
+    logger.error('Failed to start server');
     process.exit(1);
   }
 }
@@ -46,12 +31,12 @@ if (require.main === module) {
 }
 
 // Handle unhandled rejections and exceptions
-process.on('unhandledRejection', (error) => {
-  logger.fatal(error, 'Unhandled rejection');
+process.on('unhandledRejection', (_error) => {
+  logger.fatal('Unhandled rejection');
   process.exit(1);
 });
 
-process.on('uncaughtException', (error) => {
-  logger.fatal(error, 'Uncaught exception');
+process.on('uncaughtException', (_error) => {
+  logger.fatal('Uncaught exception');
   process.exit(1);
 }); 

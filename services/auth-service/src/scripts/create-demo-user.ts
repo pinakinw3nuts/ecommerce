@@ -1,6 +1,6 @@
 import { AppDataSource } from '../config/data-source';
 import { User, UserRole, UserStatus } from '../entities/user.entity';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import logger from '../utils/logger';
 
 async function createDemoUser() {

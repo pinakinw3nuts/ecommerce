@@ -15,7 +15,7 @@ export const AppDataSource = new DataSource({
   password: config.database.password,
   database: config.database.database,
   synchronize: !config.isProduction,
-  logging: !config.isProduction,
+  logging: false,
   entities: [Payment, PaymentMethod, Refund],
   migrations: ['src/migrations/**/*.ts']
 });

@@ -197,6 +197,191 @@ export const tagController = {
   },
 
   registerProtectedRoutes: async (fastify: FastifyInstance) => {
+    // Add GET route to list tags for admin
+    fastify.get('/', {
+      schema: {
+        tags: ['tags'],
+        summary: 'List all tags (admin)',
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'string' },
+            take: { type: 'string' },
+            pageSize: { type: 'string' },
+            search: { type: 'string' },
+            isActive: { type: 'boolean' },
+            sortBy: { type: 'string' },
+            sortOrder: { type: 'string', enum: ['asc', 'desc'] },
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    slug: { type: 'string' },
+                    isActive: { type: 'boolean' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    updatedAt: { type: 'string', format: 'date-time' }
+                  }
+                }
+              },
+              pagination: {
+                type: 'object',
+                properties: {
+                  total: { type: 'number' },
+                  pageSize: { type: 'number' },
+                  currentPage: { type: 'number' },
+                  totalPages: { type: 'number' },
+                  hasMore: { type: 'boolean' },
+                  hasPrevious: { type: 'boolean' }
+                }
+              }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{
+        Querystring: {
+          page?: string;
+          take?: string;
+          pageSize?: string;
+          search?: string;
+          isActive?: boolean;
+          sortBy?: string;
+          sortOrder?: string;
+        }
+      }>, reply) => {
+        const { page, take, pageSize, search, isActive, sortBy, sortOrder } = request.query;
+        
+        // Calculate pagination parameters
+        const pageNum = page ? parseInt(page) : 1;
+        const pageSizeNum = pageSize ? parseInt(pageSize) : (take ? parseInt(take) : 10);
+        const skip = (pageNum - 1) * pageSizeNum;
+        
+        const result = await tagService.listTags({
+          skip,
+          take: pageSizeNum,
+          search,
+          isActive,
+          sortBy,
+          sortOrder
+        });
+        
+        // Build pagination response
+        const totalPages = Math.ceil(result.total / pageSizeNum);
+        
+        return reply.send({
+          tags: result.tags,
+          pagination: {
+            total: result.total,
+            pageSize: pageSizeNum,
+            currentPage: pageNum,
+            totalPages,
+            hasMore: result.hasMore,
+            hasPrevious: pageNum > 1
+          }
+        });
+      }
+    });
+
+    // Add GET route to get a tag by ID for admin
+    fastify.get('/:id', {
+      schema: {
+        tags: ['tags'],
+        summary: 'Get a tag by ID (admin)',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Tag ID' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              slug: { type: 'string' },
+              isActive: { type: 'boolean' },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+        const tag = await tagService.getTagById(request.params.id);
+        if (!tag) {
+          return reply.code(404).send({ message: 'Tag not found' });
+        }
+        return reply.send(tag);
+      }
+    });
+
+    // Add GET route to get products by tag ID for admin
+    fastify.get('/:id/products', {
+      schema: {
+        tags: ['tags'],
+        summary: 'Get products by tag ID (admin)',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Tag ID' }
+          }
+        },
+        querystring: {
+          type: 'object',
+          properties: {
+            skip: { type: 'number' },
+            take: { type: 'number' }
+          }
+        },
+        response: {
+          200: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                description: { type: 'string' },
+                price: { type: 'number' },
+                mediaUrl: { type: 'string' }
+              }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{
+        Params: { id: string };
+        Querystring: { skip?: number; take?: number };
+      }>, reply) => {
+        const products = await tagService.getTagProducts(request.params.id, request.query);
+        return reply.send(products);
+      }
+    });
+
     fastify.post('/', {
       schema: {
         tags: ['tags'],

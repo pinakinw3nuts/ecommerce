@@ -22,7 +22,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME || 'ecom',
   entities: [Order, OrderNote, OrderItem],
   synchronize: !config.isProduction,
-  logging: config.isDevelopment,
+  logging: false,
   ssl: config.isProduction ? {
     rejectUnauthorized: false
   } : false

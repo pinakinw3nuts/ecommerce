@@ -13,7 +13,7 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url: env.DATABASE_URL,
   synchronize: env.NODE_ENV !== 'production', // Auto-sync schema in dev
-  logging: env.NODE_ENV === 'development',
+  logging: false, // Disable query logging
   entities: [
     AdminActivityLog,
     // Add other entities here

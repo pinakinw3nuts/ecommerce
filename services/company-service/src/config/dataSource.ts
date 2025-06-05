@@ -18,7 +18,7 @@ export const AppDataSource = new DataSource({
   // Disable synchronize to avoid conflicts with migrations
   synchronize: false,
   // Enable logging in development
-  logging: env.NODE_ENV === 'development',
+  logging: false,
   // SSL configuration for production environments (e.g. Heroku)
   ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   // Include migrations
