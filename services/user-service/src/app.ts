@@ -30,8 +30,12 @@ export async function createApp() {
 
   // Register plugins
   await app.register(cors, {
-    origin: true,
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Set-Cookie'],
+    maxAge: 86400
   });
 
   // Register Swagger plugins
@@ -53,6 +57,11 @@ export async function createApp() {
     database: process.env.DB_NAME || 'user_service',
     entities: [User, Address, LoyaltyProgramEnrollment],
     synchronize: process.env.NODE_ENV !== 'production',
+    // Enable UUID conversion
+    uuidExtension: 'uuid-ossp',
+    extra: {
+      parseInputAsJSON: true
+    }
   });
 
   await dataSource.initialize();

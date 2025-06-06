@@ -72,10 +72,13 @@ export async function forwardRequest(serviceRequest: ServiceRequest): Promise<Se
       timeout,
     });
 
-    // Create a clean copy of headers, always omitting content-length to let undici calculate it
+    // Create a clean copy of headers, removing problematic ones
     const cleanHeaders = { ...headers };
     delete cleanHeaders['content-length'];
-    delete cleanHeaders['transfer-encoding']; // Remove transfer-encoding header to prevent errors
+    delete cleanHeaders['transfer-encoding'];
+    delete cleanHeaders['expect']; // Remove expect header which causes issues with undici
+    delete cleanHeaders['connection'];
+    delete cleanHeaders['host'];
     
     // Convert body to string if it exists
     let bodyData: string | undefined;

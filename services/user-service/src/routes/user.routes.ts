@@ -33,8 +33,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
     return authGuard(request, reply);
   });
 
-  // Get current user profile
-  fastify.get('/me', {
+  // Get current user profile - single endpoint
+  fastify.get('/user/me', {
     schema: {
       tags: ['users'],
       summary: 'Get current user profile',
@@ -58,16 +58,30 @@ export default async function userRoutes(fastify: FastifyInstance) {
     }
   }, userController.getProfile.bind(userController));
 
-  // Get current user profile (versioned)
-  fastify.get('/v1/me', {
+  // Handle OPTIONS requests for CORS preflight
+  fastify.options('/user/me', (_, reply) => {
+    return reply.send();
+  });
+
+  // Update current user profile - single endpoint
+  fastify.patch('/user/me', {
     schema: {
       tags: ['users'],
-      summary: 'Get current user profile (v1)',
-      description: 'Retrieve the profile of the currently authenticated user (API v1)',
+      summary: 'Update current user profile',
+      description: 'Update the profile of the currently authenticated user',
       security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Full name of the user' },
+          email: { type: 'string', format: 'email', description: 'Email address' },
+          phoneNumber: { type: 'string', description: 'Phone number' },
+          country: { type: 'string', description: 'Country of residence' },
+        },
+      },
       response: {
         200: {
-          description: 'User profile retrieved successfully',
+          description: 'User profile updated successfully',
           ...userResponseSchema
         },
         401: {
@@ -78,10 +92,19 @@ export default async function userRoutes(fastify: FastifyInstance) {
             error: { type: 'string' },
             message: { type: 'string' }
           }
+        },
+        500: {
+          description: 'Internal server error',
+          type: 'object',
+          properties: {
+            statusCode: { type: 'integer' },
+            error: { type: 'string' },
+            message: { type: 'string' }
+          }
         }
       }
     }
-  }, userController.getProfile.bind(userController));
+  }, userController.updateProfile.bind(userController));
 
   // Create user (public route)
   fastify.post('/users', {

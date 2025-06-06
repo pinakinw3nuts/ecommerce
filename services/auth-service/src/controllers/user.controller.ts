@@ -30,7 +30,7 @@ export class UserController {
   async register(fastify: FastifyInstance) {
     // Get current user profile route
     fastify.get(
-      '/me',
+      '/user/me',
       {
         preHandler: authGuard(),
         schema: {
@@ -79,6 +79,26 @@ export class UserController {
           userLogger.error({ error, userId: request.user!.userId }, 'Error fetching user profile');
           throw error;
         }
+      }
+    );
+    
+    // For backward compatibility, add a redirect from the old route
+    fastify.get(
+      '/me',
+      {
+        preHandler: authGuard(),
+        schema: {
+          tags: ['Users'],
+          summary: 'Get current user profile (deprecated)',
+          description: 'Redirects to the new standard route /user/me',
+          security: [{ bearerAuth: [] }],
+          response: {
+            302: { description: 'Redirect to the new endpoint' }
+          }
+        }
+      },
+      async (_, reply: FastifyReply) => {
+        return reply.redirect(302, '/user/me');
       }
     );
 

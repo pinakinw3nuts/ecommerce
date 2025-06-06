@@ -1,30 +1,71 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
-export async function POST(req: NextRequest) {
+// Define schema for forgot password request
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
+
+// API Gateway URL - use explicit IPv4 address
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000/api';
+
+export async function POST(request: NextRequest) {
   try {
-    const body = await req.json();
-    
-    // Validate required fields
-    if (!body.email) {
-      return new NextResponse('Email is required', { status: 400 });
+    // Parse request body
+    const body = await request.json();
+
+    // Validate request body
+    const validationResult = forgotPasswordSchema.safeParse(body);
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { 
+          message: 'Invalid input', 
+          errors: validationResult.error.errors 
+        }, 
+        { status: 400 }
+      );
     }
-    
-    // In a real implementation, this would:
-    // 1. Check if the email exists in the database
-    // 2. Generate a password reset token
-    // 3. Save the token in the database with an expiration time
-    // 4. Send an email to the user with a link containing the token
-    
-    // Mock successful request for demo purposes
-    console.log(`Password reset requested for email: ${body.email}`);
-    
-    // Always return success to prevent email enumeration attacks
-    return new NextResponse(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' }
+
+    // Extract email
+    const { email } = validationResult.data;
+
+    // Call auth service through API gateway
+    const response = await fetch(`${API_GATEWAY_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    // Parse response
+    const result = await response.json();
+
+    // Handle error response
+    if (!response.ok) {
+      return NextResponse.json(
+        { 
+          message: result.message || 'Password reset request failed',
+          status: 'error' 
+        }, 
+        { status: response.status }
+      );
+    }
+
+    // Return success response - we always return success even if email doesn't exist
+    // to prevent email enumeration attacks
+    return NextResponse.json({
+      message: 'If your email exists in our system, you will receive password reset instructions',
+      status: 'success',
     });
   } catch (error) {
     console.error('Forgot password error:', error);
-    return new NextResponse('Request failed', { status: 500 });
+    return NextResponse.json(
+      { 
+        message: 'Internal server error', 
+        status: 'error' 
+      }, 
+      { status: 500 }
+    );
   }
 } 

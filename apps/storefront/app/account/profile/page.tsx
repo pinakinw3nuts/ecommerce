@@ -19,8 +19,8 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        // For demo purposes, we'll fetch without authentication
-        const { data } = await api.get('/users/me');
+        // Use the new standard route
+        const { data } = await api.get('/v1/user/me');
         setUser(data);
         setForm({ name: data.name, email: data.email });
       } catch (error) {
@@ -35,7 +35,8 @@ export default function ProfilePage() {
   const handleUpdate = async () => {
     try {
       setSaving(true);
-      await api.put('/users/me', form);
+      // Use the new standard route
+      await api.patch('/v1/user/me', form);
       setMessage('Profile updated.');
     } catch (error) {
       console.error('Error updating profile:', error);

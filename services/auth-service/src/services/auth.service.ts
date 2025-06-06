@@ -95,7 +95,7 @@ export class AuthService {
   /**
    * Authenticate user with email and password
    */
-  async login(email: string, password: string, requestedRole?: string): Promise<LoginResponse> {
+  async login(email: string, password: string, requestedRole?: UserRole | string): Promise<LoginResponse> {
     try {
       if (!email || !password) {
         throw new AuthenticationError(
@@ -171,18 +171,24 @@ export class AuthService {
       }
 
       // Validate role if requested
-      if (requestedRole && user.role !== requestedRole) {
-        logger.warn({ 
-          userId: user.id, 
-          userRole: user.role, 
-          requestedRole 
-        }, 'Insufficient permissions');
+      if (requestedRole) {
+        // Ensure we're comparing the same type (enum to enum)
+        const roleToCheck = typeof requestedRole === 'string' ? requestedRole : String(requestedRole);
+        const userRole = String(user.role);
+        
+        if (roleToCheck !== userRole) {
+          logger.warn({ 
+            userId: user.id, 
+            userRole: user.role, 
+            requestedRole 
+          }, 'Insufficient permissions');
 
-        throw new AuthenticationError(
-          'Insufficient permissions for requested access',
-          'INSUFFICIENT_PERMISSIONS',
-          403
-        );
+          throw new AuthenticationError(
+            'Insufficient permissions for requested access',
+            'INSUFFICIENT_PERMISSIONS',
+            403
+          );
+        }
       }
 
       // Store the password before it gets removed

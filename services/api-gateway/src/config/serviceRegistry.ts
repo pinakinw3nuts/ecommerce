@@ -37,15 +37,17 @@ export const services: Record<string, ServiceConfig> = {
     name: 'user-service',
     url: getServiceUrl(config.services.user, 3002),
     timeout: 5000,
-    routes: ['/api/users', '/api/me'],
+    routes: [
+      '/api/users',
+      '/api/v1/users',
+      '/api/v1/user/me',
+      '/api/v1/addresses'
+    ],
     versionedRoutes: true,
     specialCases: [
       {
-        pattern: /^\/api\/v\d+\/me(\?|$)/,
-        handler: 'user'
-      },
-      {
-        pattern: /^\/api\/me(\?|$)/,
+        // Single pattern for user profile
+        pattern: /^\/api\/v1\/user\/me(\?|$)/,
         handler: 'user'
       }
     ]
@@ -215,7 +217,44 @@ export function findServiceForPath(path: string): ServiceConfig | undefined {
 
 // Function to get target path for the downstream service
 export function getTargetPath(originalPath: string): string {
-  // For most cases, we can just pass the original path
+  // Extract base path without query parameters
+  const basePath = extractBasePath(originalPath);
+  const queryString = originalPath.includes('?') ? originalPath.substring(originalPath.indexOf('?')) : '';
+
+  // Handle legacy user profile routes - redirect to new standard route
+  if (basePath === '/users/me' || basePath === '/api/users/me' || 
+      basePath === '/me' || basePath === '/api/me') {
+    return `/api/v1/user/me${queryString}`;
+  }
+
+  // Handle versioned paths
+  const versionedMatch = basePath.match(/^\/api\/v(\d+)\//);
+  if (versionedMatch) {
+    // Ensure we don't have duplicate version segments
+    const version = versionedMatch[1];
+    const pathAfterVersion = basePath.substring(versionedMatch[0].length);
+    
+    // Check if the path after version starts with 'v1/' or similar
+    const duplicateVersionMatch = pathAfterVersion.match(/^v\d+\//);
+    if (duplicateVersionMatch) {
+      // Remove the duplicate version segment
+      const cleanPath = pathAfterVersion.substring(duplicateVersionMatch[0].length);
+      return `/api/v${version}/${cleanPath}${queryString}`;
+    }
+    
+    return originalPath;
+  }
+
+  // For non-versioned paths, add v1 prefix
+  if (basePath.startsWith('/api/')) {
+    return `/api/v1${basePath.substring(4)}${queryString}`;
+  }
+
+  // For paths without /api prefix
+  if (!basePath.startsWith('/api/')) {
+    return `/api/v1${basePath}${queryString}`;
+  }
+
   return originalPath;
 }
 

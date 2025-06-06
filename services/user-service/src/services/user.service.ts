@@ -94,20 +94,45 @@ export class UserService {
    * Get user by ID with optional relations
    */
   async getUserById(id: string, relations: string[] = []) {
-    const user = await this.userRepo.findOne({
-      where: { id },
-      relations
-    });
-
-    if (!user) {
-      throw new Error('User not found');
+    try {
+      // Get user without problematic type casting
+      const userResult = await this.dataSource.query(
+        `SELECT * FROM users WHERE id = $1`,
+        [id]
+      );
+      
+      if (!userResult || userResult.length === 0) {
+        throw new NotFoundError('User not found');
+      }
+      
+      const user = userResult[0];
+      
+      // Add relations if requested
+      if (relations.includes('addresses')) {
+        const addresses = await this.dataSource.query(
+          `SELECT * FROM addresses WHERE user_id = $1`,
+          [id]
+        );
+        user.addresses = addresses || [];
+      }
+      
+      if (relations.includes('loyaltyProgram')) {
+        const loyaltyProgram = await this.dataSource.query(
+          `SELECT * FROM loyalty_program_enrollments WHERE user_id = $1`,
+          [id]
+        );
+        user.loyaltyProgram = loyaltyProgram.length > 0 ? loyaltyProgram[0] : null;
+      }
+      
+      return user;
+    } catch (error) {
+      logger.error({ error, userId: id }, 'Failed to get user by ID');
+      throw error;
     }
-
-    return user;
   }
 
   /**
-   * Update user profile
+   * Update user
    */
   async updateUser(id: string, data: UpdateUserInput): Promise<User> {
     const user = await this.getUserById(id);
@@ -138,14 +163,87 @@ export class UserService {
    * Get user profile
    */
   async getUserProfile(id: string) {
-    return this.getUserById(id, ['addresses', 'loyaltyProgram']);
+    try {
+      logger.debug({ userId: id }, 'Getting user profile');
+      
+      // Get user with explicit type casting
+      const userResult = await this.dataSource.query(
+        `SELECT * FROM users WHERE id = $1`,
+        [id]
+      );
+      
+      if (!userResult || userResult.length === 0) {
+        throw new NotFoundError('User not found');
+      }
+      
+      // Get addresses with fixed query - removed the problematic type casting
+      const addresses = await this.dataSource.query(
+        `SELECT * FROM addresses WHERE user_id = $1`,
+        [id]
+      );
+      
+      // Get loyalty program with fixed query - removed the problematic type casting
+      const loyaltyProgram = await this.dataSource.query(
+        `SELECT * FROM loyalty_program_enrollments WHERE user_id = $1`,
+        [id]
+      );
+      
+      // Combine results
+      const user = userResult[0];
+      return {
+        ...user,
+        addresses: addresses || [],
+        loyaltyProgram: loyaltyProgram.length > 0 ? loyaltyProgram[0] : null
+      };
+    } catch (error) {
+      logger.error({ error, userId: id }, 'Failed to get user profile');
+      throw error;
+    }
   }
 
   /**
    * Update user profile
    */
-  async updateUserProfile(id: string, data: any) {
-    return this.updateUser(id, data);
+  async updateUserProfile(id: string, data: Partial<UpdateUserDto>): Promise<User> {
+    try {
+      logger.debug({ userId: id, data }, 'Updating user profile');
+      
+      // Check if the user exists
+      const user = await this.getUserById(id);
+      if (!user) {
+        throw new NotFoundError('User not found');
+      }
+      
+      // Validate email uniqueness if it's being updated
+      if (data.email && data.email !== user.email) {
+        const existingUser = await this.findUserByEmail(data.email);
+        if (existingUser) {
+          throw new BadRequestError('Email already in use');
+        }
+      }
+      
+      // Only allow specific fields to be updated via profile update
+      const allowedFields = ['name', 'email', 'phoneNumber', 'country'];
+      const updateData: Record<string, any> = {};
+      
+      for (const field of allowedFields) {
+        if (field in data) {
+          updateData[field] = data[field];
+        }
+      }
+      
+      // Update the user
+      const updatedUser = await this.userRepo.save({
+        ...user,
+        ...updateData
+      });
+      
+      logger.info({ userId: id }, 'User profile updated successfully');
+      return updatedUser;
+    } catch (error) {
+      logger.error({ error, userId: id }, 'Failed to update user profile');
+      throw error;
+    }
   }
 
   /**

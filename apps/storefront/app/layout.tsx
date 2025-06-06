@@ -4,6 +4,7 @@ import SiteFooter from '@components/layout/SiteFooter';
 import type { Metadata } from 'next';
 import { CartProvider } from '@/contexts/CartContext';
 import { WishlistProvider } from '@/contexts/WishlistContext';
+import { AuthProvider } from '@/contexts/AuthContext';
 import { ToastProvider } from '@/components/ui/Toast';
 
 export const metadata: Metadata = {
@@ -19,13 +20,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="min-h-screen bg-background text-foreground"
       >
         <ToastProvider>
-          <CartProvider>
-            <WishlistProvider>
-              <Header />
-              <main className="min-h-[calc(100vh-160px)]">{children}</main>
-              <SiteFooter />
-            </WishlistProvider>
-          </CartProvider>
+          <AuthProvider>
+            <CartProvider>
+              <WishlistProvider>
+                <Header />
+                <main className="min-h-[calc(100vh-160px)]">{children}</main>
+                <SiteFooter />
+              </WishlistProvider>
+            </CartProvider>
+          </AuthProvider>
         </ToastProvider>
       </body>
     </html>

@@ -72,11 +72,20 @@ export class UserController {
         return reply.status(401).send({ message: 'Unauthorized - User not authenticated' });
       }
 
+      logger.debug({ userId: request.user.userId }, 'Getting user profile');
       const user = await this.userService.getUserProfile(request.user.userId);
       return reply.send(user);
-    } catch (error) {
-      logger.error(error, 'Failed to get user profile');
-      return reply.status(500).send({ message: 'Internal server error' });
+    } catch (error: any) {
+      logger.error({ error }, 'Failed to get user profile');
+      
+      if (error.name === 'NotFoundError') {
+        return reply.status(404).send({ message: 'User not found' });
+      }
+      
+      return reply.status(500).send({ 
+        message: 'Internal server error',
+        error: error.message
+      });
     }
   }
 
@@ -89,14 +98,46 @@ export class UserController {
         return reply.status(401).send({ message: 'Unauthorized' });
       }
 
+      // Validate request body
+      const allowedFields = ['name', 'email', 'phoneNumber', 'country'];
+      const updateData: Record<string, any> = {};
+      
+      // Only include allowed fields from the request body
+      for (const field of allowedFields) {
+        if (request.body && typeof request.body === 'object' && field in request.body) {
+          updateData[field] = (request.body as Record<string, any>)[field];
+        }
+      }
+
+      // Check if there's any data to update
+      if (Object.keys(updateData).length === 0) {
+        return reply.status(400).send({ 
+          message: 'Bad request - No valid fields to update',
+          allowedFields
+        });
+      }
+
       const updatedUser = await this.userService.updateUserProfile(
         request.user.userId,
-        request.body
+        updateData
       );
+      
       return reply.send(updatedUser);
-    } catch (error) {
-      logger.error(error, 'Failed to update user profile');
-      return reply.status(500).send({ message: 'Internal server error' });
+    } catch (error: any) {
+      logger.error({ error }, 'Failed to update user profile');
+      
+      if (error.name === 'NotFoundError') {
+        return reply.status(404).send({ message: 'User not found' });
+      }
+      
+      if (error.name === 'BadRequestError') {
+        return reply.status(400).send({ message: error.message });
+      }
+      
+      return reply.status(500).send({ 
+        message: 'Internal server error',
+        error: error.message
+      });
     }
   }
 

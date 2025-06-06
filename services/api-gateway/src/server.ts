@@ -1,12 +1,15 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import cookie from '@fastify/cookie';
 import { config } from './config/env';
 import { configureRateLimiter } from './middlewares/rateLimiter';
 import { configureRequestLogger } from './middlewares/requestLogger';
 import healthRoutes from './routes/health.routes';
 import proxyRoutes from './routes/proxy.routes';
 import rootRoutes from './routes/root.routes';
+import authRoutes from './routes/auth';
+import userRoutes from './routes/user.routes';
 import { httpLogger as logger } from './utils/logger';
 
 export class Server {
@@ -32,6 +35,23 @@ export class Server {
       await this.server.register(cors, {
         origin: config.server.cors.origin,
         credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+        exposedHeaders: ['Set-Cookie'],
+        maxAge: 86400
+      });
+
+      // Cookie plugin
+      await this.server.register(cookie, {
+        secret: config.server.cookieSecret || 'your-secret-key',
+        hook: 'onRequest',
+        parseOptions: {
+          httpOnly: true,
+          secure: config.server.nodeEnv === 'production',
+          sameSite: config.server.nodeEnv === 'production' ? 'strict' : 'lax',
+          path: '/',
+          maxAge: 7 * 24 * 60 * 60 // 7 days
+        }
       });
 
       // Rate limiting
@@ -43,6 +63,8 @@ export class Server {
       // Register routes
       await this.server.register(rootRoutes);
       await this.server.register(healthRoutes);
+      await this.server.register(userRoutes, { prefix: '/api' });
+      await this.server.register(authRoutes, { prefix: '/api/auth' });
       await this.server.register(proxyRoutes);
 
       logger.info('Server configured successfully');

@@ -43,6 +43,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@fastify/cookie": "8.3.0",
     "@fastify/cors": "^8.3.0",
     "@fastify/helmet": "^11.1.1",
     "@fastify/rate-limit": "^8.0.3",

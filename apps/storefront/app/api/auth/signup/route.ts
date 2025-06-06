@@ -1,32 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
-export async function POST(req: NextRequest) {
+// Define signup schema
+const signupSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+// API Gateway URL - use explicit IPv4 address
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000/api';
+
+export async function POST(request: NextRequest) {
   try {
-    const body = await req.json();
-    
-    // Validate required fields
-    if (!body.name || !body.email || !body.password) {
-      return new NextResponse('Name, email, and password are required', { status: 400 });
+    // Parse request body
+    const body = await request.json();
+
+    // Validate request body
+    const validationResult = signupSchema.safeParse(body);
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { 
+          message: 'Invalid input', 
+          errors: validationResult.error.errors 
+        }, 
+        { status: 400 }
+      );
     }
-    
-    // In a real implementation, this would:
-    // 1. Check if the email is already in use
-    // 2. Hash the password
-    // 3. Create a new user in the database
-    // 4. Generate a JWT token
-    // 5. Return the token to the client
-    
-    // Mock successful signup for demo purposes
-    return NextResponse.json({
-      accessToken: 'mock_jwt_token',
-      user: {
-        id: 'user_' + Date.now(),
-        name: body.name,
-        email: body.email
-      }
+
+    // Extract user data
+    const { name, email, password } = validationResult.data;
+
+    // Call auth service through API gateway
+    const response = await fetch(`${API_GATEWAY_URL}/auth/signup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, email, password }),
     });
+
+    // Parse response
+    const result = await response.json();
+
+    // Handle error response
+    if (!response.ok) {
+      return NextResponse.json(
+        { 
+          message: result.message || 'Registration failed',
+          status: 'error' 
+        }, 
+        { status: response.status }
+      );
+    }
+
+    // Return success response
+    return NextResponse.json({
+      message: 'Registration successful',
+      status: 'success',
+      user: {
+        id: result.user.id,
+        name: result.user.name,
+        email: result.user.email,
+      },
+    }, { status: 201 });
   } catch (error) {
     console.error('Signup error:', error);
-    return new NextResponse('Signup failed', { status: 500 });
+    return NextResponse.json(
+      { 
+        message: 'Internal server error', 
+        status: 'error' 
+      }, 
+      { status: 500 }
+    );
   }
 } 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent, useEffect, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '../ui/Button';
@@ -9,13 +9,15 @@ import { Badge } from '../ui/Badge';
 import {
   CartIcon,
   HeartIcon,
-  UserIcon,
   SearchIcon,
   MenuIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  UserIcon,
+  LogOutIcon
 } from '../icons';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Define the categories to match sidebar categories
 const searchCategories = [
@@ -27,6 +29,9 @@ const searchCategories = [
   { id: 'beauty', name: 'Beauty' },
 ];
 
+// Add this constant near the top of the file
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:3000/api';
+
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
@@ -36,8 +41,27 @@ export default function Header() {
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchCategory, setSearchCategory] = useState('all');
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  
   const { itemCount: cartItemCount } = useCart();
   const { itemCount: wishlistItemCount } = useWishlist();
+  const { user, isAuthenticated, logout } = useAuth();
+  
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Extract category and search from URL on initial load and when URL changes
   useEffect(() => {
@@ -136,6 +160,81 @@ export default function Header() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  const renderUserSection = () => {
+    if (isAuthenticated) {
+      return (
+        <div className="relative" ref={userMenuRef}>
+          <button
+            className="flex items-center space-x-1"
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+          >
+            <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
+              {user?.name?.charAt(0) || <UserIcon className="h-5 w-5" />}
+            </div>
+            <span className="hidden md:inline text-sm">
+              {user?.name || 'Account'}
+            </span>
+            <ChevronDownIcon className="h-4 w-4" />
+          </button>
+          
+          {userMenuOpen && (
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+              <Link
+                href="/account"
+                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                onClick={() => setUserMenuOpen(false)}
+              >
+                My Account
+              </Link>
+              <Link
+                href="/orders"
+                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                onClick={() => setUserMenuOpen(false)}
+              >
+                My Orders
+              </Link>
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setUserMenuOpen(false);
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <div className="flex items-center">
+                  <LogOutIcon className="h-4 w-4 mr-2" />
+                  Logout
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    } else {
+      return (
+        <div className="flex items-center space-x-2">
+          <Link href="/login">
+            <Button variant="outline" size="sm">
+              Login
+            </Button>
+          </Link>
+          <Link href="/signup">
+            <Button className="bg-[#D23F57] hover:bg-[#b8354a] text-white" size="sm">
+              Sign Up
+            </Button>
+          </Link>
+        </div>
+      );
+    }
+  };
+
   return (
     <header className="w-full">
       {/* Top Bar */}
@@ -182,412 +281,171 @@ export default function Header() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             {/* Logo */}
-            <Link href="/" className="flex items-center mr-8">
-              <div className="relative">
-                <div className="flex items-center">
-                  <div className="rounded-full bg-[#D23F57] p-2 mr-2">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="white" strokeWidth="2">
-                      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                      <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                    </svg>
-                  </div>
-                  <span className="text-xl font-bold text-gray-800">bazaar</span>
-                </div>
+            <Link href="/" className="flex-shrink-0">
+              <div className="flex items-center">
+                <div className="bg-[#D23F57] text-white font-bold text-xl w-10 h-10 rounded-md flex items-center justify-center mr-2">S</div>
+                <span className="font-bold text-xl">Shopfinity</span>
               </div>
             </Link>
 
             {/* Search Bar */}
-            <div className="flex-grow hidden md:block">
-              <form onSubmit={handleSearch} className="flex w-full max-w-xl mx-auto border border-gray-300 rounded-md overflow-hidden">
-                <div className="relative flex flex-grow">
-                  <input
-                    type="text"
-                    placeholder="Search for products..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full py-2 pl-4 pr-12 border-0 focus:outline-none focus:ring-0"
-                  />
-                  <button 
-                    type="submit"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    aria-label="Search"
-                  >
-                    <SearchIcon className="h-5 w-5" />
-                  </button>
-                </div>
-                <div className="relative border-l border-gray-300">
-                  <select 
-                    className="h-full py-2 px-4 bg-white text-gray-700 appearance-none focus:outline-none cursor-pointer pr-8"
-                    value={searchCategory}
-                    onChange={(e) => handleCategoryChange(e.target.value)}
-                  >
-                    {searchCategories.map(category => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
-                    <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+            <form onSubmit={handleSearch} className="hidden md:flex flex-1 mx-8">
+              <div className="relative flex flex-1">
+                <div className="flex items-center">
+                  <div className="relative">
+                    <select
+                      value={searchCategory}
+                      onChange={(e) => handleCategoryChange(e.target.value)}
+                      className="h-10 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 pl-3 pr-8 text-sm focus:border-[#D23F57] focus:outline-none"
+                    >
+                      {searchCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
+                      <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+                    </div>
                   </div>
                 </div>
-              </form>
-            </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search for products..."
+                  className="flex-1 h-10 border border-gray-300 px-4 focus:outline-none focus:border-[#D23F57]"
+                />
+                <button
+                  type="submit"
+                  className="h-10 bg-[#D23F57] text-white px-4 rounded-r-md hover:bg-[#b8354a]"
+                >
+                  <SearchIcon className="h-5 w-5" />
+                </button>
+              </div>
+            </form>
 
             {/* Icons */}
-            <div className="flex items-center gap-4">
-              <Link href="/account" className="text-gray-600 hover:text-[#D23F57] transition-colors">
-                <UserIcon className="h-6 w-6" />
-              </Link>
-              <Link href="/wishlist" className="relative text-gray-600 hover:text-[#D23F57] transition-colors">
+            <div className="flex items-center space-x-4">
+              {/* User Section */}
+              {renderUserSection()}
+
+              {/* Wishlist Icon */}
+              <Link href="/wishlist" className="relative p-2">
                 <HeartIcon className="h-6 w-6" />
                 {wishlistItemCount > 0 && (
-                  <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-[#D23F57]">
+                  <Badge className="absolute -top-1 -right-1 bg-[#D23F57] text-white border-2 border-white text-xs">
                     {wishlistItemCount}
                   </Badge>
                 )}
               </Link>
-              <Link href="/cart" className="relative text-gray-600 hover:text-[#D23F57] transition-colors">
+
+              {/* Cart Icon */}
+              <Link href="/cart" className="relative p-2">
                 <CartIcon className="h-6 w-6" />
                 {cartItemCount > 0 && (
-                  <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-[#D23F57]">
+                  <Badge className="absolute -top-1 -right-1 bg-[#D23F57] text-white border-2 border-white text-xs">
                     {cartItemCount}
                   </Badge>
                 )}
               </Link>
-            </div>
 
-            {/* Mobile Menu Button */}
-            <button 
-              className="md:hidden text-gray-600 ml-4"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              <MenuIcon className="h-6 w-6" />
-            </button>
+              {/* Mobile Menu Button */}
+              <button
+                className="md:hidden p-2"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              >
+                <MenuIcon className="h-6 w-6" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <div className="bg-white border-b">
+      <nav className="bg-white shadow-sm">
         <div className="container mx-auto px-4">
-          <div className="flex items-center">
-            {/* Categories Menu */}
-            <div className="relative">
-              <button 
-                onClick={() => setCategoryMenuOpen(!categoryMenuOpen)}
-                className="flex items-center gap-2 py-4 font-medium text-gray-700 hover:text-[#D23F57]"
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="14" width="7" height="7"></rect>
-                  <rect x="3" y="14" width="7" height="7"></rect>
-                </svg>
-                <span>Categories</span>
-                <ChevronDownIcon className="h-4 w-4" />
-              </button>
-              {categoryMenuOpen && (
-                <div className="absolute z-10 w-56 bg-white shadow-lg rounded-md border border-gray-200 mt-1">
-                  <ul className="py-2">
-                    <li key="all">
-                      <Link 
-                        href="#" 
-                        className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          console.log('All categories selected from header dropdown');
-                          
-                          // Navigate programmatically instead of using direct href
-                          const url = new URL('/products', window.location.origin);
-                          
-                          // Reset page to 1 when changing category
-                          url.searchParams.set('page', '1');
-                          
-                          // Log the constructed URL
-                          console.log(`Navigating to: ${url.toString()}`);
-                          
-                          // Navigate to the URL
-                          window.location.href = url.toString();
-                          
-                          // Close the menu
-                          setCategoryMenuOpen(false);
-                        }}
-                      >
-                        All Categories
-                      </Link>
-                    </li>
-                    {searchCategories.map(category => (
-                      category.id !== 'all' && (
-                        <li key={category.id}>
-                          <Link 
-                            href="#" 
-                            className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              console.log(`Header category selected: ${category.id}`);
-                              
-                              // Navigate programmatically instead of using direct href
-                              const url = new URL('/products', window.location.origin);
-                              
-                              // Add category parameter
-                              if (category.id !== 'all') {
-                                url.searchParams.set('category', category.id);
-                              }
-                              
-                              // Reset page to 1 when changing category
-                              url.searchParams.set('page', '1');
-                              
-                              // Log the constructed URL
-                              console.log(`Navigating to: ${url.toString()}`);
-                              
-                              // Navigate to the URL
-                              window.location.href = url.toString();
-                              
-                              // Close the menu
-                              setCategoryMenuOpen(false);
-                            }}
-                          >
-                            {category.name}
-                          </Link>
-                        </li>
-                      )
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            {/* Main Navigation */}
-            <nav className="hidden md:flex items-center">
-              <Link href="/" className="block px-4 py-4 font-medium text-gray-700 hover:text-[#D23F57]">
+          <ul className="flex items-center space-x-8 h-12 text-sm">
+            <li>
+              <Link href="/" className={`font-medium ${pathname === '/' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
                 Home
               </Link>
-              <Link href="/products" className="block px-4 py-4 font-medium text-gray-700 hover:text-[#D23F57]">
+            </li>
+            <li>
+              <Link href="/products" className={`font-medium ${pathname === '/products' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
                 Shop
               </Link>
-              
-              <div className="relative group">
-                <button className="flex items-center gap-1 px-4 py-4 font-medium text-gray-700 hover:text-[#D23F57]">
-                  <span>Mega Menu</span>
-                  <ChevronDownIcon className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="relative group">
-                <button className="flex items-center gap-1 px-4 py-4 font-medium text-gray-700 hover:text-[#D23F57]">
-                  <span>Full Screen Menu</span>
-                  <ChevronDownIcon className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="relative group">
-                <button className="flex items-center gap-1 px-4 py-4 font-medium text-gray-700 hover:text-[#D23F57]">
-                  <span>Pages</span>
-                  <ChevronDownIcon className="h-4 w-4" />
-                </button>
-                <div className="absolute hidden group-hover:block bg-white shadow-lg w-48 z-10 mt-0 border border-gray-200 rounded-b-md">
-                  <ul className="py-2">
-                    <li>
-                      <Link href="/about" className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]">
-                        About Us
-                      </Link>
-                    </li>
-                    <li>
-                      <Link href="/contact" className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]">
-                        Contact Us
-                      </Link>
-                    </li>
-                    <li>
-                      <Link href="/faq" className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#D23F57]">
-                        FAQ
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              <div className="relative group">
-                <button className="flex items-center gap-1 px-4 py-4 font-medium text-gray-700 hover:text-[#D23F57]">
-                  <span>User Account</span>
-                  <ChevronDownIcon className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="relative group">
-                <button className="flex items-center gap-1 px-4 py-4 font-medium text-gray-700 hover:text-[#D23F57]">
-                  <span>Vendor Account</span>
-                  <ChevronDownIcon className="h-4 w-4" />
-                </button>
-              </div>
-            </nav>
-          </div>
+            </li>
+            <li>
+              <Link href="/products?category=clothing" className={`font-medium ${pathname.includes('/products') && searchParams.get('category') === 'clothing' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
+                Clothing
+              </Link>
+            </li>
+            <li>
+              <Link href="/products?category=electronics" className={`font-medium ${pathname.includes('/products') && searchParams.get('category') === 'electronics' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
+                Electronics
+              </Link>
+            </li>
+            <li>
+              <Link href="/products?category=home" className={`font-medium ${pathname.includes('/products') && searchParams.get('category') === 'home' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
+                Home & Kitchen
+              </Link>
+            </li>
+            <li>
+              <Link href="/products?category=beauty" className={`font-medium ${pathname.includes('/products') && searchParams.get('category') === 'beauty' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
+                Beauty
+              </Link>
+            </li>
+          </ul>
         </div>
-      </div>
+      </nav>
 
-      {/* Mobile Menu */}
+      {/* Mobile Search and Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-gray-200 py-4">
-          <div className="container mx-auto px-4">
-            {/* Mobile Search */}
-            <div className="mb-4">
-              <form onSubmit={handleSearch} className="flex border border-gray-300 rounded-md overflow-hidden">
-                <div className="relative flex-grow">
-                  <input
-                    type="text"
-                    placeholder="Search for products..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full py-2 pl-4 pr-10 border-0 focus:outline-none focus:ring-0"
-                  />
-                  <button 
-                    type="submit"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    aria-label="Search"
-                  >
-                    <SearchIcon className="h-5 w-5" />
-                  </button>
-                </div>
-                <div className="relative border-l border-gray-300">
-                  <select 
-                    className="h-full py-2 px-4 bg-white text-gray-700 appearance-none focus:outline-none cursor-pointer pr-8"
-                    value={searchCategory}
-                    onChange={(e) => handleCategoryChange(e.target.value)}
-                  >
-                    {searchCategories.map(category => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
-                    <ChevronDownIcon className="h-4 w-4 text-gray-400" />
-                  </div>
-                </div>
-              </form>
+        <div className="md:hidden bg-white border-t border-gray-200 p-4">
+          <form onSubmit={handleSearch} className="mb-4">
+            <div className="flex">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search for products..."
+                className="flex-1 h-10 border border-gray-300 rounded-l-md px-4 focus:outline-none focus:border-[#D23F57]"
+              />
+              <button
+                type="submit"
+                className="h-10 bg-[#D23F57] text-white px-4 rounded-r-md hover:bg-[#b8354a]"
+              >
+                <SearchIcon className="h-5 w-5" />
+              </button>
             </div>
-            
-            {/* Mobile Navigation */}
-            <ul className="space-y-4">
-              <li>
-                <button
-                  onClick={() => setCategoryMenuOpen(!categoryMenuOpen)}
-                  className="flex items-center justify-between w-full py-2 font-medium text-gray-700"
-                >
-                  <span>Categories</span>
-                  <ChevronDownIcon className={`h-4 w-4 transition-transform ${categoryMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {categoryMenuOpen && (
-                  <ul className="pl-4 mt-2 space-y-2">
-                    <li key="all">
-                      <Link 
-                        href="#" 
-                        className="block py-1 text-gray-600 hover:text-[#D23F57]"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          console.log('All categories selected from mobile menu');
-                          
-                          // Navigate programmatically instead of using direct href
-                          const url = new URL('/products', window.location.origin);
-                          
-                          // Reset page to 1 when changing category
-                          url.searchParams.set('page', '1');
-                          
-                          // Log the constructed URL
-                          console.log(`Navigating to: ${url.toString()}`);
-                          
-                          // Navigate to the URL
-                          window.location.href = url.toString();
-                          
-                          // Close both menus
-                          setMobileMenuOpen(false);
-                          setCategoryMenuOpen(false);
-                        }}
-                      >
-                        All Categories
-                      </Link>
-                    </li>
-                    {searchCategories.map(category => (
-                      category.id !== 'all' && (
-                        <li key={category.id}>
-                          <Link 
-                            href="#" 
-                            className="block py-1 text-gray-600 hover:text-[#D23F57]"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              console.log(`Mobile menu category selected: ${category.id}`);
-                              
-                              // Navigate programmatically instead of using direct href
-                              const url = new URL('/products', window.location.origin);
-                              
-                              // Add category parameter
-                              if (category.id !== 'all') {
-                                url.searchParams.set('category', category.id);
-                              }
-                              
-                              // Reset page to 1 when changing category
-                              url.searchParams.set('page', '1');
-                              
-                              // Log the constructed URL
-                              console.log(`Navigating to: ${url.toString()}`);
-                              
-                              // Navigate to the URL
-                              window.location.href = url.toString();
-                              
-                              // Close both menus
-                              setMobileMenuOpen(false);
-                              setCategoryMenuOpen(false);
-                            }}
-                          >
-                            {category.name}
-                          </Link>
-                        </li>
-                      )
-                    ))}
-                  </ul>
-                )}
-              </li>
-              <li>
-                <Link href="/" className="block py-2 font-medium text-gray-700 hover:text-[#D23F57]">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link href="/products" className="block py-2 font-medium text-gray-700 hover:text-[#D23F57]">
-                  Shop
-                </Link>
-              </li>
-              <li>
-                <Link href="/about" className="block py-2 font-medium text-gray-700 hover:text-[#D23F57]">
-                  About Us
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="block py-2 font-medium text-gray-700 hover:text-[#D23F57]">
-                  Contact
-                </Link>
-              </li>
-            </ul>
-
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <ul className="space-y-4">
-                <li>
-                  <Link href="/login" className="block py-2 text-gray-700 hover:text-[#D23F57]">
-                    Login / Register
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/track-orders" className="block py-2 text-gray-700 hover:text-[#D23F57]">
-                    Track Order
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/account" className="block py-2 text-gray-700 hover:text-[#D23F57]">
-                    My Account
-                  </Link>
-                </li>
-              </ul>
-            </div>
+          </form>
+          
+          <div className="space-y-3">
+            <Link href="/" className="block py-2 hover:text-[#D23F57]">
+              Home
+            </Link>
+            <Link href="/products" className="block py-2 hover:text-[#D23F57]">
+              Shop All
+            </Link>
+            <Link href="/products?category=clothing" className="block py-2 hover:text-[#D23F57]">
+              Clothing
+            </Link>
+            <Link href="/products?category=electronics" className="block py-2 hover:text-[#D23F57]">
+              Electronics
+            </Link>
+            <Link href="/products?category=home" className="block py-2 hover:text-[#D23F57]">
+              Home & Kitchen
+            </Link>
+            <Link href="/products?category=beauty" className="block py-2 hover:text-[#D23F57]">
+              Beauty
+            </Link>
+            <Link href="/wishlist" className="block py-2 hover:text-[#D23F57]">
+              Wishlist
+            </Link>
+            <Link href="/cart" className="block py-2 hover:text-[#D23F57]">
+              Cart
+            </Link>
           </div>
         </div>
       )}

@@ -133,7 +133,7 @@ export class AuthController {
       handler: async (request: FastifyRequest<LoginRequest>, reply: FastifyReply) => {
         try {
           const { email, password } = request.body;
-          const result = await this.authService.login(email, password, 'user');
+          const result = await this.authService.login(email, password, UserRole.USER);
           return reply.send(result);
         } catch (error) {
           if (error instanceof Error) {

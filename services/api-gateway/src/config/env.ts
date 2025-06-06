@@ -14,6 +14,9 @@ const envSchema = z.object({
       message: 'Port must be a valid number between 1 and 65535'
     }),
 
+  // Cookie configuration
+  COOKIE_SECRET: z.string().default('your-secret-key'),
+
   // Rate limiting configuration
   RATE_LIMIT_MAX: z.string()
     .default('100')
@@ -47,7 +50,8 @@ const envSchema = z.object({
   REDIS_URL: z.string().optional(),
 
   // CORS configuration
-  CORS_ORIGINS: z.string().default('*'),
+  // Set to your frontend origin for credentialed requests (e.g., http://localhost:3000)
+  CORS_ORIGINS: z.string().default('http://localhost:3000'),
 
   // Environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -68,6 +72,7 @@ export const config = {
     cors: {
       origin: env.CORS_ORIGINS,
     },
+    cookieSecret: env.COOKIE_SECRET,
   },
   rateLimit: {
     max: env.RATE_LIMIT_MAX,
