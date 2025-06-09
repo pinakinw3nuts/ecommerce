@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { API_GATEWAY_URL, ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from '@/lib/constants';
 
 // Google OAuth configuration
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
@@ -6,9 +7,6 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const REDIRECT_URI = process.env.NEXT_PUBLIC_BASE_URL 
   ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/google/callback` 
   : 'http://localhost:3100/api/auth/google/callback';
-
-// API Gateway URL - use explicit IPv4 address
-const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000/api';
 
 export async function GET(request: NextRequest) {
   try {
@@ -83,7 +81,7 @@ export async function GET(request: NextRequest) {
 
     // Set cookies for authentication
     response.cookies.set({
-      name: 'accessToken',
+      name: ACCESS_TOKEN_NAME,
       value: authResult.accessToken,
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -93,7 +91,7 @@ export async function GET(request: NextRequest) {
     });
 
     response.cookies.set({
-      name: 'refreshToken',
+      name: REFRESH_TOKEN_NAME,
       value: authResult.refreshToken,
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

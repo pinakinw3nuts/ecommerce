@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -21,9 +21,19 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [redirectPath, setRedirectPath] = useState<string | null>(null);
+
+  // Get redirect path from URL if available
+  useEffect(() => {
+    const redirect = searchParams.get('redirect');
+    if (redirect) {
+      setRedirectPath(redirect);
+    }
+  }, [searchParams]);
 
   const {
     register,
@@ -43,13 +53,13 @@ export default function LoginForm() {
       setLoginError(null);
 
       // Use the login function from AuthContext
+      // The login function will handle the redirect
       await login(data.email, data.password);
 
       // Login successful
       toast.success('Login successful!');
       
-      // Redirect to home page
-      router.push('/');
+      // No need to handle redirection here, it's done in the AuthContext
     } catch (error) {
       console.error('Login error:', error);
       setLoginError(error instanceof Error ? error.message : 'An error occurred during login');
@@ -61,6 +71,12 @@ export default function LoginForm() {
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
+      {redirectPath && (
+        <div className="p-3 mb-4 bg-blue-50 border border-blue-200 text-blue-700 rounded-md text-sm">
+          Please log in to continue to {redirectPath}
+        </div>
+      )}
+      
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {loginError && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-md text-sm">
@@ -142,7 +158,10 @@ export default function LoginForm() {
           className="w-full"
           onClick={() => {
             // Implement Google login
-            window.location.href = '/api/auth/google';
+            const googleAuthUrl = redirectPath 
+              ? `/api/auth/google?redirect=${encodeURIComponent(redirectPath)}`
+              : '/api/auth/google';
+            window.location.href = googleAuthUrl;
           }}
           disabled={isLoading}
         >

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 // Define reset password schema
 const resetPasswordSchema = z.object({
@@ -10,9 +11,6 @@ const resetPasswordSchema = z.object({
   message: "Passwords don't match",
   path: ["confirmPassword"],
 });
-
-// API Gateway URL - use explicit IPv4 address
-const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000/api';
 
 export async function POST(request: NextRequest) {
   try {

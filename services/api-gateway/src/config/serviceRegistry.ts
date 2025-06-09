@@ -76,6 +76,24 @@ export const services: Record<string, ServiceConfig> = {
       }
     ]
   },
+  cms: {
+    name: 'cms-service',
+    url: getServiceUrl(config.services.cms, 3013),
+    timeout: 5000,
+    routes: ['/api/cms', '/api/widget', '/api/v1/widget'],
+    versionedRoutes: true,
+    adminRoutes: true,
+    specialCases: [
+      {
+        pattern: /^\/api\/cms\/(home|pages|sections|banners|widgets)(\/.*)?(\?|$)/,
+        handler: 'cms'
+      },
+      {
+        pattern: /^\/api\/v1\/widget\/(home|test)(\/.*)?(\?|$)/,
+        handler: 'cms'
+      }
+    ]
+  },
   cart: {
     name: 'cart-service',
     url: getServiceUrl(config.services.cart, 3004),

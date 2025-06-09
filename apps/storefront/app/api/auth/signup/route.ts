@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 // Define signup schema
 const signupSchema = z.object({
@@ -7,9 +8,6 @@ const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
 });
-
-// API Gateway URL - use explicit IPv4 address
-const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000/api';
 
 export async function POST(request: NextRequest) {
   try {

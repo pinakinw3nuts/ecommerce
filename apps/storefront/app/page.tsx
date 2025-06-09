@@ -9,6 +9,7 @@ import NewsletterSignup from '@components/home/NewsletterSignup';
 import Testimonials from '@components/sections/Testimonials';
 import PromoBanner from '@components/sections/PromoBanner';
 import FeaturedCategories from '../components/sections/FeaturedCategories';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 type CMSBlock = {
   type: string;
@@ -23,9 +24,9 @@ type Product = {
   slug: string;
 };
 
-// Create a server-side API client
+// Create a server-side API client with explicit IPv4 address
 const serverApi = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api',
+  baseURL: API_GATEWAY_URL,
 });
 
 export const metadata: Metadata = {
@@ -35,8 +36,17 @@ export const metadata: Metadata = {
 
 async function fetchCMS(): Promise<CMSBlock[]> {
   try {
-    const { data } = await serverApi.get('/cms/home');
-    return data.blocks || [];
+    const { data } = await serverApi.get('/api/v1/widget/home');
+    
+    // Check if data exists and has the expected structure
+    if (!data || !data.data) {
+      console.log('CMS API returned unexpected data structure:', data);
+      return [];
+    }
+    
+    // Extract blocks from the response
+    const homeContent = data.data;
+    return homeContent.content?.blocks || [];
   } catch (error) {
     console.error('Error fetching CMS data:', error);
     return [];
@@ -45,12 +55,18 @@ async function fetchCMS(): Promise<CMSBlock[]> {
 
 async function fetchFeaturedProducts(): Promise<Product[]> {
   try {
-    const { data } = await serverApi.get('/products?featured=true&limit=4');
+    const { data } = await serverApi.get('/v1/products/featured?limit=4');
     if (!data || !data.products) {
       console.log('Products API returned unexpected data structure:', data);
       return [];
     }
-    return data.products;
+    return data.products.map((product: any) => ({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      image: product.mediaUrl || '/images/placeholder.jpg',
+      slug: product.slug
+    }));
   } catch (error) {
     console.error('Error fetching featured products:', error);
     return [];

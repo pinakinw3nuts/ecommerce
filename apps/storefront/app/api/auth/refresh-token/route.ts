@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// API Gateway URL - use explicit IPv4 address
-const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000/api';
+import { API_GATEWAY_URL, ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
   try {
-    // Get refresh token from cookies
-    const refreshToken = request.cookies.get('refreshToken')?.value;
+    // Try to get refresh token from request body first
+    let refreshToken;
+    
+    try {
+      const body = await request.json();
+      refreshToken = body.refreshToken;
+    } catch (e) {
+      // If parsing body fails, continue with cookie
+    }
+    
+    // If no token in body, try to get from cookies
+    if (!refreshToken) {
+      refreshToken = request.cookies.get(REFRESH_TOKEN_NAME)?.value;
+    }
 
-    // If no refresh token, return unauthorized
+    // If no refresh token in body or cookies, return unauthorized
     if (!refreshToken) {
       return NextResponse.json(
         { message: 'No refresh token provided' }, 
@@ -21,6 +31,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
       body: JSON.stringify({ refreshToken }),
     });
@@ -30,13 +41,23 @@ export async function POST(request: NextRequest) {
 
     // Handle error response
     if (!response.ok) {
-      return NextResponse.json(
+      // Clear cookies if refresh failed
+      const errorResponse = NextResponse.json(
         { 
           message: result.message || 'Failed to refresh token',
           status: 'error' 
         }, 
         { status: response.status }
       );
+      
+      errorResponse.cookies.delete(ACCESS_TOKEN_NAME);
+      errorResponse.cookies.delete(REFRESH_TOKEN_NAME);
+      
+      // Also delete client-side cookies
+      errorResponse.headers.append('Set-Cookie', `${ACCESS_TOKEN_NAME}_client=; Path=/; Max-Age=0; SameSite=Lax`);
+      errorResponse.headers.append('Set-Cookie', `${REFRESH_TOKEN_NAME}_client=; Path=/; Max-Age=0; SameSite=Lax`);
+      
+      return errorResponse;
     }
 
     // Create a response object
@@ -49,27 +70,36 @@ export async function POST(request: NextRequest) {
 
     // Set access token as HTTP-only cookie
     nextResponse.cookies.set({
-      name: 'accessToken',
+      name: ACCESS_TOKEN_NAME,
       value: result.accessToken,
-      httpOnly: true,
+      httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
-      // Short expiration (e.g., 15 minutes)
-      maxAge: 60 * 15,
+      // Increase expiration to 30 minutes
+      maxAge: 60 * 30,
     });
     
     // Set refresh token as HTTP-only cookie
     nextResponse.cookies.set({
-      name: 'refreshToken',
+      name: REFRESH_TOKEN_NAME,
       value: result.refreshToken,
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
       // Longer expiration (e.g., 7 days)
       maxAge: 60 * 60 * 24 * 7,
     });
+
+    // Add cache control headers
+    nextResponse.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    nextResponse.headers.set('Pragma', 'no-cache');
+    nextResponse.headers.set('Expires', '0');
+    
+    // Also set non-httpOnly cookies for client-side access (for debugging)
+    nextResponse.headers.append('Set-Cookie', `${ACCESS_TOKEN_NAME}_client=${result.accessToken}; Path=/; Max-Age=${60 * 30}; SameSite=Lax`);
+    nextResponse.headers.append('Set-Cookie', `${REFRESH_TOKEN_NAME}_client=${result.refreshToken}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax`);
 
     return nextResponse;
   } catch (error) {

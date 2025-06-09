@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Cookies from 'js-cookie';
-import { TOKEN_NAME } from '@/lib/api';
+import { ACCESS_TOKEN_NAME } from '@/lib/constants';
 
 export default function AccountPage() {
   const { user, isLoading, isAuthenticated, logout } = useAuth();
@@ -12,13 +12,6 @@ export default function AccountPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    console.log('Account page mounted');
-    console.log('Initial auth state:', { isLoading, isAuthenticated, hasUser: !!user });
-    
-    // Check for token directly
-    const token = Cookies.get(TOKEN_NAME);
-    console.log('Token exists in cookies:', !!token);
-    
     // Set checking auth to false after initial load
     setTimeout(() => {
       setIsCheckingAuth(false);
@@ -28,15 +21,7 @@ export default function AccountPage() {
   // Effect to handle redirect after auth check completes
   useEffect(() => {
     if (!isLoading && !isCheckingAuth) {
-      console.log('Auth check completed in account page');
-      console.log('Auth state after check:', { isAuthenticated, hasUser: !!user });
-      
-      if (!isAuthenticated || !user) {
-        console.log('Not authenticated, redirecting to login');
-        const token = Cookies.get(TOKEN_NAME);
-        console.log('Token before redirect:', !!token);
-        router.replace('/login?redirect=/account');
-      }
+      // The middleware is already handling redirects for unauthenticated users
     }
   }, [isLoading, isAuthenticated, user, router, isCheckingAuth]);
 
@@ -59,7 +44,6 @@ export default function AccountPage() {
   }
 
   const handleLogout = () => {
-    console.log('Logout button clicked');
     logout();
   };
 

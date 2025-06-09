@@ -646,15 +646,54 @@ export class WidgetController {
    */
   getHomeContent = async (_req: FastifyRequest, reply: FastifyReply) => {
     try {
+      // Fetch the home page content from the database using the slug 'home'
       const homeContent = await this.contentService.getPublishedContentBlockBySlug('home');
       
       if (!homeContent) {
-        return reply.status(404).send({
-          success: false,
-          message: "Home page content not found",
-          error: 'NOT_FOUND'
+        this.contextLogger.warn('Home page content not found, creating default content');
+        
+        // If no home page content exists, create a default one
+        const defaultHomeContent = await this.contentService.createContentBlock({
+          title: "Home Page",
+          slug: "home",
+          type: ContentBlockType.PAGE,
+          content: {
+            blocks: [
+              {
+                type: "banner",
+                content: {
+                  imageUrl: "/images/banner-1.jpg",
+                  alt: "Welcome to our store",
+                  title: "Summer Collection",
+                  subtitle: "Discover the latest trends",
+                  buttonText: "Shop Now",
+                  buttonLink: "/products"
+                }
+              },
+              {
+                type: "text",
+                content: {
+                  text: "Welcome to our online store. We offer a wide range of products at competitive prices."
+                }
+              }
+            ]
+          },
+          isPublished: true,
+          metadata: {
+            metaTitle: "Home | MyStore",
+            metaDescription: "Welcome to MyStore - your one-stop shop for all your needs"
+          }
+        }, 'system');
+        
+        this.contextLogger.info('Created default home page content', { id: defaultHomeContent.id });
+        
+        return reply.status(200).send({
+          success: true,
+          data: defaultHomeContent
         });
       }
+      
+      this.contextLogger.info('Home page content fetched', { id: homeContent.id });
       
       return reply.status(200).send({
         success: true,

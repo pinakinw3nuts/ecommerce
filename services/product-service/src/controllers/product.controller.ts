@@ -184,6 +184,67 @@ interface ProductQueryParams {
 export const productController = {
   // Public routes - accessible without authentication
   registerPublicRoutes: async (fastify: FastifyInstance) => {
+    // GET /products/featured - Get featured products
+    fastify.get('/featured', {
+      schema: {
+        tags: ['products'],
+        summary: 'Get featured products',
+        description: 'Retrieve a list of featured products',
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', description: 'Number of items to return', default: 4 },
+            page: { type: 'integer', description: 'Page number (starts from 1)', default: 1 }
+          }
+        }
+      }
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const query = request.query as { limit?: string; page?: string };
+        
+        // Parse query parameters
+        const limit = query.limit ? parseInt(query.limit) : 4;
+        const page = query.page ? parseInt(query.page) : 1;
+        
+        // Use the existing product service to fetch featured products
+        const result = await productService.listProducts({
+          filters: {
+            isFeatured: true,
+            isPublished: true
+          },
+          pagination: {
+            page,
+            limit
+          },
+          sort: {
+            sortBy: 'createdAt',
+            sortOrder: 'DESC'
+          }
+        });
+        
+        // Format the response
+        const formattedProducts = result.data.map(formatProductResponse);
+        
+        return reply.status(200).send({
+          success: true,
+          products: formattedProducts,
+          pagination: {
+            page: result.meta.page,
+            limit: result.meta.limit,
+            total: result.meta.total,
+            totalPages: result.meta.totalPages
+          }
+        });
+      } catch (error) {
+        console.error('Error fetching featured products:', error);
+        return reply.status(500).send({
+          success: false,
+          message: 'Failed to fetch featured products',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
     // GET /products - List all products with filtering, sorting, and pagination
     fastify.get('/', {
       schema: {

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// API Gateway URL - use explicit IPv4 address
-const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000/api';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
   try {

@@ -45,6 +45,7 @@ const envSchema = z.object({
   COMPANY_SERVICE_URL: z.string().default('http://company-service:3010'),
   PRICING_SERVICE_URL: z.string().default('http://pricing-service:3011'),
   ADMIN_SERVICE_URL: z.string().default('http://admin-service:3012'),
+  CMS_SERVICE_URL: z.string().default('http://cms-service:3013'),
 
   // Redis configuration
   REDIS_URL: z.string().optional(),
@@ -91,6 +92,7 @@ export const config = {
     company: env.COMPANY_SERVICE_URL,
     pricing: env.PRICING_SERVICE_URL,
     admin: env.ADMIN_SERVICE_URL,
+    cms: env.CMS_SERVICE_URL,
   },
   redis: {
     url: env.REDIS_URL,

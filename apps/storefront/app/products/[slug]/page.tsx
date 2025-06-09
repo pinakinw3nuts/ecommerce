@@ -2,10 +2,11 @@ import axios from 'axios';
 import { Metadata } from 'next';
 import { Product, RelatedProduct, SEO } from '@/lib/types';
 import ProductDetailClient from '@/components/products/ProductDetailClient';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
-// Create a server-side API client
+// Create a server-side API client with explicit IPv4 address
 const serverApi = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api',
+  baseURL: API_GATEWAY_URL,
 });
 
 // Mock data for when API fails or is not available

@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
+import { ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from './constants';
 
 // JWT secret key - should match the one used in auth-service
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -17,7 +18,14 @@ export interface TokenPayload {
  * Get access token from request cookies
  */
 export function getAccessToken(request: NextRequest): string | undefined {
-  return request.cookies.get('accessToken')?.value;
+  return request.cookies.get(ACCESS_TOKEN_NAME)?.value;
+}
+
+/**
+ * Get refresh token from request cookies
+ */
+export function getRefreshToken(request: NextRequest): string | undefined {
+  return request.cookies.get(REFRESH_TOKEN_NAME)?.value;
 }
 
 /**

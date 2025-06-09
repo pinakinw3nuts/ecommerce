@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { WidgetController } from '../controllers/widget.controller';
 
 // Define schemas for widget routes
 const widgetResponseSchema = {
@@ -33,6 +34,38 @@ const createWidgetSchema = {
  * Widget routes for managing widgets
  */
 export async function widgetRoutes(fastify: FastifyInstance) {
+  const widgetController = new WidgetController();
+
+  // Get home page content
+  fastify.get(
+    '/home',
+    {
+      schema: {
+        tags: ['Widget'],
+        summary: 'Get home page content',
+        description: 'Retrieve content for the home page',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              data: { type: 'object', additionalProperties: true }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              error: { type: 'string' }
+            }
+          }
+        }
+      }
+    },
+    widgetController.getHomeContent
+  );
+
   // Test route
   fastify.get(
     '/test',
