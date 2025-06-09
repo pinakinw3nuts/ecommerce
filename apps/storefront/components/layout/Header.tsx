@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { CartIcon, HeartIcon, SearchIcon, MenuIcon, UserIcon } from '../icons';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWishlist } from '@/contexts/WishlistContext';
 import { DropdownMenu, DropdownMenuItem } from '../ui/DropdownMenu';
 
 // Define the Category type
@@ -68,6 +69,7 @@ export default function Header() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const { itemCount: cartItemCount } = useCart();
+  const { itemCount: wishlistItemCount } = useWishlist();
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,8 +232,15 @@ export default function Header() {
           )}
           
           <Link href="/wishlist">
-            <div className="flex flex-col items-center">
-              <HeartIcon className="h-6 w-6 text-gray-700" />
+            <div className="flex flex-col items-center hover:text-red-600 transition-colors group">
+              <div className="relative">
+                <HeartIcon className="h-6 w-6 text-gray-700 group-hover:text-red-600 transition-colors" />
+                {wishlistItemCount > 0 && (
+                  <div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {wishlistItemCount}
+                  </div>
+                )}
+              </div>
               <div className="text-xs mt-1">
                 <span>Wish</span>
                 <span className="block">Lists</span>
@@ -239,9 +248,9 @@ export default function Header() {
             </div>
           </Link>
           
-          <Link href="/cart" className="flex flex-col items-center">
+          <Link href="/cart" className="flex flex-col items-center hover:text-red-600 transition-colors group">
             <div className="relative">
-              <CartIcon className="h-6 w-6 text-gray-700" />
+              <CartIcon className="h-6 w-6 text-gray-700 group-hover:text-red-600 transition-colors" />
               {cartItemCount > 0 && (
                 <div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                   {cartItemCount}
