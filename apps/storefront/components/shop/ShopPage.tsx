@@ -10,14 +10,9 @@ import { Button } from '@/components/ui/Button';
 import { Slider } from '@/components/ui/Slider';
 import { ProductCard } from '@/components/shop/ProductCard';
 
-// Categories for filtering
-const categories = [
-  { id: 'all', name: 'All Products' },
-  { id: 'clothing', name: 'Clothing' },
-  { id: 'electronics', name: 'Electronics' },
-  { id: 'home', name: 'Home & Kitchen' },
-  { id: 'accessories', name: 'Accessories' },
-  { id: 'beauty', name: 'Beauty' },
+// Default single "All Products" category as fallback
+const defaultCategories = [
+  { id: 'all', name: 'All Products' }
 ];
 
 // Sort options
@@ -26,6 +21,9 @@ const sortOptions = [
   { id: 'price-asc', name: 'Price: Low to High' },
   { id: 'price-desc', name: 'Price: High to Low' },
   { id: 'popular', name: 'Popularity' },
+  { id: 'name-asc', name: 'Name: A to Z' },
+  { id: 'name-desc', name: 'Name: Z to A' },
+  { id: 'rating-desc', name: 'Highest Rated' },
 ];
 
 // Min and max price range
@@ -60,6 +58,7 @@ export default function ShopPage({
   
   // State for products and loading
   const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState(defaultCategories);
   const [loading, setLoading] = useState(true);
   const [totalProducts, setTotalProducts] = useState(0);
   const [searchQuery, setSearchQuery] = useState(search);
@@ -76,8 +75,8 @@ export default function ShopPage({
   
   // State for price range slider
   const [priceRange, setPriceRange] = useState<[number, number]>([
-    typeof searchParams.minPrice === 'string' ? parseInt(searchParams.minPrice) || MIN_PRICE : MIN_PRICE,
-    typeof searchParams.maxPrice === 'string' ? parseInt(searchParams.maxPrice) || MAX_PRICE : MAX_PRICE
+    minPrice,
+    maxPrice
   ]);
   
   // Debounce search to avoid too many requests
@@ -127,17 +126,22 @@ export default function ShopPage({
         maxPrice: urlMaxPrice
       });
       
-      // Update state directly from URL
-      if (urlSearch !== '' || urlCategory !== 'all') {
-        setActiveFilters(prev => ({
-          ...prev,
+      // Make sure our state matches the URL
+      if (urlCategory !== activeFilters.category || 
+          urlSearch !== activeFilters.search || 
+          urlSort !== activeFilters.sort || 
+          urlPage !== activeFilters.page || 
+          urlMinPrice !== activeFilters.minPrice || 
+          urlMaxPrice !== activeFilters.maxPrice) {
+        
+        setActiveFilters({
           category: urlCategory,
           search: urlSearch,
           sort: urlSort,
           page: urlPage,
           minPrice: urlMinPrice,
           maxPrice: urlMaxPrice
-        }));
+        });
         
         // Also update search query for the input field
         if (urlSearch) {
@@ -152,33 +156,34 @@ export default function ShopPage({
   
   // Initialize state when search params change (like from header search)
   useEffect(() => {
+    // Always update search query when URL changes
     if (search !== searchQuery) {
       setSearchQuery(search);
     }
     
-    // Reset price range slider when URL params change
-    setPriceRange([
-      typeof searchParams.minPrice === 'string' ? parseInt(searchParams.minPrice) || MIN_PRICE : MIN_PRICE,
-      typeof searchParams.maxPrice === 'string' ? parseInt(searchParams.maxPrice) || MAX_PRICE : MAX_PRICE
-    ]);
+    // Always update price range slider when URL params change
+    setPriceRange([minPrice, maxPrice]);
     
-    // Update active filters when search params change externally
-    setActiveFilters(prev => {
-      const newFilters = {
-        ...prev,
-        category,
-        sort,
-        page,
-        minPrice,
-        maxPrice,
-        search
-      };
-      
-      console.log('URL params changed, updating filters from:', prev, 'to:', newFilters);
-      return newFilters;
+    // Always update active filters when URL params change
+    setActiveFilters({
+      category,
+      sort,
+      page,
+      minPrice,
+      maxPrice,
+      search
     });
     
-  }, [search, category, sort, page, minPrice, maxPrice]);
+    console.log('URL params changed, updating filters to:', {
+      category,
+      sort,
+      page,
+      minPrice,
+      maxPrice,
+      search
+    });
+    
+  }, [search, category, sort, page, minPrice, maxPrice, searchQuery]);
   
   // Update URL with filters
   const updateFilters = (newParams: Record<string, string | number | null>) => {
@@ -242,6 +247,36 @@ export default function ShopPage({
     router.push(newUrl);
   };
   
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/categories?limit=50');
+        
+        if (!response.ok) {
+          console.error('Failed to fetch categories:', response.status);
+          return;
+        }
+        
+        const data = await response.json();
+        
+        if (data.categories && Array.isArray(data.categories)) {
+          // Add "All Products" category at the beginning
+          const allCategoriesOption = { id: 'all', name: 'All Products' };
+          const fetchedCategories = [allCategoriesOption, ...data.categories];
+          setCategories(fetchedCategories);
+          console.log('Fetched categories:', fetchedCategories);
+        } else {
+          console.log('No categories found in API response, using defaults');
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    
+    fetchCategories();
+  }, []);
+
   // Fetch products based on filters
   useEffect(() => {
     const fetchProducts = async () => {
@@ -385,19 +420,22 @@ export default function ShopPage({
   
   // Find the matching category display name
   const getCategoryName = (categoryId: string) => {
-    const normalizedId = categoryId.toLowerCase();
+    if (categoryId === 'all') return 'All Products';
     
-    // Map common variations to standard category IDs
-    const categoryMap: Record<string, string> = {
-      'home & garden': 'home',
-      'fashion': 'clothing'
-    };
+    // Check if it's a test category (test01, test08, etc.)
+    if (/^test\d+$/i.test(categoryId)) {
+      // Format the test category name nicely
+      return `Test Category ${categoryId.substring(4)}`;
+    }
     
-    const mappedId = categoryMap[normalizedId] || normalizedId;
+    // Find the category with the matching ID or slug
+    const category = categories.find((c: any) => 
+      c.id === categoryId || c.slug === categoryId
+    );
     
-    // Find the category with the mapped ID
-    const category = categories.find(c => c.id.toLowerCase() === mappedId);
-    return category ? category.name : categoryId;
+    // Return the category name if found, otherwise return the ID with first letter capitalized
+    return category ? category.name : 
+      categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
   };
   
   // Handler for category filter
@@ -407,15 +445,29 @@ export default function ShopPage({
     // Clear search query when changing category
     setSearchQuery('');
     
+    // Handle "test" categories specially - they need to be preserved exactly as is
+    let categoryParam = categoryId === 'all' ? null : categoryId;
+    
+    // Make sure we're using the right ID format for the category
+    // Some categories might have different id/slug formats
+    const foundCategory = categories.find((c: any) => 
+      c.id === categoryId || c.slug === categoryId
+    );
+    
+    // Use the category ID if found, otherwise use the provided ID
+    if (foundCategory) {
+      categoryParam = foundCategory.id;
+    }
+    
     // Update URL and state in one call
     updateFilters({
-      category: categoryId === 'all' ? null : categoryId,
+      category: categoryParam,
       search: null,
       page: 1
     });
     
     // Log what's happening
-    console.log(`Category filter applied: ${categoryId}`);
+    console.log(`Category filter applied: ${categoryId} (param: ${categoryParam})`);
   };
   
   // Handler for price slider change
@@ -504,7 +556,7 @@ export default function ShopPage({
               <div className="mb-6">
                 <h3 className="text-lg font-medium mb-3">Categories</h3>
                 <div className="space-y-2">
-                  {categories.map((cat) => (
+                  {categories.map((cat: any) => (
                     <div key={cat.id} className="flex items-center">
                       <button
                         onClick={() => handleCategoryFilter(cat.id)}
@@ -513,6 +565,9 @@ export default function ShopPage({
                         }`}
                       >
                         {cat.name}
+                        {cat.count > 0 && cat.id !== 'all' && (
+                          <span className="ml-2 text-xs text-gray-500">({cat.count})</span>
+                        )}
                         {activeFilters.category === cat.id && (
                           <span className="ml-2 text-xs text-primary">✓</span>
                         )}
@@ -570,14 +625,19 @@ export default function ShopPage({
               </div>
               
               <div className="relative">
+                <label htmlFor="sort-options" className="block text-sm font-medium text-gray-700 mb-1">
+                  Sort by
+                </label>
                 <select
+                  id="sort-options"
                   value={activeFilters.sort}
                   onChange={(e) => handleSortChange(e.target.value)}
-                  className="appearance-none border border-gray-300 rounded-md py-2 pl-3 pr-10 bg-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                  className="appearance-none border border-gray-300 rounded-md py-2 pl-3 pr-10 bg-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary min-w-[200px]"
+                  aria-label="Sort products by"
                 >
                   {sortOptions.map((option) => (
                     <option key={option.id} value={option.id}>
-                      Sort by: {option.name}
+                      {option.name}
                     </option>
                   ))}
                 </select>
@@ -589,7 +649,8 @@ export default function ShopPage({
             {(activeFilters.category !== 'all' || 
               activeFilters.minPrice > 0 || 
               activeFilters.maxPrice < 1000 || 
-              activeFilters.search) && (
+              activeFilters.search ||
+              activeFilters.sort !== 'newest') && (
               <div className="flex flex-wrap gap-2 mb-4">
                 {activeFilters.category !== 'all' && (
                   <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm flex items-center">
@@ -630,12 +691,17 @@ export default function ShopPage({
                   </div>
                 )}
                 
-                <button 
-                  onClick={handleResetFilters}
-                  className="text-sm text-gray-500 hover:text-primary underline"
-                >
-                  Clear all filters
-                </button>
+                {activeFilters.sort !== 'newest' && (
+                  <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm flex items-center">
+                    Sort: {sortOptions.find(option => option.id === activeFilters.sort)?.name || activeFilters.sort}
+                    <button 
+                      onClick={() => updateFilters({ sort: null })}
+                      className="ml-2 text-primary hover:text-primary/70"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             
@@ -656,10 +722,10 @@ export default function ShopPage({
                     </div>
                   </div>
                 )}
-                {activeFilters.category === 'electronics' && !activeFilters.search && (
+                {activeFilters.category !== 'all' && !activeFilters.search && (
                   <div className="col-span-full text-center mb-6">
                     <div className="inline-block bg-primary/10 text-primary px-4 py-2 rounded-md">
-                      Showing Electronics category products...
+                      Showing {getCategoryName(activeFilters.category)} products...
                     </div>
                   </div>
                 )}

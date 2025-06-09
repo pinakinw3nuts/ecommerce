@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShoppingCart, Plus, Minus, X } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, X, Tag, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCart } from '@/contexts/CartContext';
 import { formatPrice } from '@/lib/utils';
+import CouponForm from '@/components/coupon/CouponForm';
+import AppliedCoupon from '@/components/coupon/AppliedCoupon';
 
 export default function CartPage() {
   const { 
@@ -15,9 +17,15 @@ export default function CartPage() {
     updateQuantity, 
     subtotal, 
     shipping, 
-    tax, 
+    tax,
+    discount,
     total, 
-    isEmpty 
+    isEmpty,
+    coupon,
+    applyCoupon,
+    removeCoupon,
+    couponLoading,
+    couponError
   } = useCart();
   const [isClient, setIsClient] = useState(false);
 
@@ -172,6 +180,37 @@ export default function CartPage() {
           </div>
           
           <div className="lg:col-span-1">
+            {/* Coupon Code Section */}
+            <div className="bg-white rounded-lg border p-6 mb-6">
+              <h3 className="text-lg font-medium mb-4 flex items-center">
+                <Tag className="h-5 w-5 mr-2 text-[#D23F57]" />
+                Apply Coupon
+              </h3>
+              
+              {coupon ? (
+                <div className="mb-4">
+                  <AppliedCoupon 
+                    coupon={coupon} 
+                    onRemove={removeCoupon}
+                  />
+                </div>
+              ) : (
+                <CouponForm 
+                  orderTotal={subtotal} 
+                  onApply={applyCoupon}
+                  compact
+                />
+              )}
+              
+              <div className="text-sm text-gray-500 mt-4">
+                <Link href="/coupons" className="text-[#D23F57] hover:underline flex items-center">
+                  <Tag className="h-4 w-4 mr-1" />
+                  View all available coupons
+                </Link>
+              </div>
+            </div>
+            
+            {/* Order Summary */}
             <div className="bg-white rounded-lg border p-6">
               <h3 className="text-lg font-medium mb-4">Order Summary</h3>
               
@@ -180,14 +219,24 @@ export default function CartPage() {
                   <span className="text-gray-500">Subtotal</span>
                   <span>{formatPrice(subtotal)}</span>
                 </div>
+                
+                {discount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount</span>
+                    <span>-{formatPrice(discount)}</span>
+                  </div>
+                )}
+                
                 <div className="flex justify-between">
                   <span className="text-gray-500">Shipping</span>
                   <span>{shipping === 0 ? "Free" : formatPrice(shipping)}</span>
                 </div>
+                
                 <div className="flex justify-between">
                   <span className="text-gray-500">Tax</span>
                   <span>{formatPrice(tax)}</span>
                 </div>
+                
                 <div className="border-t pt-3 mt-3">
                   <div className="flex justify-between font-medium text-lg">
                     <span>Total</span>

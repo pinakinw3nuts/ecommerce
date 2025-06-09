@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { API_GATEWAY_URL, ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from '@/lib/constants';
 
-// Define signup schema
-const signupSchema = z.object({
+// Define register schema with password confirmation
+const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string().min(8, "Confirm password must be at least 8 characters")
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"]
 });
 
 // Define error interface for better typing
@@ -21,7 +25,7 @@ interface FetchError extends Error {
 }
 
 /**
- * POST handler for /api/auth/signup
+ * POST handler for /api/auth/register
  * Proxies requests to the API gateway
  */
 export async function POST(request: NextRequest) {
@@ -30,7 +34,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Validate request body
-    const validationResult = signupSchema.safeParse(body);
+    const validationResult = registerSchema.safeParse(body);
     if (!validationResult.success) {
       return NextResponse.json(
         { 
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract user data
+    // Extract user data (exclude confirmPassword)
     const { name, email, password } = validationResult.data;
 
     // Always use IPv4 address explicitly for local development
@@ -52,7 +56,7 @@ export async function POST(request: NextRequest) {
         : API_GATEWAY_URL;
     
     console.log('Making API request to:', `${baseUrl}/api/auth/signup`);
-
+    
     // Call auth service through API gateway with explicit timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
@@ -98,7 +102,7 @@ export async function POST(request: NextRequest) {
         refreshToken: result.refreshToken,
       }, { status: 201 });
 
-      // Set access token as HTTP-only cookie if provided
+      // Set access token as HTTP-only cookie
       if (result.accessToken) {
         nextResponse.cookies.set({
           name: ACCESS_TOKEN_NAME,
@@ -111,7 +115,7 @@ export async function POST(request: NextRequest) {
         });
       }
       
-      // Set refresh token as HTTP-only cookie if provided
+      // Set refresh token as HTTP-only cookie
       if (result.refreshToken) {
         nextResponse.cookies.set({
           name: REFRESH_TOKEN_NAME,
@@ -146,12 +150,12 @@ export async function POST(request: NextRequest) {
       throw fetchError;
     }
   } catch (error: any) {
-    console.error('Signup error:', error);
+    console.error('Registration error:', error);
     
     // Return appropriate error response
     return NextResponse.json(
       { 
-        error: 'Failed to signup', 
+        error: 'Failed to register', 
         message: error.message,
         details: {
           code: error.cause?.code,

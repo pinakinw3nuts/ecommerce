@@ -16,16 +16,22 @@ export interface TokenPayload {
 
 /**
  * Get access token from request cookies
+ * Checks both the httpOnly and client-accessible cookies
  */
 export function getAccessToken(request: NextRequest): string | undefined {
-  return request.cookies.get(ACCESS_TOKEN_NAME)?.value;
+  // Try the standard cookie first, then the client-accessible one
+  return request.cookies.get(ACCESS_TOKEN_NAME)?.value || 
+         request.cookies.get(`${ACCESS_TOKEN_NAME}_client`)?.value;
 }
 
 /**
  * Get refresh token from request cookies
+ * Checks both the httpOnly and client-accessible cookies
  */
 export function getRefreshToken(request: NextRequest): string | undefined {
-  return request.cookies.get(REFRESH_TOKEN_NAME)?.value;
+  // Try the standard cookie first, then the client-accessible one
+  return request.cookies.get(REFRESH_TOKEN_NAME)?.value || 
+         request.cookies.get(`${REFRESH_TOKEN_NAME}_client`)?.value;
 }
 
 /**

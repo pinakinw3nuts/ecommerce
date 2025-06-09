@@ -102,14 +102,14 @@ export default function SiteFooter() {
           <div>
             <h3 className="font-bold text-lg mb-4">CATEGORIES</h3>
             <ul className="space-y-2">
-              <li><Link href="/shop/audi" className="hover:text-red-500">Audi</Link></li>
-              <li><Link href="/shop/porsche" className="hover:text-red-500">Porsche</Link></li>
-              <li><Link href="/shop/skoda" className="hover:text-red-500">Skoda</Link></li>
-              <li><Link href="/shop/volkswagen" className="hover:text-red-500">Volkswagen</Link></li>
-              <li><Link href="/shop/bmw" className="hover:text-red-500">BMW</Link></li>
-              <li><Link href="/shop/mini" className="hover:text-red-500">Mini Cooper</Link></li>
-              <li><Link href="/shop/mercedes" className="hover:text-red-500">Mercedes</Link></li>
-              <li><Link href="/shop/land-rover" className="hover:text-red-500">Land Rover</Link></li>
+              <li><Link href="/products?brand=audi" className="hover:text-red-500">Audi</Link></li>
+              <li><Link href="/products?brand=porsche" className="hover:text-red-500">Porsche</Link></li>
+              <li><Link href="/products?brand=skoda" className="hover:text-red-500">Skoda</Link></li>
+              <li><Link href="/products?brand=volkswagen" className="hover:text-red-500">Volkswagen</Link></li>
+              <li><Link href="/products?brand=bmw" className="hover:text-red-500">BMW</Link></li>
+              <li><Link href="/products?brand=mini" className="hover:text-red-500">Mini Cooper</Link></li>
+              <li><Link href="/products?brand=mercedes" className="hover:text-red-500">Mercedes</Link></li>
+              <li><Link href="/products?brand=land-rover" className="hover:text-red-500">Land Rover</Link></li>
             </ul>
           </div>
           

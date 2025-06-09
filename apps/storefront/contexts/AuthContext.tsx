@@ -39,10 +39,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Function to refresh authentication
   const refreshAuth = async (): Promise<boolean> => {
     try {
-      // Get refresh token
-      const refreshToken = Cookies.get(REFRESH_TOKEN_NAME);
+      // Check for both HTTP-only and client-accessible cookies
+      const refreshToken = Cookies.get(REFRESH_TOKEN_NAME) || Cookies.get(`${REFRESH_TOKEN_NAME}_client`);
       
       if (!refreshToken) {
+        console.log('No refresh token found in cookies');
         return false;
       }
       
@@ -61,7 +62,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Clear cookies if refresh failed
         Cookies.remove(ACCESS_TOKEN_NAME, { path: '/' });
         Cookies.remove(REFRESH_TOKEN_NAME, { path: '/' });
+        Cookies.remove(`${ACCESS_TOKEN_NAME}_client`, { path: '/' });
+        Cookies.remove(`${REFRESH_TOKEN_NAME}_client`, { path: '/' });
+        console.log('Token refresh failed, cleared cookies');
         return false;
+      }
+      
+      const refreshData = await refreshResponse.json();
+      
+      // Ensure client-side cookies are set as backup
+      if (refreshData.accessToken) {
+        Cookies.set(`${ACCESS_TOKEN_NAME}_client`, refreshData.accessToken, {
+          path: '/',
+          expires: 1/48, // 30 minutes
+          sameSite: 'lax'
+        });
+      }
+      
+      if (refreshData.refreshToken) {
+        Cookies.set(`${REFRESH_TOKEN_NAME}_client`, refreshData.refreshToken, {
+          path: '/',
+          expires: 7, // 7 days
+          sameSite: 'lax'
+        });
       }
       
       // Get user data
@@ -73,6 +96,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       
       if (!meResponse.ok) {
+        if (refreshData.accessToken) {
+          // Use token data if available
+          setUser(createStandardUser(refreshData.accessToken));
+          return true;
+        }
         return false;
       }
       
@@ -119,9 +147,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setIsLoading(true);
         
-        // Check for access token
-        const accessToken = Cookies.get(ACCESS_TOKEN_NAME);
-        const refreshToken = Cookies.get(REFRESH_TOKEN_NAME);
+        // Check for access token - try both httpOnly and client cookies
+        const accessToken = Cookies.get(ACCESS_TOKEN_NAME) || Cookies.get(`${ACCESS_TOKEN_NAME}_client`);
+        const refreshToken = Cookies.get(REFRESH_TOKEN_NAME) || Cookies.get(`${REFRESH_TOKEN_NAME}_client`);
+        
+        console.log('Auth check - Tokens found:', { 
+          accessToken: !!accessToken, 
+          refreshToken: !!refreshToken 
+        });
         
         // If no tokens, user is not authenticated
         if (!accessToken && !refreshToken) {
@@ -209,9 +242,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         console.error('Auth check error:', err);
         setUser(null);
-      } finally {
-        setIsLoading(false);
       }
+      setIsLoading(false);
     };
 
     checkAuthStatus();
@@ -247,13 +279,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Update user state
       setUser(data.user);
       
-      // Wait a moment to ensure cookies are set before navigation
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Manually set cookies on the client side as a backup
+      if (data.accessToken) {
+        Cookies.set(`${ACCESS_TOKEN_NAME}_client`, data.accessToken, {
+          path: '/',
+          expires: 1/48, // 30 minutes
+          sameSite: 'lax'
+        });
+        
+        // Also set the regular cookie for compatibility
+        Cookies.set(ACCESS_TOKEN_NAME, data.accessToken, {
+          path: '/',
+          expires: 1/48, // 30 minutes
+          sameSite: 'lax'
+        });
+      }
+      
+      if (data.refreshToken) {
+        Cookies.set(`${REFRESH_TOKEN_NAME}_client`, data.refreshToken, {
+          path: '/',
+          expires: 7, // 7 days
+          sameSite: 'lax'
+        });
+      }
+      
+      // Wait longer to ensure cookies are set before navigation
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       // Check if there's a redirect parameter
       const redirect = searchParams.get('redirect');
       
       console.log('Login successful, redirecting to:', redirect || '/account');
+      console.log('Cookies after login:', {
+        accessToken: Cookies.get(ACCESS_TOKEN_NAME) || Cookies.get(`${ACCESS_TOKEN_NAME}_client`),
+        refreshToken: !!Cookies.get(REFRESH_TOKEN_NAME) || !!Cookies.get(`${REFRESH_TOKEN_NAME}_client`)
+      });
       
       // Use router.replace instead of push to avoid adding to history
       if (redirect) {
@@ -292,6 +352,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Clear cookies manually to ensure they're removed
       Cookies.remove(ACCESS_TOKEN_NAME, { path: '/' });
       Cookies.remove(REFRESH_TOKEN_NAME, { path: '/' });
+      Cookies.remove(`${ACCESS_TOKEN_NAME}_client`, { path: '/' });
+      Cookies.remove(`${REFRESH_TOKEN_NAME}_client`, { path: '/' });
       
       router.refresh(); // Refresh the page to update server components
       router.push('/'); // Redirect to home page
@@ -303,6 +365,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       Cookies.remove(ACCESS_TOKEN_NAME, { path: '/' });
       Cookies.remove(REFRESH_TOKEN_NAME, { path: '/' });
+      Cookies.remove(`${ACCESS_TOKEN_NAME}_client`, { path: '/' });
+      Cookies.remove(`${REFRESH_TOKEN_NAME}_client`, { path: '/' });
     } finally {
       setIsLoading(false);
     }

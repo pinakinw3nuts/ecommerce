@@ -2,13 +2,15 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, CreditCard, MapPin, Package, Truck, ChevronDown } from 'lucide-react';
+import { Check, CreditCard, MapPin, Package, Truck, ChevronDown, Tag } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { useCart } from '@/contexts/CartContext';
 import { formatPrice } from '@/lib/utils';
+import CouponForm from '@/components/coupon/CouponForm';
+import AppliedCoupon from '@/components/coupon/AppliedCoupon';
 
 // Simple Label component
 function Label({ htmlFor, children, className = "" }: { 
@@ -100,7 +102,18 @@ type Address = {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, subtotal, shipping, tax, total, clearCart } = useCart();
+  const { 
+    items, 
+    subtotal, 
+    shipping, 
+    tax, 
+    total, 
+    clearCart, 
+    coupon,
+    discount,
+    applyCoupon,
+    removeCoupon 
+  } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [shippingMethod, setShippingMethod] = useState<'standard' | 'express' | 'next-day'>('standard');
   const [paymentMethod, setPaymentMethod] = useState<'credit' | 'paypal' | 'applepay'>('credit');
@@ -171,7 +184,8 @@ export default function CheckoutPage() {
     'next-day': shipping + 20,
   }[shippingMethod] || 0;
   
-  const orderTotal = subtotal + shippingCost + tax;
+  // Use total from cart context which includes discount
+  const finalTotal = total + (shippingMethod === 'standard' ? 0 : shippingMethod === 'express' ? 10 : 20);
   
   // Validate form
   const validateForm = () => {
@@ -244,7 +258,7 @@ export default function CheckoutPage() {
         subtotal,
         shipping: shippingCost,
         tax,
-        total: orderTotal 
+        total: finalTotal 
       });
       
       // Clear cart and redirect to success page
@@ -296,7 +310,7 @@ export default function CheckoutPage() {
   return (
     <div className="container max-w-6xl mx-auto px-6 py-12">
       <h1 className="text-2xl font-bold mb-8">Checkout</h1>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Checkout Form (Left Column) */}
         <div className="lg:col-span-2 space-y-8">
@@ -630,11 +644,33 @@ export default function CheckoutPage() {
                     ))}
                   </div>
                   
+                  {/* Coupon section for mobile */}
+                  {coupon && (
+                    <div className="border-t pt-3">
+                      <h4 className="text-sm font-medium mb-2 flex items-center">
+                        <Tag className="h-4 w-4 mr-1 text-[#D23F57]" />
+                        Applied Discount
+                      </h4>
+                      <AppliedCoupon
+                        coupon={coupon}
+                        compact
+                      />
+                    </div>
+                  )}
+                  
                   <div className="border-t pt-4">
                     <div className="flex justify-between py-1">
                       <span className="text-muted-foreground">Subtotal</span>
                       <span>{formatPrice(subtotal)}</span>
                     </div>
+                    
+                    {discount > 0 && (
+                      <div className="flex justify-between py-1 text-green-600">
+                        <span>Discount</span>
+                        <span>-{formatPrice(discount)}</span>
+                      </div>
+                    )}
+                    
                     <div className="flex justify-between py-1">
                       <span className="text-muted-foreground">Shipping</span>
                       <span>{shippingCost === 0 ? "Free" : formatPrice(shippingCost)}</span>
@@ -645,22 +681,22 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex justify-between py-2 font-medium text-lg">
                       <span>Total</span>
-                      <span>{formatPrice(orderTotal)}</span>
+                      <span>{formatPrice(finalTotal)}</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
             
-            <Button
-              type="submit"
-              className="w-full bg-neutral-900 hover:bg-neutral-800"
+            <Button 
+              type="submit" 
+              className="w-full bg-[#D23F57] hover:bg-[#b8354a] text-white"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>Processing...</>
               ) : (
-                <>Place Order • {formatPrice(orderTotal)}</>
+                <>Place Order • {formatPrice(finalTotal)}</>
               )}
             </Button>
           </form>
@@ -697,11 +733,47 @@ export default function CheckoutPage() {
                   ))}
                 </div>
                 
+                {/* Coupon section for desktop */}
+                {coupon && (
+                  <div className="border-t pt-3">
+                    <h4 className="text-sm font-medium mb-2 flex items-center">
+                      <Tag className="h-4 w-4 mr-1 text-[#D23F57]" />
+                      Applied Discount
+                    </h4>
+                    <AppliedCoupon
+                      coupon={coupon}
+                      compact
+                    />
+                  </div>
+                )}
+                
+                {!coupon && (
+                  <div className="border-t pt-3">
+                    <h4 className="text-sm font-medium mb-2 flex items-center">
+                      <Tag className="h-4 w-4 mr-1 text-[#D23F57]" />
+                      Add Coupon
+                    </h4>
+                    <CouponForm
+                      orderTotal={subtotal}
+                      onApply={applyCoupon}
+                      compact
+                    />
+                  </div>
+                )}
+                
                 <div className="border-t pt-4">
                   <div className="flex justify-between py-1">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>{formatPrice(subtotal)}</span>
                   </div>
+                  
+                  {discount > 0 && (
+                    <div className="flex justify-between py-1 text-green-600">
+                      <span>Discount</span>
+                      <span>-{formatPrice(discount)}</span>
+                    </div>
+                  )}
+                  
                   <div className="flex justify-between py-1">
                     <span className="text-muted-foreground">Shipping</span>
                     <span>{shippingCost === 0 ? "Free" : formatPrice(shippingCost)}</span>
@@ -712,7 +784,7 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex justify-between py-2 font-medium text-lg">
                     <span>Total</span>
-                    <span>{formatPrice(orderTotal)}</span>
+                    <span>{formatPrice(finalTotal)}</span>
                   </div>
                 </div>
                 

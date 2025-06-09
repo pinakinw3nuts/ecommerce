@@ -3,7 +3,7 @@ import axios from 'axios';
 import { API_GATEWAY_URL } from '@/lib/constants';
 
 /**
- * GET handler for /api/categories
+ * GET handler for /api/brands
  * Proxies requests to the API gateway
  */
 export async function GET(request: NextRequest) {
@@ -20,13 +20,14 @@ export async function GET(request: NextRequest) {
         ? API_GATEWAY_URL.substring(0, API_GATEWAY_URL.length - 4)
         : API_GATEWAY_URL;
     
-    console.log('Making API request to:', `${baseUrl}/v1/categories`);
+    console.log('Making API request to:', `${baseUrl}/v1/brands`);
     
     // Forward request to API gateway
-    const response = await axios.get(`${baseUrl}/v1/categories`, {
+    const response = await axios.get(`${baseUrl}/v1/brands`, {
       params: {
         limit,
         page,
+        isActive: true
       },
       headers: {
         'Accept': 'application/json',
@@ -38,21 +39,22 @@ export async function GET(request: NextRequest) {
     const apiData = response.data;
     
     // Check if the API returned data in the expected format
-    if (apiData && Array.isArray(apiData.data)) {
-      // API returned data in a different format, transform it
+    if (apiData && Array.isArray(apiData)) {
+      // API returned data in the expected format, transform it to our structure
       const transformedData = {
-        categories: apiData.data.map((category: any) => ({
-          id: category.id,
-          name: category.name,
-          slug: category.slug || category.name.toLowerCase().replace(/\s+/g, '-'),
-          description: category.description || '',
-          image: category.mediaUrl || '/images/placeholder.jpg',
-          count: category.productCount || 0
+        brands: apiData.map((brand: any) => ({
+          id: brand.id,
+          name: brand.name,
+          slug: brand.name.toLowerCase().replace(/\s+/g, '-'),
+          description: brand.description || '',
+          logo: brand.logoUrl || '/images/placeholder.jpg',
+          website: brand.website || '#',
+          productCount: brand.products?.length || 0
         })),
-        total: apiData.total || apiData.data.length,
+        total: apiData.length,
         page: parseInt(page),
         limit: parseInt(limit),
-        totalPages: Math.ceil((apiData.total || apiData.data.length) / parseInt(limit))
+        totalPages: Math.ceil(apiData.length / parseInt(limit))
       };
       
       return NextResponse.json(transformedData);
@@ -61,11 +63,11 @@ export async function GET(request: NextRequest) {
     // If the response already has the expected format, return it as is
     return NextResponse.json(apiData);
   } catch (error: any) {
-    console.error('Error fetching categories:', error);
+    console.error('Error fetching brands:', error);
     
     // Return appropriate error response
     return NextResponse.json(
-      { error: 'Failed to fetch categories', message: error.message },
+      { error: 'Failed to fetch brands', message: error.message },
       { status: error.response?.status || 500 }
     );
   }

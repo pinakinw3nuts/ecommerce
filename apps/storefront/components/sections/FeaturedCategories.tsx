@@ -16,19 +16,19 @@ interface CategoryType {
 const featuredCategories = [
   {
     name: 'HAMMER TAILS',
-    href: '/shop/hammer-tails',
+    href: '/products?category=hammer-tails',
     image: '/images/categories/hammer-tails.jpg',
     position: 'left'
   },
   {
     name: 'SOPHISTICATED MUSCLE',
-    href: '/shop/sophisticated-muscle',
+    href: '/products?category=sophisticated-muscle',
     image: '/images/categories/sophisticated-muscle.jpg',
     position: 'center'
   },
   {
     name: 'HYPERCARS',
-    href: '/shop/hypercars',
+    href: '/products?category=hypercars',
     image: '/images/categories/hypercars.jpg',
     position: 'right'
   }

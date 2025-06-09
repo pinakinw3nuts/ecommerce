@@ -48,8 +48,8 @@ const createAPI = () => {
   // Add request interceptor
   api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-      // Get token from cookies
-      const token = Cookies.get(ACCESS_TOKEN_NAME);
+      // Get token from cookies (try both standard and client cookies)
+      const token = Cookies.get(ACCESS_TOKEN_NAME) || Cookies.get(`${ACCESS_TOKEN_NAME}_client`);
       
       // If token exists, add it to headers
       if (token) {
@@ -90,7 +90,7 @@ const createAPI = () => {
 
       try {
         // Get refresh token
-        const refreshToken = Cookies.get(REFRESH_TOKEN_NAME);
+        const refreshToken = Cookies.get(REFRESH_TOKEN_NAME) || Cookies.get(`${REFRESH_TOKEN_NAME}_client`);
         
         if (!refreshToken) {
           throw new Error('No refresh token available');
@@ -113,13 +113,28 @@ const createAPI = () => {
         
         // Save new tokens - cookies should be set by the server, but we'll also set them client-side as backup
         Cookies.set(ACCESS_TOKEN_NAME, data.accessToken, { 
-          expires: 1/96, // 15 minutes
+          expires: 1/48, // 30 minutes (changed from 15 minutes)
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
           path: '/'
         });
         
         Cookies.set(REFRESH_TOKEN_NAME, data.refreshToken, { 
+          expires: 7, // 7 days
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/'
+        });
+        
+        // Also set client-accessible cookies
+        Cookies.set(`${ACCESS_TOKEN_NAME}_client`, data.accessToken, { 
+          expires: 1/48, // 30 minutes
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/'
+        });
+        
+        Cookies.set(`${REFRESH_TOKEN_NAME}_client`, data.refreshToken, { 
           expires: 7, // 7 days
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
@@ -140,6 +155,8 @@ const createAPI = () => {
         // Clear tokens
         Cookies.remove(ACCESS_TOKEN_NAME, { path: '/' });
         Cookies.remove(REFRESH_TOKEN_NAME, { path: '/' });
+        Cookies.remove(`${ACCESS_TOKEN_NAME}_client`, { path: '/' });
+        Cookies.remove(`${REFRESH_TOKEN_NAME}_client`, { path: '/' });
         
         // Process queue with error
         processQueue(refreshError as Error);

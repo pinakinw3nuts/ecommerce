@@ -4,7 +4,7 @@ export const API_GATEWAY_URL =
   (typeof window !== 'undefined' 
     ? '/api' // Client-side: Use relative URL
     : process.env.NODE_ENV === 'development'
-      ? 'http://127.0.0.1:3000/api' // Server-side development (using IPv4 explicitly)
+      ? 'http://localhost:3000/api' // Server-side development (using localhost)
       : 'http://api-gateway:3000'); // Server-side in Docker/production
 
 // Flag to use mock data when API is not available

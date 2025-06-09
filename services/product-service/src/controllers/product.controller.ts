@@ -100,8 +100,14 @@ const productQuerySchema = z.object({
   }),
   
   // Sorting
-  sortBy: z.enum(['name', 'price', 'createdAt']).optional(),
-  sortOrder: z.enum(['ASC', 'DESC']).optional(),
+  sortBy: z.enum(['name', 'price', 'createdAt', 'rating']).optional().transform(val => {
+    console.log('Transforming sortBy value:', val, typeof val);
+    return val;
+  }),
+  sortOrder: z.enum(['ASC', 'DESC']).optional().transform(val => {
+    console.log('Transforming sortOrder value:', val, typeof val);
+    return val;
+  }),
   
   // Filtering
   search: z.string().optional(),
@@ -167,7 +173,7 @@ interface ProductQueryParams {
   limit?: number;
   
   // Sorting
-  sortBy?: 'name' | 'price' | 'createdAt';
+  sortBy?: 'name' | 'price' | 'createdAt' | 'rating';
   sortOrder?: 'ASC' | 'DESC';
   
   // Filtering

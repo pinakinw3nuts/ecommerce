@@ -37,7 +37,7 @@ export default function CategoryIconsRow() {
         const formattedCategories = response.data.categories.map((cat: any) => ({
           id: cat.id || cat._id || '',
           name: cat.name || '',
-          href: `/shop/${cat.slug || cat.id || ''}`,
+          href: `/products?category=${cat.slug || cat.id || ''}`,
           image: cat.imageUrl || cat.image || '/images/placeholder.png',
           description: cat.description || '',
           productCount: cat.productCount || 0,

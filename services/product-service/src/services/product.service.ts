@@ -21,7 +21,7 @@ export interface ProductFilterOptions {
 }
 
 export interface ProductSortOptions {
-  sortBy?: 'name' | 'price' | 'createdAt';
+  sortBy?: 'name' | 'price' | 'createdAt' | 'rating';
   sortOrder?: 'ASC' | 'DESC';
 }
 
@@ -427,14 +427,14 @@ export class ProductService {
                 
                 if (isUuid) {
                   // It's a UUID, use it directly
-                  categoryConditions.push(`"categoryId" = $${paramIndex}`);
+                  categoryConditions.push(`product."categoryId" = $${paramIndex}`);
                   params.push(catId);
                   paramIndex++;
                 } else {
                   // Try to find the category by name or slug
                   const category = await this.getCategoryByNameOrSlug(catId);
                   if (category) {
-                    categoryConditions.push(`"categoryId" = $${paramIndex}`);
+                    categoryConditions.push(`product."categoryId" = $${paramIndex}`);
                     params.push(category.id);
                     paramIndex++;
                   }
@@ -453,7 +453,7 @@ export class ProductService {
               if (isUuid) {
                 // Filter by category ID directly on the foreign key
                 console.log('Filtering by category ID');
-                conditions.push(`"categoryId" = $${paramIndex}`);
+                conditions.push(`product."categoryId" = $${paramIndex}`);
                 params.push(singleCategoryId);
                 paramIndex++;
               } else {
@@ -463,7 +463,7 @@ export class ProductService {
                 
                 if (category) {
                   console.log('Found category:', category.id, category.name);
-                  conditions.push(`"categoryId" = $${paramIndex}`);
+                  conditions.push(`product."categoryId" = $${paramIndex}`);
                   params.push(category.id);
                   paramIndex++;
                 } else {
@@ -488,9 +488,9 @@ export class ProductService {
             // Simple LIKE search for PostgreSQL
             const searchTerm = `%${search}%`;
             conditions.push(`(
-              LOWER("name") LIKE LOWER($${paramIndex}) OR 
-              LOWER("description") LIKE LOWER($${paramIndex}) OR 
-              LOWER("slug") LIKE LOWER($${paramIndex})
+              LOWER(product."name") LIKE LOWER($${paramIndex}) OR 
+              LOWER(product."description") LIKE LOWER($${paramIndex}) OR 
+              LOWER(product."slug") LIKE LOWER($${paramIndex})
             )`);
             params.push(searchTerm);
             paramIndex++;
@@ -501,43 +501,43 @@ export class ProductService {
         
         // Filter by price range
         if (minPrice !== undefined && maxPrice !== undefined) {
-          conditions.push(`"price" BETWEEN $${paramIndex} AND $${paramIndex + 1}`);
+          conditions.push(`product."price" BETWEEN $${paramIndex} AND $${paramIndex + 1}`);
           params.push(minPrice, maxPrice);
           paramIndex += 2;
         } else if (minPrice !== undefined) {
-          conditions.push(`"price" >= $${paramIndex}`);
+          conditions.push(`product."price" >= $${paramIndex}`);
           params.push(minPrice);
           paramIndex++;
         } else if (maxPrice !== undefined) {
-          conditions.push(`"price" <= $${paramIndex}`);
+          conditions.push(`product."price" <= $${paramIndex}`);
           params.push(maxPrice);
           paramIndex++;
         }
         
         // Filter by featured status
         if (isFeatured !== undefined) {
-          conditions.push(`"isFeatured" = $${paramIndex}`);
+          conditions.push(`product."isFeatured" = $${paramIndex}`);
           params.push(isFeatured);
           paramIndex++;
         }
         
         // Filter by published status
         if (isPublished !== undefined) {
-          conditions.push(`"isPublished" = $${paramIndex}`);
+          conditions.push(`product."isPublished" = $${paramIndex}`);
           params.push(isPublished);
           paramIndex++;
         }
         
         // Filter by sale price
         if (options.filters.hasSalePrice) {
-          conditions.push(`"salePrice" IS NOT NULL AND "salePrice" > 0 AND "salePrice" < "price"`);
+          conditions.push(`product."salePrice" IS NOT NULL AND product."salePrice" > 0 AND product."salePrice" < product."price"`);
         }
         
         // Filter by tags
         if (tagIds && tagIds.length > 0) {
           // For each tag, we'll add a parameter
           const tagParams = tagIds.map((_, idx) => `$${paramIndex + idx}`).join(',');
-          conditions.push(`"id" IN (
+          conditions.push(`product."id" IN (
             SELECT "productId" FROM product_tags_tag WHERE "tagId" IN (${tagParams})
           )`);
           
@@ -553,7 +553,20 @@ export class ProductService {
       // Build order by clause
       const sortField = options?.sort?.sortBy || 'createdAt';
       const sortDirection = options?.sort?.sortOrder || 'DESC';
-      const orderByClause = `ORDER BY "${sortField}" ${sortDirection}, "id" ASC`;
+      
+      // Special handling for rating sort - use a subquery to calculate average rating from reviews
+      let orderByClause = '';
+      if (sortField === 'rating') {
+        orderByClause = `
+          ORDER BY (
+            SELECT COALESCE(AVG(pr."rating"), 0) 
+            FROM product_review pr 
+            WHERE pr."productId" = product.id
+          ) ${sortDirection}, product."id" ASC
+        `;
+      } else {
+        orderByClause = `ORDER BY product."${sortField}" ${sortDirection}, product."id" ASC`;
+      }
       
       // Count query - do not use joins
       const countQuery = `
@@ -584,7 +597,7 @@ export class ProductService {
       
       // Main query to get product IDs with pagination - do not use joins
       const idsQuery = `
-        SELECT id
+        SELECT product.id
         FROM product
         ${whereClause}
         ${orderByClause}

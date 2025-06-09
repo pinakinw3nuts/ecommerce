@@ -330,9 +330,11 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const limit = searchParams.get('limit') || '10';
     const page = searchParams.get('page') || '1';
-    const categoryId = searchParams.get('categoryId') || '';
+    const category = searchParams.get('category') || '';
     const search = searchParams.get('search') || '';
     const sort = searchParams.get('sort') || '';
+    const minPrice = searchParams.get('minPrice') || '';
+    const maxPrice = searchParams.get('maxPrice') || '';
     
     // Build params object
     const params: Record<string, string> = {
@@ -340,10 +342,62 @@ export async function GET(request: NextRequest) {
       page,
     };
     
-    // Add optional params
-    if (categoryId) params.categoryId = categoryId;
+    // Add optional params - correct parameter names for the API
+    if (category) {
+      // Check if it's a test category (test01, test08, etc.)
+      if (/^test\d+$/i.test(category)) {
+        // For test categories, use them as search terms
+        params.search = category;
+        console.log('Using test category as search term:', category);
+      } else {
+        params.categoryId = category;
+        console.log('Using category parameter:', category);
+      }
+    }
+    
     if (search) params.search = search;
-    if (sort) params.sort = sort;
+    if (minPrice) params.minPrice = minPrice;
+    if (maxPrice) params.maxPrice = maxPrice;
+    
+    // Handle sort parameter mapping from frontend to backend format
+    if (sort) {
+      // Map frontend sort options to backend format
+      switch (sort) {
+        case 'price-asc':
+          params.sortBy = 'price';
+          params.sortOrder = 'ASC';
+          break;
+        case 'price-desc':
+          params.sortBy = 'price';
+          params.sortOrder = 'DESC';
+          break;
+        case 'newest':
+          params.sortBy = 'createdAt';
+          params.sortOrder = 'DESC';
+          break;
+        case 'popular':
+          params.sortBy = 'rating';
+          params.sortOrder = 'DESC';
+          break;
+        case 'name-asc':
+          params.sortBy = 'name';
+          params.sortOrder = 'ASC';
+          break;
+        case 'name-desc':
+          params.sortBy = 'name';
+          params.sortOrder = 'DESC';
+          break;
+        case 'rating-desc':
+          params.sortBy = 'rating';
+          params.sortOrder = 'DESC';
+          break;
+        default:
+          // Pass the sort parameter as is if it doesn't match our mappings
+          params.sort = sort;
+      }
+    }
+    
+    console.log('Query parameters being sent to API:', params);
     
     // Use explicit IPv4 address for local development
     const baseUrl = process.env.NODE_ENV === 'development'

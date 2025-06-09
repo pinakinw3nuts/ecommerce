@@ -31,12 +31,23 @@ const createStandardUser = (accessToken: string) => {
 
 export async function GET(request: NextRequest) {
   try {
-    // Get access token from cookies
+    console.log('[/api/auth/me] Checking authentication status');
+    
+    // Get tokens from cookies (uses the updated function that checks both cookie types)
     const accessToken = getAccessToken(request);
     const refreshToken = getRefreshToken(request);
+    
+    // Log cookie presence for debugging
+    console.log('[/api/auth/me] Tokens found:', { 
+      accessToken: !!accessToken, 
+      refreshToken: !!refreshToken,
+      standardCookie: !!request.cookies.get(ACCESS_TOKEN_NAME),
+      clientCookie: !!request.cookies.get(`${ACCESS_TOKEN_NAME}_client`)
+    });
 
     // If no token at all, return unauthorized
     if (!accessToken && !refreshToken) {
+      console.log('[/api/auth/me] No authentication tokens found');
       return NextResponse.json(
         { message: 'Unauthorized' }, 
         { status: 401 }
@@ -45,20 +56,24 @@ export async function GET(request: NextRequest) {
 
     // If we have an access token, create a user
     if (accessToken) {
+      console.log('[/api/auth/me] Creating user from access token');
+      const user = createStandardUser(accessToken);
+      
       // Return standardized user data
       return NextResponse.json({
         success: true,
-        user: createStandardUser(accessToken)
+        user: user
       });
     }
 
     // If we only have a refresh token, return unauthorized
+    console.log('[/api/auth/me] Only refresh token available, no access token');
     return NextResponse.json(
-      { message: 'Unauthorized' }, 
+      { message: 'Unauthorized - Access token required' }, 
       { status: 401 }
     );
   } catch (error) {
-    console.error('Error in ME route:', error);
+    console.error('[/api/auth/me] Error:', error);
     return NextResponse.json(
       { message: 'Internal server error' }, 
       { status: 500 }
