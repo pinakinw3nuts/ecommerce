@@ -58,10 +58,15 @@ export const services: Record<string, ServiceConfig> = {
     timeout: 10000,
     routes: [
       '/api/products',
+      '/api/v1/products',
       '/api/categories',
+      '/api/v1/categories',
       '/api/brands',
+      '/api/v1/brands',
       '/api/tags',
-      '/api/coupons'
+      '/api/v1/tags',
+      '/api/coupons',
+      '/api/v1/coupons'
     ],
     versionedRoutes: true,
     adminRoutes: true,
@@ -72,6 +77,14 @@ export const services: Record<string, ServiceConfig> = {
       },
       {
         pattern: /^\/api\/admin\/(products|categories|brands|tags|coupons)(\/.*)?(\?|$)/,
+        handler: 'product'
+      },
+      {
+        pattern: /^\/api\/v\d+\/products\/featured(\?|$)/,
+        handler: 'product'
+      },
+      {
+        pattern: /^\/api\/v\d+\/products\/([^\/]+)(\/.*)?(\?|$)/,
         handler: 'product'
       }
     ]

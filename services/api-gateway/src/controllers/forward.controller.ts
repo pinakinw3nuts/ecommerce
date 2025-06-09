@@ -46,6 +46,17 @@ export async function forwardHandler(
     const targetPath = getTargetPath(path);
     const targetUrl = `${serviceConfig.url}${targetPath}`;
 
+    // Additional logging for CMS service requests
+    if (serviceConfig.name === 'cms-service') {
+      logger.debug({
+        msg: 'CMS service request details',
+        originalPath: path,
+        targetPath,
+        targetUrl,
+        requestId,
+      });
+    }
+
     // Log the forwarding details
     logger.info({
       msg: 'Forwarding request',

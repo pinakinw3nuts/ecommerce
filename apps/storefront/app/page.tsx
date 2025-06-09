@@ -22,6 +22,9 @@ type Product = {
   price: number;
   image: string;
   slug: string;
+  isFeatured: boolean;
+  isOnSale: boolean;
+  salePrice?: number;
 };
 
 // Create a server-side API client with explicit IPv4 address
@@ -36,7 +39,7 @@ export const metadata: Metadata = {
 
 async function fetchCMS(): Promise<CMSBlock[]> {
   try {
-    const { data } = await serverApi.get('/api/v1/widget/home');
+    const { data } = await serverApi.get('/v1/widget/home');
     
     // Check if data exists and has the expected structure
     if (!data || !data.data) {
@@ -55,17 +58,24 @@ async function fetchCMS(): Promise<CMSBlock[]> {
 
 async function fetchFeaturedProducts(): Promise<Product[]> {
   try {
-    const { data } = await serverApi.get('/v1/products/featured?limit=4');
-    if (!data || !data.products) {
+    const response = await serverApi.get('/v1/products/featured?limit=4');
+    const data = response.data;
+    
+    // Check if data exists and has the expected structure
+    if (!data || !data.products || !Array.isArray(data.products)) {
       console.log('Products API returned unexpected data structure:', data);
       return [];
     }
+    
     return data.products.map((product: any) => ({
-      id: product.id,
-      name: product.name,
-      price: product.price,
+      id: product.id || '',
+      name: product.name || 'Product',
+      price: typeof product.price === 'string' ? parseFloat(product.price) : (product.price || 0),
       image: product.mediaUrl || '/images/placeholder.jpg',
-      slug: product.slug
+      slug: product.slug || product.id || '',
+      isFeatured: product.isFeatured === true,
+      isOnSale: product.salePrice && parseFloat(product.salePrice) > 0,
+      salePrice: product.salePrice ? parseFloat(product.salePrice) : undefined
     }));
   } catch (error) {
     console.error('Error fetching featured products:', error);
@@ -130,14 +140,28 @@ export default async function HomePage() {
               >
                 <div className="relative aspect-square overflow-hidden rounded-md mb-3">
                   <Image 
-                    src={product.image || '/api/placeholder'} 
+                    src={product.image || '/images/placeholder.jpg'} 
                     alt={product.name} 
                     fill
                     className="object-cover transition-transform group-hover:scale-105"
                   />
+                  {product.isOnSale && (
+                    <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
+                      SALE
+                    </div>
+                  )}
                 </div>
                 <h3 className="font-medium">{product.name}</h3>
-                <p className="text-gray-600">${product.price.toFixed(2)}</p>
+                <div className="flex items-center">
+                  {product.isOnSale && product.salePrice !== undefined ? (
+                    <>
+                      <p className="text-gray-600 line-through mr-2">${product.price.toFixed(2)}</p>
+                      <p className="text-red-500 font-semibold">${product.salePrice.toFixed(2)}</p>
+                    </>
+                  ) : (
+                    <p className="text-gray-600">${product.price.toFixed(2)}</p>
+                  )}
+                </div>
               </a>
             ))}
           </div>
