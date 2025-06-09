@@ -3,6 +3,32 @@ import { getAccessToken, getRefreshToken } from '@/lib/auth';
 import { ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from '@/lib/constants';
 import { cookies } from 'next/headers';
 
+// Function to create a standard user object from token or default values
+const createStandardUser = (accessToken: string) => {
+  let userId = 'authenticated-user';
+  let name = 'User';
+  let email = 'user@example.com';
+  
+  try {
+    // Try to decode the token to get user info
+    const tokenParts = accessToken.split('.');
+    if (tokenParts.length === 3) {
+      const payload = JSON.parse(atob(tokenParts[1]));
+      userId = payload.userId || payload.sub || userId;
+      name = payload.name || name;
+      email = payload.email || email;
+    }
+  } catch (error) {
+    console.error('Error decoding token:', error);
+  }
+  
+  return {
+    id: userId,
+    name: name,
+    email: email
+  };
+};
+
 export async function GET(request: NextRequest) {
   try {
     // Get access token from cookies
@@ -17,35 +43,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // If we have an access token, create a mock user
-    // In a real implementation, this would validate the token and fetch user data
+    // If we have an access token, create a user
     if (accessToken) {
-      // Try to decode the token to get user info
-      let userId = 'authenticated-user';
-      let name = 'Authenticated User';
-      let email = 'user@example.com';
-      
-      try {
-        // Try to decode the token to get user info
-        const tokenParts = accessToken.split('.');
-        if (tokenParts.length === 3) {
-          const payload = JSON.parse(atob(tokenParts[1]));
-          userId = payload.userId || payload.sub || userId;
-          name = payload.name || name;
-          email = payload.email || email;
-        }
-      } catch (error) {
-        console.error('Error decoding token:', error);
-      }
-      
-      // Return mock user data
+      // Return standardized user data
       return NextResponse.json({
         success: true,
-        user: {
-          id: userId,
-          name: name,
-          email: email
-        }
+        user: createStandardUser(accessToken)
       });
     }
 

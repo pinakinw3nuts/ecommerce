@@ -85,6 +85,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Function to create a standard user object from token or default values
+  const createStandardUser = (accessToken: string | undefined) => {
+    let userId = 'authenticated-user';
+    let name = 'User';
+    let email = 'user@example.com';
+    
+    if (accessToken) {
+      try {
+        // Try to decode the token to get user info
+        const tokenParts = accessToken.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]));
+          userId = payload.userId || payload.sub || userId;
+          name = payload.name || name;
+          email = payload.email || email;
+        }
+      } catch (error) {
+        console.error('Error decoding token:', error);
+      }
+    }
+    
+    return {
+      id: userId,
+      name: name,
+      email: email
+    };
+  };
+
   // Check if user is logged in on mount and when tokens change
   useEffect(() => {
     const checkAuthStatus = async () => {
@@ -123,29 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // If we get a 404, the route might not be available
           // In this case, we'll create a mock user based on the token
           if (response.status === 404 && accessToken) {
-            try {
-              // Try to decode the token to get user info
-              const tokenParts = accessToken.split('.');
-              if (tokenParts.length === 3) {
-                const payload = JSON.parse(atob(tokenParts[1]));
-                setUser({
-                  id: payload.userId || payload.sub || 'unknown',
-                  name: payload.name || null,
-                  email: payload.email || 'user@example.com'
-                });
-                setIsLoading(false);
-                return;
-              }
-            } catch (decodeError) {
-              console.error('Error decoding token:', decodeError);
-            }
-            
-            // If we can't decode the token, create a generic user
-            setUser({
-              id: 'authenticated-user',
-              name: 'Authenticated User',
-              email: 'user@example.com'
-            });
+            setUser(createStandardUser(accessToken));
             setIsLoading(false);
             return;
           }
@@ -171,11 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setUser(userData.user);
               } else if (meResponse.status === 404 && accessToken) {
                 // If we get a 404 again, create a mock user
-                setUser({
-                  id: 'authenticated-user',
-                  name: 'Authenticated User',
-                  email: 'user@example.com'
-                });
+                setUser(createStandardUser(accessToken));
               } else {
                 setUser(null);
               }
@@ -189,11 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // If there's an error but we have a token, assume authenticated
           if (accessToken) {
-            setUser({
-              id: 'authenticated-user',
-              name: 'Authenticated User',
-              email: 'user@example.com'
-            });
+            setUser(createStandardUser(accessToken));
             setIsLoading(false);
             return;
           }

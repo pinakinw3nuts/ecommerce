@@ -177,10 +177,10 @@ export default function Header() {
             onClick={() => setUserMenuOpen(!userMenuOpen)}
           >
             <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-              {user?.name?.charAt(0) || <UserIcon className="h-5 w-5" />}
+              <UserIcon className="h-5 w-5" />
             </div>
             <span className="hidden md:inline text-sm">
-              {user?.name || 'Account'}
+              {user?.name || 'User'}
             </span>
             <ChevronDownIcon className="h-4 w-4" />
           </button>

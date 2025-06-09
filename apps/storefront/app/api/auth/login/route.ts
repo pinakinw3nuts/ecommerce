@@ -53,14 +53,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Standardize user data format
+    const userData = {
+      id: result.user?.id || 'authenticated-user',
+      name: result.user?.name || 'User',
+      email: result.user?.email || email,
+    };
+
     // Create a response object
     const nextResponse = NextResponse.json({
       message: 'Login successful',
-      user: {
-        id: result.user.id,
-        name: result.user.name,
-        email: result.user.email,
-      },
+      user: userData,
       // Include tokens in the response for client-side storage as backup
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
