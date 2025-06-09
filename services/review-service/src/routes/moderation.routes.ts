@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { ModerationController } from '../controllers/moderation.controller';
-import { authGuard, JwtPayload } from '../middleware/authGuard';
+import { authGuard, JwtPayload } from '../middlewares/authGuard';
 import { authLogger } from '../utils/logger';
 import { RouteGenericInterface } from 'fastify/types/route';
 import { FastifyRequest, FastifyReply } from 'fastify';

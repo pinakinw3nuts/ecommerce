@@ -1,40 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Mock cart data
-const mockCart = {
-  items: [
-    {
-      id: "ci1",
-      productId: "classic-t-shirt",
-      name: "Classic T-Shirt",
-      image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1480&auto=format&fit=crop",
-      price: 19.99,
-      quantity: 2,
-      total: 39.98
-    },
-    {
-      id: "ci2",
-      productId: "wireless-headphones",
-      name: "Wireless Headphones",
-      image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=1470&auto=format&fit=crop",
-      price: 89.99,
-      quantity: 1,
-      total: 89.99
-    }
-  ],
-  subtotal: 129.97
-};
-
-// Empty cart
-const emptyCart = {
-  items: [],
-  subtotal: 0
-};
+import axios from 'axios';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 export async function GET(req: NextRequest) {
-  // For demo purposes, we'll always return the mock cart
-  // In a real implementation, this would fetch the cart from the cart service
-  // based on the user's authentication token
-  
-  return NextResponse.json(mockCart);
+  try {
+    // Get the user token from the request cookies
+    const token = req.cookies.get('accessToken')?.value;
+    
+    // Call the cart service API through the API gateway
+    const response = await axios.get(`${API_GATEWAY_URL}/v1/cart`, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    return NextResponse.json(response.data);
+  } catch (error: any) {
+    console.error('Error fetching cart:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch cart', message: error.message },
+      { status: error.response?.status || 500 }
+    );
+  }
 } 

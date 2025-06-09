@@ -4,7 +4,7 @@
   "description": "API Gateway for E-commerce Microservices",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only --exit-child --watch src src/index.ts",
+    "dev": "ts-node-dev --respawn --transpile-only --exit-child --watch src src/index.ts --dns-result-order=ipv4first",
     "dev:no-redis": "node scripts/start-without-redis.js",
     "dev:port": "node scripts/start-on-port.js",
     "build": "tsc",

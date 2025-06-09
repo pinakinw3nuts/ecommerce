@@ -245,6 +245,75 @@ export const productController = {
       }
     });
 
+    // GET /products/sale - Get products on sale
+    fastify.get('/sale', {
+      schema: {
+        tags: ['products'],
+        summary: 'Get products on sale',
+        description: 'Retrieve a list of products with sale prices',
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', description: 'Number of items to return', default: 4 },
+            page: { type: 'integer', description: 'Page number (starts from 1)', default: 1 }
+          }
+        }
+      }
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const query = request.query as { limit?: string; page?: string };
+        
+        // Parse query parameters
+        const limit = query.limit ? parseInt(query.limit) : 4;
+        const page = query.page ? parseInt(query.page) : 1;
+        
+        // Use the existing product service to fetch products on sale
+        const result = await productService.listProducts({
+          filters: {
+            isPublished: true,
+            hasSalePrice: true // Custom filter to be implemented in the service
+          },
+          pagination: {
+            page,
+            limit
+          },
+          sort: {
+            sortBy: 'createdAt',
+            sortOrder: 'DESC'
+          }
+        });
+        
+        // Filter products that have a sale price
+        const saleProducts = result.data.filter(product => 
+          product.salePrice !== undefined && 
+          product.salePrice !== null && 
+          product.salePrice > 0 && 
+          product.salePrice < product.price
+        );
+        
+        // Format the response
+        const formattedProducts = saleProducts.map(formatProductResponse);
+        
+        return reply.status(200).send({
+          success: true,
+          products: formattedProducts,
+          pagination: {
+            page: result.meta.page,
+            limit: result.meta.limit,
+            total: saleProducts.length,
+            totalPages: Math.ceil(saleProducts.length / limit)
+          }
+        });
+      } catch (error) {
+        console.error('Error fetching sale products:', error);
+        return reply.status(500).send({
+          success: false,
+          message: 'Failed to fetch sale products',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
     // GET /products - List all products with filtering, sorting, and pagination
     fastify.get('/', {
       schema: {

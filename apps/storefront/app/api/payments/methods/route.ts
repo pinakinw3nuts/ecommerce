@@ -1,44 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Mock payment methods
-const mockPaymentMethods = {
-  methods: [
-    { 
-      id: "cod", 
-      name: "Cash on Delivery", 
-      type: "COD", 
-      label: "Cash on Delivery" 
-    },
-    { 
-      id: "stripe", 
-      name: "Stripe", 
-      type: "CARD", 
-      label: "Pay with Card" 
-    },
-    { 
-      id: "paypal", 
-      name: "PayPal", 
-      type: "DIGITAL", 
-      label: "Pay with PayPal" 
-    }
-  ]
-};
+import axios from 'axios';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 export async function GET(req: NextRequest) {
   try {
-    // Verify authentication
-    const hasAuth = req.headers.get('authorization')?.startsWith('Bearer ');
+    // Get the user token from the request cookies
+    const token = req.cookies.get('accessToken')?.value;
     
-    if (!hasAuth) {
-      return new NextResponse('Unauthorized', { status: 401 });
+    // Check if user is authenticated
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
     
-    // In a real implementation, we might filter available payment methods
-    // based on user location, order value, or other factors
+    // Get query parameters for filtering payment methods
+    const searchParams = req.nextUrl.searchParams;
+    const countryCode = searchParams.get('countryCode');
+    const amount = searchParams.get('amount');
     
-    return NextResponse.json(mockPaymentMethods);
-  } catch (error) {
+    // Call the payment service API through the API gateway
+    const response = await axios.get(`${API_GATEWAY_URL}/v1/payments/methods`, {
+      params: {
+        countryCode,
+        amount
+      },
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    return NextResponse.json(response.data);
+  } catch (error: any) {
     console.error('Error fetching payment methods:', error);
-    return new NextResponse('Failed to fetch payment methods', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch payment methods', message: error.message },
+      { status: error.response?.status || 500 }
+    );
   }
 } 

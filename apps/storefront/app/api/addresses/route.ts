@@ -1,88 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Mock addresses data store
-export let mockAddresses = [
-  {
-    id: "addr_1",
-    type: "shipping",
-    name: "John Doe",
-    phone: "555-1234",
-    line1: "123 Main St",
-    city: "New York",
-    state: "NY",
-    country: "USA",
-    pincode: "10001"
-  },
-  {
-    id: "addr_2",
-    type: "billing",
-    name: "John Doe",
-    phone: "555-1234",
-    line1: "456 Business Ave",
-    city: "New York",
-    state: "NY",
-    country: "USA",
-    pincode: "10002"
-  }
-];
-
-// Simple function to generate a unique ID
-function generateId() {
-  return `addr_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-}
+import axios from 'axios';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 export async function GET(req: NextRequest) {
   try {
-    // For demo purposes, we'll skip authentication
-    // In a real implementation, we would verify the JWT token
+    // Get the user token from the request cookies
+    const token = req.cookies.get('accessToken')?.value;
     
-    // Return the mock addresses
-    return NextResponse.json(mockAddresses);
-  } catch (error) {
+    // Call the user service API through the API gateway
+    const response = await axios.get(`${API_GATEWAY_URL}/v1/addresses`, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    return NextResponse.json(response.data);
+  } catch (error: any) {
     console.error('Error fetching addresses:', error);
-    return new NextResponse('Failed to fetch addresses', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch addresses', message: error.message },
+      { status: error.response?.status || 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    // For demo purposes, we'll skip authentication
-    // In a real implementation, we would verify the JWT token
+    // Get the user token from the request cookies
+    const token = req.cookies.get('accessToken')?.value;
     
     // Parse the request body
     const body = await req.json();
     
-    // Validate required fields
-    const requiredFields = ['type', 'name', 'phone', 'line1', 'city', 'state', 'country', 'pincode'];
-    for (const field of requiredFields) {
-      if (!body[field]) {
-        return new NextResponse(`${field} is required`, { status: 400 });
-      }
-    }
-    
-    // Create new address with a unique ID
-    const newAddress = {
-      id: generateId(),
-      type: body.type,
-      name: body.name,
-      phone: body.phone,
-      line1: body.line1,
-      city: body.city,
-      state: body.state,
-      country: body.country,
-      pincode: body.pincode
-    };
-    
-    // In a real implementation, we would save this to a database
-    // For now, just add to our mock data
-    mockAddresses.push(newAddress);
-    
-    return new NextResponse(JSON.stringify(newAddress), {
-      status: 201,
-      headers: { 'content-type': 'application/json' }
+    // Call the user service API through the API gateway
+    const response = await axios.post(`${API_GATEWAY_URL}/v1/addresses`, body, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
     });
-  } catch (error) {
+    
+    return NextResponse.json(response.data, { status: 201 });
+  } catch (error: any) {
     console.error('Error creating address:', error);
-    return new NextResponse('Failed to create address', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to create address', message: error.message },
+      { status: error.response?.status || 500 }
+    );
   }
 } 

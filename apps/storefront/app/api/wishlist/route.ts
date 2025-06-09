@@ -1,32 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Mock wishlist data
-const mockWishlistItems = [
-  {
-    id: 'w1',
-    productId: 'p1',
-    name: 'Classic T-Shirt',
-    price: 19.99,
-    image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1480&auto=format&fit=crop',
-    slug: 'classic-t-shirt'
-  },
-  {
-    id: 'w2',
-    productId: 'p2',
-    name: 'Wireless Headphones',
-    price: 89.99,
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=1470&auto=format&fit=crop',
-    slug: 'wireless-headphones'
-  }
-];
+import axios from 'axios';
+import { getApiUrl } from '@/lib/apiUtils';
 
 export async function GET(req: NextRequest) {
   try {
-    // For demo purposes, we'll return mock data
-    // In a real implementation, we would fetch from a database
-    return NextResponse.json(mockWishlistItems);
-  } catch (err) {
-    console.error('Error fetching wishlist:', err);
-    return new NextResponse('Failed to fetch wishlist', { status: 500 });
+    // Get the user token from the request cookies
+    const token = req.cookies.get('accessToken')?.value;
+    
+    // Call the wishlist service API through the API gateway
+    const response = await axios.get(getApiUrl('v1/wishlist'), {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    return NextResponse.json(response.data);
+  } catch (error: any) {
+    console.error('Error fetching wishlist:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch wishlist', message: error.message },
+      { status: error.response?.status || 500 }
+    );
   }
 } 

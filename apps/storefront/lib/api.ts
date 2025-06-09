@@ -3,6 +3,7 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 import Cookies from 'js-cookie';
 import { API_GATEWAY_URL, ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from './constants';
+import { Product, RelatedProduct, Review } from './types';
 
 // Flag to prevent multiple refresh requests
 let isRefreshing = false;
@@ -28,8 +29,15 @@ const processQueue = (error: Error | null, token: string | null = null) => {
 
 // Create a server-side compatible API instance
 const createAPI = () => {
+  // Force IPv4 address for local development
+  const baseURL = typeof window !== 'undefined' 
+    ? '/api' // Client-side: Use relative URL
+    : process.env.NODE_ENV === 'development'
+      ? 'http://127.0.0.1:3000/api' // Server-side development (using IPv4 explicitly)
+      : API_GATEWAY_URL; // Server-side in Docker/production
+      
   const api = axios.create({
-    baseURL: API_GATEWAY_URL,
+    baseURL: baseURL,
     headers: {
       'Content-Type': 'application/json',
     },
@@ -155,6 +163,97 @@ const createAPI = () => {
 };
 
 const api = createAPI();
+
+// Product API helper functions
+export const productAPI = {
+  /**
+   * Get product by slug
+   */
+  getProductBySlug: async (slug: string): Promise<Product> => {
+    const response = await api.get(`/products/${slug}`);
+    return response.data;
+  },
+
+  /**
+   * Get related products for a product
+   */
+  getRelatedProducts: async (slug: string): Promise<RelatedProduct[]> => {
+    const response = await api.get(`/products/related/${slug}`);
+    return response.data.relatedProducts;
+  },
+
+  /**
+   * Get reviews for a product by ID
+   */
+  getProductReviews: async (productId: string, options?: {
+    page?: number;
+    limit?: number;
+    sort?: 'newest' | 'oldest' | 'highest' | 'lowest';
+    rating?: number;
+    verified?: boolean;
+  }): Promise<{
+    reviews: Review[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+    productRating: {
+      averageRating: number;
+      totalReviews: number;
+      ratingDistribution: Record<string, number>;
+    };
+  }> => {
+    const params = new URLSearchParams();
+    
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.sort) params.append('sort', options.sort);
+    if (options?.rating) params.append('rating', options.rating.toString());
+    if (options?.verified !== undefined) params.append('verified', options.verified.toString());
+    
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const response = await api.get(`/reviews/product/${productId}${queryString}`);
+    return response.data;
+  },
+  
+  /**
+   * Get reviews for a product by slug
+   */
+  getProductReviewsBySlug: async (slug: string, options?: {
+    page?: number;
+    limit?: number;
+    sort?: 'newest' | 'oldest' | 'highest' | 'lowest';
+    rating?: number;
+    verified?: boolean;
+  }): Promise<{
+    reviews: Review[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+    productRating: {
+      averageRating: number;
+      totalReviews: number;
+      ratingDistribution: Record<string, number>;
+    };
+  }> => {
+    const params = new URLSearchParams();
+    
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.sort) params.append('sort', options.sort);
+    if (options?.rating) params.append('rating', options.rating.toString());
+    if (options?.verified !== undefined) params.append('verified', options.verified.toString());
+    
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const response = await api.get(`/reviews/product-slug/${slug}${queryString}`);
+    return response.data;
+  }
+};
 
 export const get = api.get;
 export const post = api.post;

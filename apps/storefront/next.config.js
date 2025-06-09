@@ -24,6 +24,12 @@ const nextConfig = {
       },
     ];
   },
+  env: {
+    // API Gateway URL for microservices
+    API_GATEWAY_URL: process.env.API_GATEWAY_URL || 'http://localhost:3000',
+    // Always use real API data, not mock data
+    USE_MOCK_DATA: 'false',
+  },
 };
 
 module.exports = nextConfig; 

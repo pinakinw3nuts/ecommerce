@@ -13,6 +13,27 @@ interface CategoryType {
   slug: string;
 }
 
+const featuredCategories = [
+  {
+    name: 'HAMMER TAILS',
+    href: '/shop/hammer-tails',
+    image: '/images/categories/hammer-tails.jpg',
+    position: 'left'
+  },
+  {
+    name: 'SOPHISTICATED MUSCLE',
+    href: '/shop/sophisticated-muscle',
+    image: '/images/categories/sophisticated-muscle.jpg',
+    position: 'center'
+  },
+  {
+    name: 'HYPERCARS',
+    href: '/shop/hypercars',
+    image: '/images/categories/hypercars.jpg',
+    position: 'right'
+  }
+];
+
 export default function FeaturedCategories() {
   const categories: CategoryType[] = [
     {
@@ -46,7 +67,7 @@ export default function FeaturedCategories() {
     {
       id: '5',
       name: 'Bags',
-      image: 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=800&auto=format',
+      image: 'https://images.unsplash.com/photo-1590874103328-e08b4cac3105?w=800&auto=format',
       productCount: 36,
       slug: 'bags',
     },
@@ -60,56 +81,28 @@ export default function FeaturedCategories() {
   ];
 
   return (
-    <section className="py-16 px-4 bg-gray-50">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold mb-4">Featured Categories</h2>
-          <p className="text-gray-600 max-w-xl mx-auto">
-            Discover our wide selection of products across popular categories
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
-          {categories.map((category) => (
+    <section className="py-12 bg-white">
+      <div className="container mx-auto px-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {featuredCategories.map((category) => (
             <Link 
-              key={category.id} 
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                console.log(`Featured category selected: ${category.slug}`);
-                
-                // Navigate programmatically instead of using direct href
-                const url = new URL('/products', window.location.origin);
-                
-                // Add category parameter
-                url.searchParams.set('category', category.slug);
-                
-                // Reset page to 1 when changing category
-                url.searchParams.set('page', '1');
-                
-                // Log the constructed URL
-                console.log(`Navigating to: ${url.toString()}`);
-                
-                // Navigate to the URL
-                window.location.href = url.toString();
-              }}
-              className="group block"
+              key={category.name} 
+              href={category.href}
+              className="relative group overflow-hidden h-64 block"
             >
-              <div className="relative rounded-lg overflow-hidden bg-white shadow-sm">
-                <div className="aspect-square relative">
-                  <Image
-                    src={category.image}
-                    alt={category.name}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
-                    sizes="(max-width: 768px) 50vw, 33vw"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                  <h3 className="text-lg font-semibold">{category.name}</h3>
-                  <p className="text-sm text-white/80">{category.productCount} products</p>
-                </div>
+              <div 
+                className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
+                style={{ 
+                  backgroundImage: `url(${category.image})`,
+                  backgroundPosition: category.position === 'center' ? 'center' : 
+                                      category.position === 'left' ? 'left center' : 'right center'
+                }}
+              />
+              <div className="absolute inset-0 bg-black bg-opacity-40 group-hover:bg-opacity-30 transition-opacity duration-300" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <h3 className="text-white text-2xl md:text-3xl font-bold tracking-wider">
+                  {category.name}
+                </h3>
               </div>
             </Link>
           ))}

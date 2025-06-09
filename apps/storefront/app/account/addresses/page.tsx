@@ -18,87 +18,114 @@ type Address = {
   isDefault?: boolean;
 };
 
-// Mock addresses for demonstration
-const mockAddresses: Address[] = [
-  {
-    id: "addr1",
-    type: "home",
-    name: "John Doe",
-    phone: "+1 (555) 123-4567",
-    line1: "123 Main Street",
-    line2: "Apt 4B",
-    city: "New York",
-    state: "NY",
-    country: "United States",
-    pincode: "10001",
-    isDefault: true
-  },
-  {
-    id: "addr2",
-    type: "work",
-    name: "John Doe",
-    phone: "+1 (555) 987-6543",
-    line1: "456 Park Avenue",
-    city: "Boston",
-    state: "MA",
-    country: "United States",
-    pincode: "02108"
-  }
-];
-
 export default function AddressPage() {
-  const [addresses, setAddresses] = useState<Address[]>(mockAddresses);
-  const [loading, setLoading] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    const fetchAddresses = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get('/api/addresses');
+        
+        if (response.data && Array.isArray(response.data)) {
+          setAddresses(response.data);
+        } else {
+          setAddresses([]);
+        }
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching addresses:', err);
+        setError('Failed to load addresses. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAddresses();
+  }, []);
+
   const handleEdit = (addr: Address) => {
-    // In a real app, we would navigate to an edit page or open a modal
-    alert(`Edit address functionality would open a form for address ID: ${addr.id}`);
+    window.location.href = `/account/address/edit/${addr.id}`;
   };
 
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this address?')) {
-      setLoading(true);
+      setIsSubmitting(true);
       try {
-        // In a real implementation, we would make an API call
-        // await axios.delete(`/api/addresses/${id}`);
-        
-        // For demo, just remove from state
+        await axios.delete(`/api/addresses/${id}`);
         setAddresses(addresses.filter(addr => addr.id !== id));
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 300));
       } catch (error) {
         console.error('Error deleting address:', error);
         alert('Failed to delete address. Please try again.');
       } finally {
-        setLoading(false);
+        setIsSubmitting(false);
       }
     }
   };
 
   const handleSetDefault = async (id: string) => {
-    setLoading(true);
+    setIsSubmitting(true);
     try {
-      // In a real implementation, we would make an API call
-      // await axios.patch(`/api/addresses/${id}/default`);
+      // Update the address with isDefault: true
+      await axios.put(`/api/addresses/${id}`, {
+        ...addresses.find(addr => addr.id === id),
+        isDefault: true
+      });
       
-      // For demo, update the state
+      // Update local state
       setAddresses(addresses.map(addr => ({
         ...addr,
         isDefault: addr.id === id
       })));
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
       console.error('Error setting default address:', error);
       alert('Failed to set default address. Please try again.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-semibold text-gray-800">Your Addresses</h1>
+        </div>
+        <div className="animate-pulse space-y-4">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="border border-gray-200 rounded-lg p-4">
+              <div className="h-4 bg-gray-200 rounded w-1/4 mb-3"></div>
+              <div className="h-3 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-2/3 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-semibold text-gray-800">Your Addresses</h1>
+          <Link 
+            href="/account/address/new" 
+            className="bg-black text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-800 transition"
+          >
+            Add New Address
+          </Link>
+        </div>
+        <div className="bg-red-50 p-4 rounded-md">
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -112,7 +139,7 @@ export default function AddressPage() {
         </Link>
       </div>
 
-      {loading ? (
+      {isSubmitting ? (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-black"></div>
         </div>

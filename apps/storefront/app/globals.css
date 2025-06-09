@@ -3,26 +3,30 @@
 @tailwind utilities;
 
 :root {
-  --primary: #2065D1;
-  --primary-light: #4782DA;
-  --primary-dark: #103996;
-  --secondary: #3366FF;
+  --primary: #1E40AF;
+  --primary-light: #3B82F6;
+  --primary-dark: #1E3A8A;
+  --secondary: #2563EB;
   --success: #22C55E;
-  --warning: #FFAB00;
-  --error: #FF5630;
-  --info: #00B8D9;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --info: #0EA5E9;
   --background: #F9FAFB;
-  --foreground: #212B36;
+  --foreground: #1F2937;
   --card: #FFFFFF;
-  --card-foreground: #212B36;
-  --border: #E5E8EB;
-  --input: #E5E8EB;
-  --ring: #2065D1;
+  --card-foreground: #1F2937;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --ring: #2563EB;
 }
 
 @layer base {
   body {
-    @apply bg-[#F9FAFB] text-[#212B36];
+    @apply bg-gray-50 text-gray-900;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold;
   }
 }
 
@@ -38,15 +42,35 @@
   }
   
   .btn-primary {
-    @apply bg-primary text-white hover:bg-primary-light;
+    @apply bg-blue-600 text-white hover:bg-blue-700;
   }
   
   .btn-secondary {
-    @apply bg-white text-foreground border border-input hover:bg-gray-50;
+    @apply bg-white text-gray-900 border border-gray-300 hover:bg-gray-50;
   }
   
   .card {
-    @apply bg-white rounded-lg shadow-sm border border-border p-4;
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-4;
+  }
+  
+  .product-card {
+    @apply bg-white border border-gray-200 rounded-lg p-4 transition-shadow hover:shadow-md;
+  }
+  
+  .product-image {
+    @apply relative aspect-square overflow-hidden rounded-md mb-3;
+  }
+  
+  .product-title {
+    @apply font-medium text-gray-900;
+  }
+  
+  .product-price {
+    @apply text-gray-700 font-semibold;
+  }
+  
+  .sale-badge {
+    @apply absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded;
   }
 }
 

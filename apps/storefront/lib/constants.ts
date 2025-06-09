@@ -1,5 +1,14 @@
-// API Gateway URL - use explicit IPv4 address
-export const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000/api';
+// API Gateway URL with multiple fallback options
+export const API_GATEWAY_URL = 
+  process.env.API_GATEWAY_URL || 
+  (typeof window !== 'undefined' 
+    ? '/api' // Client-side: Use relative URL
+    : process.env.NODE_ENV === 'development'
+      ? 'http://127.0.0.1:3000/api' // Server-side development (using IPv4 explicitly)
+      : 'http://api-gateway:3000'); // Server-side in Docker/production
+
+// Flag to use mock data when API is not available
+export const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true' || false;
 
 // Token names for cookies
 export const ACCESS_TOKEN_NAME = 'accessToken';

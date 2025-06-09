@@ -93,7 +93,12 @@ export const services: Record<string, ServiceConfig> = {
     name: 'cms-service',
     url: getServiceUrl(config.services.cms, 3013),
     timeout: 5000,
-    routes: ['/api/cms', '/api/widget', '/api/v1/widget'],
+    routes: [
+      '/api/cms', 
+      '/api/widget', 
+      '/api/v1/widget',
+      '/api/v1/cms'
+    ],
     versionedRoutes: true,
     adminRoutes: true,
     specialCases: [
@@ -103,6 +108,10 @@ export const services: Record<string, ServiceConfig> = {
       },
       {
         pattern: /^\/api\/v1\/widget\/(home|test)(\/.*)?(\?|$)/,
+        handler: 'cms'
+      },
+      {
+        pattern: /^\/api\/v1\/cms\/(.*?)(\?|$)/,
         handler: 'cms'
       }
     ]

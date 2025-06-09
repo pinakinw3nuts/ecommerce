@@ -1,67 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Mock checkout preview data
-const mockCheckoutPreview = {
-  items: [
-    {
-      id: "ci1",
-      name: "Classic T-Shirt",
-      image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1480&auto=format&fit=crop",
-      price: 19.99,
-      quantity: 2,
-      total: 39.98
-    },
-    {
-      id: "ci2",
-      name: "Wireless Headphones",
-      image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=1470&auto=format&fit=crop",
-      price: 89.99,
-      quantity: 1,
-      total: 89.99
-    }
-  ],
-  subtotal: 129.97,
-  tax: 10.40,
-  shipping: 4.99,
-  total: 145.36
-};
+import axios from 'axios';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 export async function POST(req: NextRequest) {
   try {
-    // Verify authentication
-    const hasAuth = req.headers.get('authorization')?.startsWith('Bearer ');
+    // Get the user token from the request cookies
+    const token = req.cookies.get('accessToken')?.value;
     
-    if (!hasAuth) {
-      return new NextResponse('Unauthorized', { status: 401 });
+    // Check if user is authenticated
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
     
     // Parse the request body
     const body = await req.json();
     
-    if (!body.addressId || !body.shippingId || !body.paymentId) {
-      return new NextResponse('Missing required parameters', { status: 400 });
+    if (!body.addressId || !body.shippingId) {
+      return NextResponse.json(
+        { error: 'Missing required parameters' },
+        { status: 400 }
+      );
     }
     
-    // In a real implementation, we would calculate the preview based on:
-    // 1. The items in the user's cart
-    // 2. The selected shipping method
-    // 3. The user's address (for tax calculation)
+    // Call the checkout service API through the API gateway
+    const response = await axios.post(`${API_GATEWAY_URL}/v1/checkout/preview`, body, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
     
-    // For now, just return mock data
-    // We could adjust shipping cost based on the selected shipping method
-    let preview = { ...mockCheckoutPreview };
-    
-    if (body.shippingId === 'express') {
-      preview.shipping = 9.99;
-      preview.total = preview.subtotal + preview.tax + 9.99;
-    } else if (body.shippingId === 'overnight') {
-      preview.shipping = 19.99;
-      preview.total = preview.subtotal + preview.tax + 19.99;
-    }
-    
-    return NextResponse.json(preview);
-  } catch (error) {
+    return NextResponse.json(response.data);
+  } catch (error: any) {
     console.error('Error generating checkout preview:', error);
-    return new NextResponse('Failed to generate checkout preview', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to generate checkout preview', message: error.message },
+      { status: error.response?.status || 500 }
+    );
   }
 } 

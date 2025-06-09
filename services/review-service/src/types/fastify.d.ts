@@ -1,4 +1,4 @@
-import { JwtPayload } from '../middleware/authGuard';
+import { JwtPayload } from '../middlewares/authGuard';
 
 declare module 'fastify' {
   interface FastifyRequest {

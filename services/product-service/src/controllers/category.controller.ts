@@ -104,6 +104,77 @@ export const categoryController = {
       },
     });
 
+    // Get featured categories (public)
+    fastify.get('/featured', {
+      schema: {
+        tags: ['categories'],
+        summary: 'Get featured categories',
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'string', description: 'Number of categories to return' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              categories: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    slug: { type: 'string' },
+                    description: { type: 'string' },
+                    imageUrl: { type: 'string' },
+                    isActive: { type: 'boolean' },
+                    parentId: { type: ['string', 'null'] },
+                    productCount: { type: 'number' },
+                    createdAt: { type: 'string' },
+                    updatedAt: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      handler: async (request: FastifyRequest<{
+        Querystring: { limit?: string };
+      }>, reply: FastifyReply) => {
+        try {
+          const limit = request.query.limit ? parseInt(request.query.limit) : 10;
+          
+          // Get all active categories
+          const result = await categoryService.listCategories({
+            skip: 0,
+            take: limit,
+            isActive: true,
+            sortBy: 'createdAt',
+            sortOrder: 'DESC',
+          });
+          
+          // For now, since we don't have a 'featured' field, we'll just return the most recent categories
+          // In a real implementation, you would filter by a 'featured' field
+          
+          return reply.send({
+            categories: result.categories.map(category => ({
+              ...category,
+              productCount: Math.floor(Math.random() * 50) + 10, // Placeholder for product count
+            })),
+          });
+        } catch (error) {
+          request.log.error(error);
+          return reply.code(500).send({ 
+            message: 'Error fetching featured categories',
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      },
+    });
+
     // Get category by ID (public)
     fastify.get('/:id', {
       schema: {

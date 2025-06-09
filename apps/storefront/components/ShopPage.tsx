@@ -94,13 +94,26 @@ export default function ShopPage() {
   
   // Fetch categories
   useEffect(() => {
-    // Mock categories
-    setCategories([
-      { id: 'clothing', name: 'Clothing', count: 24 },
-      { id: 'electronics', name: 'Electronics', count: 18 },
-      { id: 'home', name: 'Home & Kitchen', count: 12 },
-      { id: 'accessories', name: 'Accessories', count: 9 },
-    ]);
+    const fetchCategories = async () => {
+      try {
+        const { data } = await axios.get('/api/categories');
+        
+        if (data && Array.isArray(data.categories)) {
+          const formattedCategories = data.categories.map((cat: any) => ({
+            id: cat.id || cat._id || '',
+            name: cat.name || '',
+            count: cat.productCount || 0
+          }));
+          setCategories(formattedCategories);
+        } else {
+          console.error('Invalid category data format:', data);
+        }
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+      }
+    };
+    
+    fetchCategories();
   }, []);
   
   // Filter and sort products

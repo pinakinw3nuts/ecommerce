@@ -17,6 +17,7 @@ export interface ProductFilterOptions {
   tagIds?: string[];
   isFeatured?: boolean;
   isPublished?: boolean;
+  hasSalePrice?: boolean;
 }
 
 export interface ProductSortOptions {
@@ -525,6 +526,11 @@ export class ProductService {
           conditions.push(`"isPublished" = $${paramIndex}`);
           params.push(isPublished);
           paramIndex++;
+        }
+        
+        // Filter by sale price
+        if (options.filters.hasSalePrice) {
+          conditions.push(`"salePrice" IS NOT NULL AND "salePrice" > 0 AND "salePrice" < "price"`);
         }
         
         // Filter by tags

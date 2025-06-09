@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
+import axios from 'axios';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 // Define product template type
 type ProductTemplate = {
@@ -315,419 +317,93 @@ const generateProducts = () => {
   return products;
 };
 
-// Generate products once
+// Generate all products
 const allProducts = generateProducts();
 
+/**
+ * GET handler for /api/products
+ * Proxies requests to the API gateway
+ */
 export async function GET(request: NextRequest) {
   try {
-    // Log the raw URL for debugging
-    console.log(`Products API raw URL: ${request.url}`);
-    
+    // Get query parameters
     const searchParams = request.nextUrl.searchParams;
+    const limit = searchParams.get('limit') || '10';
+    const page = searchParams.get('page') || '1';
+    const categoryId = searchParams.get('categoryId') || '';
+    const search = searchParams.get('search') || '';
+    const sort = searchParams.get('sort') || '';
     
-    // Dump all search parameters for debugging
-    console.log('All search parameters:');
-    searchParams.forEach((value, key) => {
-      console.log(`  ${key}: ${value}`);
-    });
-    
-    // Parse query parameters
-    const category = searchParams.get('category');
-    const search = searchParams.get('search');
-    const sort = searchParams.get('sort') || 'newest';
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '12');
-    const minPrice = parseFloat(searchParams.get('minPrice') || '0');
-    const maxPrice = parseFloat(searchParams.get('maxPrice') || '1000');
-    const featured = searchParams.get('featured') === 'true';
-    
-    console.log(`Products API called with params:`, {
-      category,
-      search,
-      sort,
+    // Build params object
+    const params: Record<string, string> = {
+      limit,
       page,
-      limit,
-      minPrice,
-      maxPrice,
-      featured
-    });
-    
-    // Log the URL pathname to check if we're using the right route
-    console.log(`URL pathname: ${request.nextUrl.pathname}`);
-    console.log(`Full URL: ${request.nextUrl.toString()}`);
-    
-    // Log all categories in products for debugging
-    const allCategories = allProducts.map(p => p.category);
-    const uniqueCategoriesInData = [...new Set(allCategories)];
-    console.log('Unique categories in product data:', uniqueCategoriesInData);
-    
-    // Count products by category
-    const categoryProductCounts: Record<string, number> = {};
-    allProducts.forEach(product => {
-      const cat = product.category;
-      categoryProductCounts[cat] = (categoryProductCounts[cat] || 0) + 1;
-    });
-    console.log('Number of products in each category:', categoryProductCounts);
-    
-    // Start with all products
-    let filteredProducts = [...allProducts];
-    
-    // Track filter operations for debugging
-    const filterOperations = [];
-    
-    // ------------------------
-    // CATEGORY FILTERING
-    // ------------------------
-    if (category && !['all', 'all categories'].includes(category.toLowerCase())) {
-      console.log(`Filtering by category: "${category}"`);
-      
-      const categoryLower = category.toLowerCase().trim();
-      const beforeCount = filteredProducts.length;
-      
-      // Log all product categories for debugging
-      console.log('Available categories in data:');
-      uniqueCategoriesInData.forEach(cat => console.log(`- ${cat}`));
-      
-      // Log first 5 products with their categories
-      console.log('Sample products with categories:');
-      allProducts.slice(0, 5).forEach(p => console.log(`- ${p.name}: ${p.category}`));
-      
-      // Add more debug info
-      console.log(`Looking for category match using: "${categoryLower}"`);
-      
-      // IMPORTANT: Try a more permissive match approach
-      // Check if category is any of our known types first
-      if (['clothing', 'electronics', 'home', 'accessories', 'beauty'].includes(categoryLower)) {
-        console.log(`Using direct category match for standard category: ${categoryLower}`);
-        
-        // Direct exact match with the known category
-        filteredProducts = allProducts.filter(product => 
-          product.category.toLowerCase() === categoryLower
-        );
-        
-        console.log(`Found ${filteredProducts.length} products with category ${categoryLower}`);
-      } else {
-        // For non-standard categories, try substring matching
-        console.log(`Using substring match for non-standard category: ${categoryLower}`);
-        
-        // More permissive matching - check if the category contains our search term
-        // or if our search term contains the category
-        filteredProducts = allProducts.filter(product => {
-          const prodCategory = product.category.toLowerCase();
-          return prodCategory.includes(categoryLower) || 
-                 categoryLower.includes(prodCategory) ||
-                 // Also check for word boundaries
-                 categoryLower.split(/[\s-_]+/).some(term => 
-                   prodCategory.includes(term) && term.length > 2
-                 );
-        });
-        
-        console.log(`Found ${filteredProducts.length} products with substring match to ${categoryLower}`);
-      }
-      
-      const afterCount = filteredProducts.length;
-      console.log(`Category filter applied: "${category}" - Products reduced from ${beforeCount} to ${afterCount}`);
-      
-      filterOperations.push({
-        type: 'category',
-        filter: category,
-        before: beforeCount,
-        after: afterCount,
-        removed: beforeCount - afterCount
-      });
-      
-      // If no products found with exact category, try fuzzy matching
-      if (afterCount === 0) {
-        console.log('No direct category matches, trying alternative matching...');
-        
-        // Map of category aliases for fuzzy matching
-        const categoryMap: Record<string, string[]> = {
-          'clothing': ['clothes', 'fashion', 'apparel', 'wear', 'dress', 'outfit', 'attire'],
-          'electronics': ['tech', 'gadgets', 'devices', 'electronic', 'digital', 'computer', 'phone', 'audio'],
-          'home': ['home & kitchen', 'home & garden', 'kitchen', 'household', 'house', 'decor', 'furniture'],
-          'accessories': ['accessory', 'addon', 'add-on', 'jewelry', 'bag', 'purse', 'wallet'],
-          'beauty': ['skincare', 'makeup', 'cosmetics', 'skin care', 'personal care']
-        };
-        
-        // Find potential categories based on the requested category
-        let potentialCategories: string[] = [];
-        
-        // Check if the requested category is an alias for any main category
-        for (const [mainCategory, aliases] of Object.entries(categoryMap)) {
-          if (aliases.some(alias => categoryLower.includes(alias) || alias.includes(categoryLower))) {
-            potentialCategories.push(mainCategory);
-            console.log(`Category "${categoryLower}" matched alias "${aliases.find(a => categoryLower.includes(a) || a.includes(categoryLower))}" for main category "${mainCategory}"`);
-          }
-        }
-        
-        // Check if any word in the category matches
-        const words = categoryLower.split(/[\s-_]+/).filter(w => w.length > 2);
-        if (words.length > 1) {
-          console.log(`Trying word-by-word matching with: ${words.join(', ')}`);
-          for (const [mainCategory, aliases] of Object.entries(categoryMap)) {
-            for (const word of words) {
-              if (mainCategory.includes(word) || aliases.some(alias => alias.includes(word))) {
-                if (!potentialCategories.includes(mainCategory)) {
-                  potentialCategories.push(mainCategory);
-                  console.log(`Word "${word}" matched main category "${mainCategory}"`);
-                }
-              }
-            }
-          }
-        }
-        
-        // Direct match with uniqueCategoriesInData
-        for (const existingCategory of uniqueCategoriesInData) {
-          const existingCategoryLower = existingCategory.toLowerCase();
-          if (existingCategoryLower.includes(categoryLower) || categoryLower.includes(existingCategoryLower)) {
-            console.log(`Found direct match with existing category: "${existingCategory}"`);
-            potentialCategories.push(existingCategoryLower);
-          }
-        }
-        
-        console.log(`Potential alternative categories: ${potentialCategories.join(', ')}`);
-        
-        if (potentialCategories.length > 0) {
-          filteredProducts = allProducts.filter(product => 
-            potentialCategories.includes(product.category.toLowerCase())
-          );
-          
-          console.log(`Found ${filteredProducts.length} products using alternative category matching`);
-        }
-      }
-    }
-    
-    // ------------------------
-    // SEARCH TERM FILTERING
-    // ------------------------
-    if (search && search.trim()) {
-      const searchLower = search.toLowerCase().trim();
-      const terms = searchLower.split(' ').filter(term => term.length > 0);
-      
-      const beforeCount = filteredProducts.length;
-      
-      // If multiple terms, match any of them
-      if (terms.length > 1) {
-        console.log(`Multi-term search applied: ${terms.join(', ')}`);
-        
-        // For multi-word exact phrases, check the exact phrase first
-        const fullPhrase = terms.join(' ');
-        
-        filteredProducts = filteredProducts.filter(product => {
-          // Check for full phrase match
-          const fullPhraseMatch = 
-            product.name.toLowerCase().includes(fullPhrase) || 
-            product.description.toLowerCase().includes(fullPhrase) ||
-            product.brand?.toLowerCase().includes(fullPhrase);
-            
-          // Also check for individual term matches
-          const nameMatch = terms.some(term => product.name.toLowerCase().includes(term));
-          const descriptionMatch = terms.some(term => product.description.toLowerCase().includes(term));
-          const brandMatch = product.brand && terms.some(term => product.brand.toLowerCase().includes(term));
-          const categoryMatch = terms.some(term => product.category.toLowerCase().includes(term));
-          
-          // Return true if any match is found
-          return fullPhraseMatch || nameMatch || descriptionMatch || brandMatch || categoryMatch;
-        });
-      } else {
-        // Single term search
-        console.log(`Single-term search applied: "${searchLower}"`);
-        filteredProducts = filteredProducts.filter(product => 
-          product.name.toLowerCase().includes(searchLower) || 
-          product.description.toLowerCase().includes(searchLower) ||
-          (product.brand && product.brand.toLowerCase().includes(searchLower)) ||
-          product.category.toLowerCase().includes(searchLower)
-        );
-      }
-      
-      const afterCount = filteredProducts.length;
-      
-      filterOperations.push({
-        type: 'search',
-        filter: search,
-        before: beforeCount,
-        after: afterCount,
-        removed: beforeCount - afterCount
-      });
-      
-      console.log(`Search filter applied: "${search}" - Products reduced from ${beforeCount} to ${afterCount}`);
-    }
-    
-    // ------------------------
-    // PRICE RANGE FILTERING
-    // ------------------------
-    if (minPrice > 0 || maxPrice < 1000) {
-      console.log(`Filtering by price range: ${minPrice} to ${maxPrice}`);
-      
-      const beforeCount = filteredProducts.length;
-      filteredProducts = filteredProducts.filter(product => {
-        // Use the discounted price if available, otherwise use regular price
-        const effectivePrice = product.discountedPrice !== null ? product.discountedPrice : product.price;
-        return effectivePrice >= minPrice && effectivePrice <= maxPrice;
-      });
-      const afterCount = filteredProducts.length;
-      
-      filterOperations.push({
-        type: 'price',
-        filter: `${minPrice} to ${maxPrice}`,
-        before: beforeCount,
-        after: afterCount,
-        removed: beforeCount - afterCount
-      });
-      
-      console.log(`Price filter applied: ${minPrice} to ${maxPrice} - Products reduced from ${beforeCount} to ${afterCount}`);
-    }
-    
-    // ------------------------
-    // FEATURED PRODUCTS FILTERING
-    // ------------------------
-    if (featured) {
-      console.log(`Filtering by featured products`);
-      
-      const beforeCount = filteredProducts.length;
-      filteredProducts = filteredProducts.filter(product => product.featured);
-      const afterCount = filteredProducts.length;
-      
-      filterOperations.push({
-        type: 'featured',
-        filter: 'true',
-        before: beforeCount,
-        after: afterCount,
-        removed: beforeCount - afterCount
-      });
-      
-      console.log(`Featured filter applied - Products reduced from ${beforeCount} to ${afterCount}`);
-    }
-    
-    // ------------------------
-    // SPECIAL KEYWORD FILTERS
-    // ------------------------
-    // Handle "new" search keyword
-    if (search && search.trim().toLowerCase() === 'new') {
-      console.log(`Special filter: new products`);
-      
-      const beforeCount = filteredProducts.length;
-      filteredProducts = filteredProducts.filter(product => product.new);
-      const afterCount = filteredProducts.length;
-      
-      filterOperations.push({
-        type: 'new',
-        filter: 'true',
-        before: beforeCount,
-        after: afterCount,
-        removed: beforeCount - afterCount
-      });
-    }
-    
-    // Handle "best seller" search keyword
-    if (search && search.trim().toLowerCase() === 'best seller') {
-      console.log(`Special filter: best seller products`);
-      
-      const beforeCount = filteredProducts.length;
-      filteredProducts = filteredProducts.filter(product => product.bestSeller);
-      const afterCount = filteredProducts.length;
-      
-      filterOperations.push({
-        type: 'best_seller',
-        filter: 'true',
-        before: beforeCount,
-        after: afterCount,
-        removed: beforeCount - afterCount
-      });
-    }
-    
-    // ------------------------
-    // SORTING
-    // ------------------------
-    const totalBeforeSort = filteredProducts.length;
-    
-    switch (sort.toLowerCase()) {
-      case 'newest':
-        console.log('Sorting by newest');
-        filteredProducts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        break;
-      case 'oldest':
-        console.log('Sorting by oldest');
-        filteredProducts.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        break;
-      case 'price-asc':
-      case 'price-low-high':
-        console.log('Sorting by price ascending');
-        filteredProducts.sort((a, b) => {
-          const priceA = a.discountedPrice !== null ? a.discountedPrice : a.price;
-          const priceB = b.discountedPrice !== null ? b.discountedPrice : b.price;
-          return priceA - priceB;
-        });
-        break;
-      case 'price-desc':
-      case 'price-high-low':
-        console.log('Sorting by price descending');
-        filteredProducts.sort((a, b) => {
-          const priceA = a.discountedPrice !== null ? a.discountedPrice : a.price;
-          const priceB = b.discountedPrice !== null ? b.discountedPrice : b.price;
-          return priceB - priceA;
-        });
-        break;
-      case 'rating-asc':
-      case 'rating-low-high':
-        console.log('Sorting by rating ascending');
-        filteredProducts.sort((a, b) => a.rating - b.rating);
-        break;
-      case 'rating-desc':
-      case 'rating-high-low':
-        console.log('Sorting by rating descending');
-        filteredProducts.sort((a, b) => b.rating - a.rating);
-        break;
-      default:
-        console.log(`Unknown sort option: ${sort}, defaulting to newest`);
-        filteredProducts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-    
-    filterOperations.push({
-      type: 'sort',
-      filter: sort,
-      before: totalBeforeSort,
-      after: filteredProducts.length,
-      removed: 0
-    });
-    
-    // ------------------------
-    // PAGINATION
-    // ------------------------
-    const totalProducts = filteredProducts.length;
-    
-    // Calculate pagination info
-    const totalPages = Math.ceil(totalProducts / limit);
-    const startIndex = (page - 1) * limit;
-    const endIndex = Math.min(startIndex + limit, totalProducts);
-    
-    // Validate page number
-    const validatedPage = page > totalPages && totalPages > 0 ? totalPages : page;
-    const validatedStartIndex = (validatedPage - 1) * limit;
-    
-    // Get the products for the current page
-    const paginatedProducts = filteredProducts.slice(validatedStartIndex, validatedStartIndex + limit);
-    
-    console.log(`Pagination: page ${validatedPage} of ${totalPages}, showing products ${startIndex+1}-${endIndex} of ${totalProducts}`);
-    
-    // ------------------------
-    // PREPARE RESPONSE
-    // ------------------------
-    const response = {
-      products: paginatedProducts,
-      total: totalProducts,
-      page: validatedPage,
-      limit,
-      totalPages,
-      filterOperations
     };
     
-    return NextResponse.json(response);
-  } catch (error) {
-    console.error('Error processing products API request:', error);
-    return NextResponse.json({ 
-      error: 'An error occurred while processing the request',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    // Add optional params
+    if (categoryId) params.categoryId = categoryId;
+    if (search) params.search = search;
+    if (sort) params.sort = sort;
+    
+    // Use explicit IPv4 address for local development
+    const baseUrl = process.env.NODE_ENV === 'development'
+      ? 'http://127.0.0.1:3000'
+      : API_GATEWAY_URL.endsWith('/api')
+        ? API_GATEWAY_URL.substring(0, API_GATEWAY_URL.length - 4)
+        : API_GATEWAY_URL;
+        
+    console.log('Making API request to:', `${baseUrl}/v1/products`);
+    
+    // Forward request to API gateway
+    const response = await axios.get(`${baseUrl}/v1/products`, {
+      params,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    // Transform the API response to match the expected format
+    const apiData = response.data;
+    
+    // Check if the API returned data in the expected format
+    if (apiData && Array.isArray(apiData.data)) {
+      // API returned data in a different format, transform it
+      const transformedData = {
+        products: apiData.data.map((product: any) => ({
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          description: product.description,
+          price: product.price,
+          image: product.mediaUrl || '/images/placeholder.jpg',
+          category: product.category?.name?.toLowerCase() || 'uncategorized',
+          categoryId: product.category?.id || '',
+          rating: product.rating || 4.5,
+          reviewCount: product.reviewCount || Math.floor(Math.random() * 50) + 5,
+          inStock: true,
+          discountedPrice: product.salePrice || null,
+          isFeatured: product.isFeatured || false,
+          isNew: product.isNew || false
+        })),
+        total: apiData.total || apiData.data.length,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil((apiData.total || apiData.data.length) / parseInt(limit))
+      };
+      
+      return NextResponse.json(transformedData);
+    }
+    
+    // If the response already has the expected format, return it as is
+    return NextResponse.json(apiData);
+  } catch (error: any) {
+    console.error('Error fetching products:', error);
+    
+    // Return appropriate error response
+    return NextResponse.json(
+      { error: 'Failed to fetch products', message: error.message },
+      { status: error.response?.status || 500 }
+    );
   }
 }

@@ -1,54 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Mock shipping options
-const mockShippingOptions = {
-  options: [
-    {
-      id: "standard",
-      name: "Standard Shipping",
-      rate: 4.99,
-      estimatedDays: 5
-    },
-    {
-      id: "express",
-      name: "Express Shipping",
-      rate: 9.99,
-      estimatedDays: 2
-    },
-    {
-      id: "overnight",
-      name: "Overnight Shipping",
-      rate: 19.99,
-      estimatedDays: 1
-    }
-  ]
-};
+import axios from 'axios';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 export async function POST(req: NextRequest) {
   try {
-    // In a real implementation, this would calculate shipping options based on the address
-    // and potentially the items in the cart
+    // Get the user token from the request cookies
+    const token = req.cookies.get('accessToken')?.value;
     
-    // Verify authentication
-    const hasAuth = req.headers.get('authorization')?.startsWith('Bearer ');
-    
-    if (!hasAuth) {
-      return new NextResponse('Unauthorized', { status: 401 });
+    // Check if user is authenticated
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
     
-    // Parse the request body to get the addressId
+    // Parse the request body
     const body = await req.json();
     
     if (!body.addressId) {
-      return new NextResponse('Address ID is required', { status: 400 });
+      return NextResponse.json(
+        { error: 'Address ID is required' },
+        { status: 400 }
+      );
     }
     
-    // In a real implementation, we would use the addressId to calculate shipping options
-    // For now, we'll just return mock data
+    // Call the shipping service API through the API gateway
+    const response = await axios.post(`${API_GATEWAY_URL}/v1/shipping/eta`, body, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
     
-    return NextResponse.json(mockShippingOptions);
-  } catch (error) {
+    return NextResponse.json(response.data);
+  } catch (error: any) {
     console.error('Error calculating shipping options:', error);
-    return new NextResponse('Failed to calculate shipping options', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to calculate shipping options', message: error.message },
+      { status: error.response?.status || 500 }
+    );
   }
 } 

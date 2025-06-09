@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Import the mockAddresses from the parent route
-// In a real implementation, this would be a database query
-import { mockAddresses } from '../route';
+import axios from 'axios';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 // Helper function to extract id safely
 async function extractId(params: any): Promise<string> {
@@ -16,50 +14,31 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    // For demo purposes, we'll skip authentication
-    // In a real implementation, we would verify the JWT token
+    // Get the user token from the request cookies
+    const token = req.cookies.get('accessToken')?.value;
 
     // Extract id safely
     const id = await extractId(params);
     
-    // Find the address to update
-    const addressIndex = mockAddresses.findIndex(addr => addr.id === id);
-    
-    if (addressIndex === -1) {
-      return new NextResponse('Address not found', { status: 404 });
-    }
-    
     // Parse the request body
     const body = await req.json();
     
-    // Validate required fields
-    const requiredFields = ['type', 'name', 'phone', 'line1', 'city', 'state', 'country', 'pincode'];
-    for (const field of requiredFields) {
-      if (!body[field]) {
-        return new NextResponse(`${field} is required`, { status: 400 });
-      }
-    }
+    // Call the user service API through the API gateway
+    const response = await axios.put(`${API_GATEWAY_URL}/v1/addresses/${id}`, body, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
     
-    // Update the address
-    const updatedAddress = {
-      ...mockAddresses[addressIndex],
-      type: body.type,
-      name: body.name,
-      phone: body.phone,
-      line1: body.line1,
-      city: body.city,
-      state: body.state,
-      country: body.country,
-      pincode: body.pincode
-    };
-    
-    // In a real implementation, we would update this in a database
-    mockAddresses[addressIndex] = updatedAddress;
-    
-    return NextResponse.json(updatedAddress);
-  } catch (error) {
+    return NextResponse.json(response.data);
+  } catch (error: any) {
     console.error('Error updating address:', error);
-    return new NextResponse('Failed to update address', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to update address', message: error.message },
+      { status: error.response?.status || 500 }
+    );
   }
 }
 
@@ -68,28 +47,27 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // For demo purposes, we'll skip authentication
-    // In a real implementation, we would verify the JWT token
+    // Get the user token from the request cookies
+    const token = req.cookies.get('accessToken')?.value;
 
     // Extract id safely
     const id = await extractId(params);
     
-    // Find the address to delete
-    const addressIndex = mockAddresses.findIndex(addr => addr.id === id);
-    
-    if (addressIndex === -1) {
-      return new NextResponse('Address not found', { status: 404 });
-    }
-    
-    // In a real implementation, we would delete this from a database
-    const index = mockAddresses.findIndex(addr => addr.id === id);
-    if (index !== -1) {
-      mockAddresses.splice(index, 1);
-    }
+    // Call the user service API through the API gateway
+    await axios.delete(`${API_GATEWAY_URL}/v1/addresses/${id}`, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
     
     return new NextResponse(null, { status: 204 });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting address:', error);
-    return new NextResponse('Failed to delete address', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to delete address', message: error.message },
+      { status: error.response?.status || 500 }
+    );
   }
 } 

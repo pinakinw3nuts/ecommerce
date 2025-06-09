@@ -1,6 +1,4 @@
-// Register module aliases first
-import './register-aliases';
-
+// Import required modules
 import { buildApp } from './app';
 import { config } from './config';
 import { appLogger } from './utils/logger';

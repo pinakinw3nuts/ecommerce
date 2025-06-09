@@ -1,454 +1,177 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, FormEvent, useEffect, useRef } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useState, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import {
-  CartIcon,
-  HeartIcon,
-  SearchIcon,
-  MenuIcon,
-  ChevronDownIcon,
-  UserIcon,
-  LogOutIcon
-} from '../icons';
+import { CartIcon, HeartIcon, SearchIcon, MenuIcon, UserIcon } from '../icons';
 import { useCart } from '@/contexts/CartContext';
-import { useWishlist } from '@/contexts/WishlistContext';
-import { useAuth } from '@/contexts/AuthContext';
-
-// Define the categories to match sidebar categories
-const searchCategories = [
-  { id: 'all', name: 'All Categories' },
-  { id: 'clothing', name: 'Clothing' },
-  { id: 'electronics', name: 'Electronics' },
-  { id: 'home', name: 'Home & Kitchen' },
-  { id: 'accessories', name: 'Accessories' },
-  { id: 'beauty', name: 'Beauty' },
-];
-
-// Add this constant near the top of the file
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:3000/api';
 
 export default function Header() {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchCategory, setSearchCategory] = useState('all');
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  
   const { itemCount: cartItemCount } = useCart();
-  const { itemCount: wishlistItemCount } = useWishlist();
-  const { user, isAuthenticated, logout } = useAuth();
+  const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   
-  const userMenuRef = useRef<HTMLDivElement>(null);
-
-  // Close user menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setUserMenuOpen(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Extract category and search from URL on initial load and when URL changes
-  useEffect(() => {
-    const categoryParam = searchParams.get('category');
-    const searchParam = searchParams.get('search');
-    
-    if (searchParam) {
-      setSearchQuery(searchParam);
-      console.log(`Header: Setting search query from URL: "${searchParam}"`);
-    }
-    
-    if (categoryParam) {
-      const matchedCategory = searchCategories.find(
-        cat => cat.id.toLowerCase() === categoryParam.toLowerCase()
-      );
-      if (matchedCategory) {
-        setSearchCategory(matchedCategory.id);
-        console.log(`Header: Setting category from URL: "${matchedCategory.id}"`);
-      }
-    }
-  }, [searchParams]);
-
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     
-    try {
-      // Get the category ID to use in the URL
-      const categoryId = searchCategory === 'all' ? '' : searchCategory;
-      
-      // Create new URLSearchParams object
-      const params = new URLSearchParams();
-      
-      // If we have a search query, add it to the URL
-      if (searchQuery.trim()) {
-        params.set('search', searchQuery.trim());
-      }
-      
-      // Add category if selected
-      if (categoryId) {
-        params.set('category', categoryId);
-      }
-      
-      // Reset to page 1 when searching
-      params.set('page', '1');
-      
-      // Log the search attempt
-      console.log('Header Search:', {
-        query: searchQuery.trim() || '(no query)',
-        category: categoryId || 'all',
-        fullParams: params.toString(),
-        url: `/products?${params.toString()}`
-      });
-      
-      // Check if we have any parameters, otherwise go to base products page
-      const queryString = params.toString();
-      const url = queryString ? `/products?${queryString}` : '/products';
-      
-      // Navigate to products page with search parameters
-      // Use window.location for a full page refresh to ensure proper state reset
-      window.location.href = url;
-    } catch (error) {
-      console.error('Search error:', error);
+    if (searchQuery.trim()) {
+      router.push(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
-  // Handle direct category selection from dropdown (without search)
-  const handleCategoryChange = (newCategory: string) => {
-    setSearchCategory(newCategory);
-    
-    // If no search query, apply the category filter immediately
-    if (!searchQuery.trim()) {
-      // Create new URLSearchParams object
-      const params = new URLSearchParams();
-      
-      // Add category if not "all"
-      if (newCategory !== 'all') {
-        params.set('category', newCategory);
-      }
-      
-      // Reset to page 1
-      params.set('page', '1');
-      
-      // Log the category selection
-      console.log('Header Category Selection:', {
-        category: newCategory,
-        fullParams: params.toString(),
-        url: `/products?${params.toString()}`
-      });
-      
-      // Check if we have any parameters, otherwise go to base products page
-      const queryString = params.toString();
-      const url = queryString ? `/products?${queryString}` : '/products';
-      
-      // Navigate to products page with the category parameter
-      window.location.href = url;
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  const renderUserSection = () => {
-    if (isAuthenticated) {
-      return (
-        <div className="relative" ref={userMenuRef}>
-          <button
-            className="flex items-center space-x-1"
-            onClick={() => setUserMenuOpen(!userMenuOpen)}
-          >
-            <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-              <UserIcon className="h-5 w-5" />
-            </div>
-            <span className="hidden md:inline text-sm">
-              {user?.name || 'User'}
-            </span>
-            <ChevronDownIcon className="h-4 w-4" />
-          </button>
-          
-          {userMenuOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-              <Link
-                href="/account"
-                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                onClick={() => setUserMenuOpen(false)}
-              >
-                My Account
-              </Link>
-              <Link
-                href="/orders"
-                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                onClick={() => setUserMenuOpen(false)}
-              >
-                My Orders
-              </Link>
-              <button
-                onClick={() => {
-                  handleLogout();
-                  setUserMenuOpen(false);
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <div className="flex items-center">
-                  <LogOutIcon className="h-4 w-4 mr-2" />
-                  Logout
-                </div>
-              </button>
-            </div>
-          )}
-        </div>
-      );
-    } else {
-      return (
-        <div className="flex items-center space-x-2">
-          <Link href="/login">
-            <Button variant="outline" size="sm">
-              Login
-            </Button>
-          </Link>
-          <Link href="/signup">
-            <Button className="bg-[#D23F57] hover:bg-[#b8354a] text-white" size="sm">
-              Sign Up
-            </Button>
-          </Link>
-        </div>
-      );
-    }
-  };
+  const categories = [
+    { name: 'Body Parts', href: '/shop/body-parts' },
+    { name: 'Interior Parts', href: '/shop/interior-parts' },
+    { name: 'Suspension Parts', href: '/shop/suspension-parts' },
+    { name: 'Air Suspension', href: '/shop/air-suspension' },
+    { name: 'Electric Parts', href: '/shop/electric-parts' },
+    { name: 'Engine Parts', href: '/shop/engine-parts' },
+    { name: 'Sensors', href: '/shop/sensors' },
+    { name: 'Brake Parts', href: '/shop/brake-parts' },
+    { name: 'AC Parts', href: '/shop/ac-parts' },
+    { name: 'Maintenance Parts', href: '/shop/maintenance-parts' },
+  ];
 
   return (
     <header className="w-full">
-      {/* Top Bar */}
-      <div className="bg-[#D23F57] text-white">
-        <div className="container mx-auto px-4 flex justify-between items-center h-10">
-          <div className="flex items-center space-x-3">
-            <span className="bg-white text-[#D23F57] text-xs font-bold px-2 py-0.5 rounded">
-              HOT
-            </span>
-            <span className="text-sm">Free Express Shipping</span>
+      {/* Top red bar */}
+      <div className="bg-red-600 h-1 w-full"></div>
+      
+      {/* Main header */}
+      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        {/* Logo */}
+        <Link href="/" className="flex-shrink-0">
+          <div className="flex items-center">
+            <div className="font-bold text-2xl">
+              <span className="text-red-600">A2Z</span>
+              <span className="text-sm block">NEW GENERATION PARTS SUPPLIER</span>
+            </div>
           </div>
+        </Link>
+        
+        {/* Search */}
+        <div className="flex-grow max-w-3xl mx-6">
+          <form onSubmit={handleSearch} className="flex">
+            <input
+              type="text"
+              placeholder="Search the store"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-grow px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700"
+            >
+              <SearchIcon className="h-5 w-5" />
+            </button>
+          </form>
+        </div>
+        
+        {/* User/Wishlist/Cart */}
+        <div className="flex items-center space-x-6">
+          <div className="flex flex-col items-center">
+            <UserIcon className="h-6 w-6 text-gray-700" />
+            <div className="text-xs mt-1">
+              <span>Hello</span>
+              <span className="block">Sign In</span>
+            </div>
+          </div>
+          
+          <div className="flex flex-col items-center">
+            <HeartIcon className="h-6 w-6 text-gray-700" />
+            <div className="text-xs mt-1">
+              <span>Wish</span>
+              <span className="block">Lists</span>
+            </div>
+          </div>
+          
+          <Link href="/cart" className="flex flex-col items-center">
+            <div className="relative">
+              <CartIcon className="h-6 w-6 text-gray-700" />
+              {cartItemCount > 0 && (
+                <div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {cartItemCount}
+                </div>
+              )}
+            </div>
+            <div className="text-xs mt-1">
+              <span>Cart</span>
+            </div>
+          </Link>
+        </div>
+      </div>
+      
+      {/* Category navigation */}
+      <div className="border-t border-gray-200">
+        <div className="container mx-auto px-4">
           <div className="flex items-center">
             <div className="relative">
-              <button className="text-sm flex items-center gap-1 mr-4">
-                <span>EN</span>
-                <ChevronDownIcon className="h-4 w-4" />
+              <button 
+                className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2"
+                onClick={() => setShowCategoryMenu(!showCategoryMenu)}
+              >
+                <MenuIcon className="h-5 w-5" />
+                <span>Category</span>
               </button>
-            </div>
-            <div className="flex items-center gap-3">
-              <a href="#" aria-label="Twitter" className="text-white">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M19.633 7.997c.013.175.013.349.013.523 0 5.325-4.053 11.461-11.46 11.461-2.282 0-4.402-.661-6.186-1.809.324.037.636.05.973.05a8.07 8.07 0 0 0 5.001-1.721 4.036 4.036 0 0 1-3.767-2.793c.249.037.499.062.761.062.361 0 .724-.05 1.061-.137a4.027 4.027 0 0 1-3.23-3.953v-.05c.537.299 1.16.486 1.82.511a4.022 4.022 0 0 1-1.796-3.354c0-.748.199-1.434.548-2.032a11.457 11.457 0 0 0 8.306 4.215c-.062-.3-.1-.599-.1-.899a4.026 4.026 0 0 1 4.028-4.028c1.16 0 2.207.486 2.943 1.272a7.957 7.957 0 0 0 2.556-.973 4.02 4.02 0 0 1-1.771 2.22 8.073 8.073 0 0 0 2.319-.624 8.645 8.645 0 0 1-2.019 2.083z"></path>
-                </svg>
-              </a>
-              <a href="#" aria-label="Facebook" className="text-white">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M13.397 20.997v-8.196h2.765l.411-3.209h-3.176V7.548c0-.926.258-1.56 1.587-1.56h1.684V3.127A22.336 22.336 0 0 0 14.201 3c-2.444 0-4.122 1.492-4.122 4.231v2.355H7.332v3.209h2.753v8.202h3.312z"></path>
-                </svg>
-              </a>
-              <a href="#" aria-label="Instagram" className="text-white">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M11.999 7.377a4.623 4.623 0 1 0 0 9.248 4.623 4.623 0 0 0 0-9.248zm0 7.627a3.004 3.004 0 1 1 0-6.008 3.004 3.004 0 0 1 0 6.008z"></path>
-                  <circle cx="16.806" cy="7.207" r="1.078"></circle>
-                  <path d="M20.533 6.111A4.605 4.605 0 0 0 17.9 3.479a6.606 6.606 0 0 0-2.186-.42c-.963-.042-1.268-.054-3.71-.054s-2.755 0-3.71.054a6.554 6.554 0 0 0-2.184.42 4.6 4.6 0 0 0-2.633 2.632 6.585 6.585 0 0 0-.419 2.186c-.043.962-.056 1.267-.056 3.71 0 2.442 0 2.753.056 3.71.015.748.156 1.486.419 2.187a4.61 4.61 0 0 0 2.634 2.632 6.584 6.584 0 0 0 2.185.45c.963.042 1.268.055 3.71.055s2.755 0 3.71-.055a6.615 6.615 0 0 0 2.186-.419 4.613 4.613 0 0 0 2.633-2.633c.263-.7.404-1.438.419-2.186.043-.962.056-1.267.056-3.71s0-2.753-.056-3.71a6.581 6.581 0 0 0-.421-2.217zm-1.218 9.532a5.043 5.043 0 0 1-.311 1.688 2.987 2.987 0 0 1-1.712 1.711 4.985 4.985 0 0 1-1.67.311c-.95.044-1.218.055-3.654.055-2.438 0-2.687 0-3.655-.055a4.96 4.96 0 0 1-1.669-.311 2.985 2.985 0 0 1-1.719-1.711 5.08 5.08 0 0 1-.311-1.669c-.043-.95-.053-1.218-.053-3.654 0-2.437 0-2.686.053-3.655a5.038 5.038 0 0 1 .311-1.687c.305-.789.93-1.41 1.719-1.712a5.01 5.01 0 0 1 1.669-.311c.951-.043 1.218-.055 3.655-.055s2.687 0 3.654.055a4.96 4.96 0 0 1 1.67.311 2.991 2.991 0 0 1 1.712 1.712 5.08 5.08 0 0 1 .311 1.669c.043.951.054 1.218.054 3.655 0 2.436 0 2.698-.043 3.654h-.011z"></path>
-                </svg>
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Header */}
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo */}
-            <Link href="/" className="flex-shrink-0">
-              <div className="flex items-center">
-                <div className="bg-[#D23F57] text-white font-bold text-xl w-10 h-10 rounded-md flex items-center justify-center mr-2">S</div>
-                <span className="font-bold text-xl">Shopfinity</span>
-              </div>
-            </Link>
-
-            {/* Search Bar */}
-            <form onSubmit={handleSearch} className="hidden md:flex flex-1 mx-8">
-              <div className="relative flex flex-1">
-                <div className="flex items-center">
-                  <div className="relative">
-                    <select
-                      value={searchCategory}
-                      onChange={(e) => handleCategoryChange(e.target.value)}
-                      className="h-10 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 pl-3 pr-8 text-sm focus:border-[#D23F57] focus:outline-none"
-                    >
-                      {searchCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
+              
+              {showCategoryMenu && (
+                <div className="absolute left-0 top-full w-64 bg-white border border-gray-200 shadow-lg z-10">
+                  <ul>
+                    {categories.map((category) => (
+                      <li key={category.name}>
+                        <Link 
+                          href={category.href}
+                          className="block px-4 py-2 hover:bg-gray-100"
+                          onClick={() => setShowCategoryMenu(false)}
+                        >
                           {category.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
-                      <ChevronDownIcon className="h-4 w-4 text-gray-400" />
-                    </div>
-                  </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search for products..."
-                  className="flex-1 h-10 border border-gray-300 px-4 focus:outline-none focus:border-[#D23F57]"
-                />
-                <button
-                  type="submit"
-                  className="h-10 bg-[#D23F57] text-white px-4 rounded-r-md hover:bg-[#b8354a]"
-                >
-                  <SearchIcon className="h-5 w-5" />
-                </button>
-              </div>
-            </form>
-
-            {/* Icons */}
-            <div className="flex items-center space-x-4">
-              {/* User Section */}
-              {renderUserSection()}
-
-              {/* Wishlist Icon */}
-              <Link href="/wishlist" className="relative p-2">
-                <HeartIcon className="h-6 w-6" />
-                {wishlistItemCount > 0 && (
-                  <Badge className="absolute -top-1 -right-1 bg-[#D23F57] text-white border-2 border-white text-xs">
-                    {wishlistItemCount}
-                  </Badge>
-                )}
+              )}
+            </div>
+            
+            <nav className="flex-grow overflow-x-auto">
+              <ul className="flex space-x-6 px-4">
+                {categories.map((category) => (
+                  <li key={category.name} className="whitespace-nowrap">
+                    <Link 
+                      href={category.href}
+                      className="block py-3 text-sm hover:text-red-600"
+                    >
+                      {category.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            
+            {/* Social Icons */}
+            <div className="flex items-center space-x-4 ml-auto">
+              <Link href="#" className="text-gray-700 hover:text-red-600">
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
               </Link>
-
-              {/* Cart Icon */}
-              <Link href="/cart" className="relative p-2">
-                <CartIcon className="h-6 w-6" />
-                {cartItemCount > 0 && (
-                  <Badge className="absolute -top-1 -right-1 bg-[#D23F57] text-white border-2 border-white text-xs">
-                    {cartItemCount}
-                  </Badge>
-                )}
+              <Link href="#" className="text-gray-700 hover:text-red-600">
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+                </svg>
               </Link>
-
-              {/* Mobile Menu Button */}
-              <button
-                className="md:hidden p-2"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              >
-                <MenuIcon className="h-6 w-6" />
-              </button>
+              <Link href="#" className="text-gray-700 hover:text-red-600">
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 0C5.373 0 0 5.373 0 12c0 5.303 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.298 24 12c0-6.627-5.373-12-12-12"/>
+                </svg>
+              </Link>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm">
-        <div className="container mx-auto px-4">
-          <ul className="flex items-center space-x-8 h-12 text-sm">
-            <li>
-              <Link href="/" className={`font-medium ${pathname === '/' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
-                Home
-              </Link>
-            </li>
-            <li>
-              <Link href="/products" className={`font-medium ${pathname === '/products' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
-                Shop
-              </Link>
-            </li>
-            <li>
-              <Link href="/products?category=clothing" className={`font-medium ${pathname.includes('/products') && searchParams.get('category') === 'clothing' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
-                Clothing
-              </Link>
-            </li>
-            <li>
-              <Link href="/products?category=electronics" className={`font-medium ${pathname.includes('/products') && searchParams.get('category') === 'electronics' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
-                Electronics
-              </Link>
-            </li>
-            <li>
-              <Link href="/products?category=home" className={`font-medium ${pathname.includes('/products') && searchParams.get('category') === 'home' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
-                Home & Kitchen
-              </Link>
-            </li>
-            <li>
-              <Link href="/products?category=beauty" className={`font-medium ${pathname.includes('/products') && searchParams.get('category') === 'beauty' ? 'text-[#D23F57]' : 'hover:text-[#D23F57]'}`}>
-                Beauty
-              </Link>
-            </li>
-          </ul>
-        </div>
-      </nav>
-
-      {/* Mobile Search and Menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-gray-200 p-4">
-          <form onSubmit={handleSearch} className="mb-4">
-            <div className="flex">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search for products..."
-                className="flex-1 h-10 border border-gray-300 rounded-l-md px-4 focus:outline-none focus:border-[#D23F57]"
-              />
-              <button
-                type="submit"
-                className="h-10 bg-[#D23F57] text-white px-4 rounded-r-md hover:bg-[#b8354a]"
-              >
-                <SearchIcon className="h-5 w-5" />
-              </button>
-            </div>
-          </form>
-          
-          <div className="space-y-3">
-            <Link href="/" className="block py-2 hover:text-[#D23F57]">
-              Home
-            </Link>
-            <Link href="/products" className="block py-2 hover:text-[#D23F57]">
-              Shop All
-            </Link>
-            <Link href="/products?category=clothing" className="block py-2 hover:text-[#D23F57]">
-              Clothing
-            </Link>
-            <Link href="/products?category=electronics" className="block py-2 hover:text-[#D23F57]">
-              Electronics
-            </Link>
-            <Link href="/products?category=home" className="block py-2 hover:text-[#D23F57]">
-              Home & Kitchen
-            </Link>
-            <Link href="/products?category=beauty" className="block py-2 hover:text-[#D23F57]">
-              Beauty
-            </Link>
-            <Link href="/wishlist" className="block py-2 hover:text-[#D23F57]">
-              Wishlist
-            </Link>
-            <Link href="/cart" className="block py-2 hover:text-[#D23F57]">
-              Cart
-            </Link>
-          </div>
-        </div>
-      )}
     </header>
   );
 } 

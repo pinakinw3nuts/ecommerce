@@ -253,6 +253,8 @@ services:
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:3000/api
+      - API_GATEWAY_URL=http://api-gateway:3000
+      - USE_MOCK_DATA=false
     restart: unless-stopped
 
   # Admin Panel - Next.js Frontend Development Mode

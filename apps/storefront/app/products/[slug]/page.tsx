@@ -1,12 +1,15 @@
 import axios from 'axios';
 import { Metadata } from 'next';
-import { Product, RelatedProduct, SEO } from '@/lib/types';
+import { Product, RelatedProduct, SEO, Review } from '@/lib/types';
 import ProductDetailClient from '@/components/products/ProductDetailClient';
 import { API_GATEWAY_URL } from '@/lib/constants';
 
-// Create a server-side API client with explicit IPv4 address
+// Create a server-side API client with environment-aware configuration
 const serverApi = axios.create({
-  baseURL: API_GATEWAY_URL,
+  baseURL: process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000/api' // For local development
+    : API_GATEWAY_URL, // For Docker/production environment
+  timeout: 5000, // Add timeout to prevent long waiting periods
 });
 
 // Mock data for when API fails or is not available
@@ -64,6 +67,31 @@ const mockRelatedProducts: RelatedProduct[] = [
   },
 ];
 
+// Mock reviews for when API fails
+const mockReviews: Review[] = [
+  {
+    id: '1',
+    rating: 5,
+    comment: 'Excellent product! Very comfortable and fits perfectly.',
+    user: {
+      id: 'user1',
+      name: 'John Doe',
+      avatar: '/api/placeholder',
+    },
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: '2',
+    rating: 4,
+    comment: 'Good quality, but the sizing runs a bit small.',
+    user: {
+      id: 'user2',
+      name: 'Jane Smith',
+    },
+    createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+  },
+];
+
 // Define the params type for Next.js 14 dynamic routes
 type PageParams = {
   params: {
@@ -114,6 +142,7 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
 export default async function ProductPage({ params }: PageParams) {
   let product: Product;
   let relatedProducts: RelatedProduct[];
+  let reviews: Review[] = [];
   let seo: SEO;
 
   try {
@@ -122,15 +151,32 @@ export default async function ProductPage({ params }: PageParams) {
     
     try {
       // Fetch all data in parallel
-      const [productRes, relatedProductsRes, seoRes] = await Promise.all([
+      const [productResponse, relatedProductsResponse, seoResponse, reviewsResponse] = await Promise.all([
         serverApi.get(`/products/${slug}`),
         serverApi.get(`/products/related/${slug}`),
         serverApi.get(`/seo/meta?slug=${slug}`),
+        serverApi.get(`/reviews/product-slug/${slug}?limit=10&sort=newest`),
       ]);
       
-      product = productRes.data.product;
-      relatedProducts = relatedProductsRes.data.relatedProducts;
-      seo = seoRes.data;
+      // Extract product data
+      product = productResponse.data;
+      
+      // Extract related products
+      relatedProducts = relatedProductsResponse.data.relatedProducts || [];
+      
+      // Extract SEO data
+      seo = seoResponse.data;
+      
+      // Extract reviews and update product rating data
+      if (reviewsResponse.data && reviewsResponse.data.reviews) {
+        reviews = reviewsResponse.data.reviews;
+        
+        // Update product rating and review count based on actual reviews
+        if (reviewsResponse.data.productRating) {
+          product.rating = reviewsResponse.data.productRating.averageRating || product.rating;
+          product.reviewCount = reviewsResponse.data.productRating.totalReviews || product.reviewCount;
+        }
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       
@@ -146,6 +192,7 @@ export default async function ProductPage({ params }: PageParams) {
       };
       
       relatedProducts = mockRelatedProducts;
+      reviews = mockReviews;
       
       seo = {
         title: `${product.name} | Shopfinity`,
@@ -160,6 +207,7 @@ export default async function ProductPage({ params }: PageParams) {
     // Fallback to mock data if everything fails
     product = mockProduct;
     relatedProducts = mockRelatedProducts;
+    reviews = mockReviews;
     seo = {
       title: 'Product Details',
       description: 'Explore product details and pricing',
@@ -196,7 +244,11 @@ export default async function ProductPage({ params }: PageParams) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       
-      <ProductDetailClient product={product} relatedProducts={relatedProducts} />
+      <ProductDetailClient 
+        product={product} 
+        relatedProducts={relatedProducts} 
+        reviews={reviews} 
+      />
     </>
   );
 } 

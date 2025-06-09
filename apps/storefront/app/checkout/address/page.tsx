@@ -1,4 +1,8 @@
+'use client';
+
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 
 type Address = {
   id: string;
@@ -14,37 +18,71 @@ type Address = {
   isDefault: boolean;
 };
 
-// Enhanced mock addresses with more realistic data
-const mockAddresses: Address[] = [
-  {
-    id: "addr1",
-    type: "home",
-    name: "John Doe",
-    phone: "+1 (555) 123-4567",
-    line1: "123 Main Street",
-    line2: "Apt 4B",
-    city: "New York",
-    state: "NY",
-    country: "United States",
-    pincode: "10001",
-    isDefault: true
-  },
-  {
-    id: "addr2",
-    type: "work",
-    name: "John Doe",
-    phone: "+1 (555) 987-6543",
-    line1: "456 Park Avenue",
-    city: "Boston",
-    state: "MA",
-    country: "United States",
-    pincode: "02108",
-    isDefault: false
-  }
-];
-
 export default function AddressStep() {
-  const addresses = mockAddresses;
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAddresses = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get('/api/addresses');
+        
+        if (response.data && Array.isArray(response.data)) {
+          setAddresses(response.data);
+        } else {
+          setAddresses([]);
+        }
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching addresses:', err);
+        setError('Failed to load addresses. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAddresses();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-gray-800">Shipping Address</h1>
+          <p className="text-gray-500 mt-1">Loading your saved addresses...</p>
+        </div>
+        <div className="animate-pulse space-y-4">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="border border-gray-200 rounded-lg p-4">
+              <div className="h-4 bg-gray-200 rounded w-1/4 mb-3"></div>
+              <div className="h-3 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-2/3 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-gray-800">Shipping Address</h1>
+          <p className="text-red-500 mt-1">{error}</p>
+        </div>
+        <Link 
+          href="/account/address/new?returnUrl=/checkout/address" 
+          className="inline-block bg-black text-white px-6 py-2.5 rounded-md font-medium text-sm hover:bg-gray-800 transition"
+        >
+          Add new address
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -118,6 +156,7 @@ export default function AddressStep() {
           <button 
             type="submit" 
             className="bg-black text-white px-6 py-2.5 rounded-md font-medium text-sm hover:bg-gray-800 transition"
+            disabled={addresses.length === 0}
           >
             Continue to Shipping
           </button>

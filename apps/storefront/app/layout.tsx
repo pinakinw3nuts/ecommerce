@@ -9,8 +9,8 @@ import { ToastProvider } from '@/components/ui/Toast';
 import AuthDebug from '@/components/layout/AuthDebug';
 
 export const metadata: Metadata = {
-  title: 'Shopfinity – Modern Fashion Store',
-  description: 'Your go-to destination for curated fashion and accessories.',
+  title: 'AutoParts – Premium Auto Parts Store',
+  description: 'Your trusted source for OEM and aftermarket auto parts for European vehicles.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body 
         suppressHydrationWarning
-        className="min-h-screen bg-background text-foreground"
+        className="min-h-screen bg-gray-50 text-gray-900"
       >
         <ToastProvider>
           <AuthProvider>
