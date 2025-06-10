@@ -168,8 +168,8 @@ const authRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
         switch (response.status) {
           case 200:
             // Set auth cookies if login successful
-            if (response.body.accessToken) {
-              reply.setCookie('access_token', response.body.accessToken, {
+            if ((response.body as any)?.accessToken) {
+              reply.setCookie('access_token', (response.body as any).accessToken, {
                 httpOnly: true,
                 secure: config.server.nodeEnv === 'production',
                 sameSite: 'lax',
@@ -177,8 +177,8 @@ const authRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
                 maxAge: 24 * 60 * 60 // 24 hours
               });
             }
-            if (response.body.refreshToken) {
-              reply.setCookie('refresh_token', response.body.refreshToken, {
+            if ((response.body as any)?.refreshToken) {
+              reply.setCookie('refresh_token', (response.body as any).refreshToken, {
                 httpOnly: true,
                 secure: config.server.nodeEnv === 'production',
                 sameSite: 'lax',

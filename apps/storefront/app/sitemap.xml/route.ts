@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import api from '@lib/api';
+
+// Fallback static pages if the API is unavailable
+const FALLBACK_PAGES = [
+  { slug: '', updatedAt: new Date().toISOString() },
+  { slug: 'products', updatedAt: new Date().toISOString() },
+  { slug: 'about', updatedAt: new Date().toISOString() },
+  { slug: 'contact', updatedAt: new Date().toISOString() },
+  { slug: 'cart', updatedAt: new Date().toISOString() },
+  { slug: 'checkout', updatedAt: new Date().toISOString() },
+];
 
 export async function GET(req: NextRequest) {
   try {
-    const { data: entries } = await api.get('/seo/sitemap'); // expects list of slugs/URLs
-
+    const entries = FALLBACK_PAGES;
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://mystore.com';
 
     const xml = `

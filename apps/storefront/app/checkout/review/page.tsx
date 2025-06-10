@@ -1,4 +1,8 @@
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
 
 type CartItem = {
   id: string;
@@ -15,14 +19,6 @@ type OrderPreview = {
   tax: number;
   shipping: number;
   total: number;
-};
-
-type Props = {
-  searchParams: {
-    addressId?: string;
-    shippingId?: string;
-    paymentId?: string;
-  };
 };
 
 // Mock order preview data for demonstration
@@ -55,9 +51,25 @@ function getMockOrderPreview(shippingId: string): OrderPreview {
   };
 }
 
-export default function ReviewPage({ searchParams }: Props) {
-  const { addressId, shippingId, paymentId } = searchParams;
-  if (!addressId || !shippingId || !paymentId) redirect('/checkout/address');
+// Separate the core component logic
+function ReviewPageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  const addressId = searchParams.get('addressId');
+  const shippingId = searchParams.get('shippingId');
+  const paymentId = searchParams.get('paymentId');
+  
+  useEffect(() => {
+    if (!addressId || !shippingId || !paymentId) {
+      router.push('/checkout/address');
+    }
+  }, [addressId, shippingId, paymentId, router]);
+
+  // Return early if missing required parameters
+  if (!addressId || !shippingId || !paymentId) {
+    return null;
+  }
 
   const preview = getMockOrderPreview(shippingId);
 
@@ -108,5 +120,45 @@ export default function ReviewPage({ searchParams }: Props) {
         </button>
       </form>
     </div>
+  );
+}
+
+// Loading fallback
+function ReviewPageLoading() {
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="h-8 bg-gray-200 rounded w-1/4 mb-6 animate-pulse"></div>
+      <div className="space-y-4">
+        {[1, 2].map((i) => (
+          <div key={i} className="flex items-center gap-4 border-b pb-2">
+            <div className="w-16 h-16 bg-gray-200 rounded animate-pulse"></div>
+            <div className="flex-1">
+              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2 animate-pulse"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/4 animate-pulse"></div>
+            </div>
+            <div className="h-4 bg-gray-200 rounded w-16 animate-pulse"></div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 border-t pt-4 space-y-2">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex justify-between">
+            <div className="h-3 bg-gray-200 rounded w-1/6 animate-pulse"></div>
+            <div className="h-3 bg-gray-200 rounded w-1/12 animate-pulse"></div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6">
+        <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+    </div>
+  );
+}
+
+export default function ReviewPage() {
+  return (
+    <Suspense fallback={<ReviewPageLoading />}>
+      <ReviewPageContent />
+    </Suspense>
   );
 } 

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, Search, SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Star, Search, SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, AlertCircle } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Button } from '@/components/ui/Button';
 import { Slider } from '@/components/ui/Slider';
@@ -28,12 +28,60 @@ const sortOptions = [
 
 // Min and max price range
 const MIN_PRICE = 0;
-const MAX_PRICE = 1000;
+const MAX_PRICE = 10000;
+
+function NoProductsFound({ 
+  isError, 
+  errorMessage, 
+  searchTerm, 
+  onReset 
+}: { 
+  isError: boolean; 
+  errorMessage: string | null;
+  searchTerm?: string;
+  onReset: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+      {isError ? (
+        <>
+          <AlertCircle className="h-16 w-16 text-red-500 mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            Something went wrong
+          </h3>
+          <p className="text-gray-600 mb-6">
+            {errorMessage || 'We encountered an error while fetching products. Please try again.'}
+          </p>
+        </>
+      ) : (
+        <>
+          <Search className="h-16 w-16 text-gray-400 mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            No products found
+          </h3>
+          <p className="text-gray-600 mb-6">
+            {searchTerm 
+              ? `We couldn't find any products matching "${searchTerm}".` 
+              : 'No products match the selected filters.'}
+          </p>
+        </>
+      )}
+      
+      <Button 
+        onClick={onReset} 
+        className="flex items-center gap-2"
+      >
+        <RefreshCw className="h-4 w-4" />
+        Reset Filters
+      </Button>
+    </div>
+  );
+}
 
 export default function ShopPage({ 
   searchParams 
 }: { 
-  searchParams: { [key: string]: string | string[] | undefined } 
+  searchParams: Record<string, string | string[] | undefined>
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -45,16 +93,6 @@ export default function ShopPage({
   const minPrice = typeof searchParams.minPrice === 'string' ? parseInt(searchParams.minPrice) || MIN_PRICE : MIN_PRICE;
   const maxPrice = typeof searchParams.maxPrice === 'string' ? parseInt(searchParams.maxPrice) || MAX_PRICE : MAX_PRICE;
   const search = typeof searchParams.search === 'string' ? searchParams.search : '';
-  
-  // Debug log to check what comes from URL parameters
-  console.log('URL Parameters:', {
-    category,
-    search,
-    sort,
-    page,
-    minPrice,
-    maxPrice
-  });
   
   // State for products and loading
   const [products, setProducts] = useState<any[]>([]);
@@ -89,24 +127,22 @@ export default function ShopPage({
   const debouncedPriceRange = useDebounce(priceRange, 500);
   
   // Products per page
-  const PRODUCTS_PER_PAGE = 12;
+  const PRODUCTS_PER_PAGE = 6;
+  
+  // Force a minimum total for testing pagination
+  const FORCE_MINIMUM_TOTAL = 14;
   
   // For debugging - log initial params
   useEffect(() => {
-    console.log('Initial search params:', {
-      category,
-      search,
-      sort,
-      page,
-      minPrice,
-      maxPrice
-    });
+    // Initial search params are available here, but don't log them directly
+    // to avoid the Next.js warning
   }, []);
   
   // Debug the initial state
   useEffect(() => {
+    // Log only the client-side state, not the original searchParams
     console.log('Initial activeFilters state:', activeFilters);
-  }, []);
+  }, [activeFilters]);
   
   // Check if we're in a browser environment and parse URL directly
   useEffect(() => {
@@ -120,30 +156,25 @@ export default function ShopPage({
       const urlMinPrice = parseInt(url.searchParams.get('minPrice') || MIN_PRICE.toString());
       const urlMaxPrice = parseInt(url.searchParams.get('maxPrice') || MAX_PRICE.toString());
       
-      console.log('Direct URL parameters:', {
-        category: urlCategory,
-        search: urlSearch,
-        sort: urlSort,
-        page: urlPage,
-        minPrice: urlMinPrice,
-        maxPrice: urlMaxPrice
-      });
+      // Validate price range values to ensure they're within bounds
+      const validMinPrice = isNaN(urlMinPrice) ? MIN_PRICE : Math.max(MIN_PRICE, Math.min(MAX_PRICE, urlMinPrice));
+      const validMaxPrice = isNaN(urlMaxPrice) ? MAX_PRICE : Math.max(validMinPrice, Math.min(MAX_PRICE, urlMaxPrice));
       
       // Make sure our state matches the URL
       if (urlCategory !== activeFilters.category || 
           urlSearch !== activeFilters.search || 
           urlSort !== activeFilters.sort || 
           urlPage !== activeFilters.page || 
-          urlMinPrice !== activeFilters.minPrice || 
-          urlMaxPrice !== activeFilters.maxPrice) {
+          validMinPrice !== activeFilters.minPrice || 
+          validMaxPrice !== activeFilters.maxPrice) {
         
         setActiveFilters({
           category: urlCategory,
           search: urlSearch,
           sort: urlSort,
           page: urlPage,
-          minPrice: urlMinPrice,
-          maxPrice: urlMaxPrice
+          minPrice: validMinPrice,
+          maxPrice: validMaxPrice
         });
         
         // Also update search query for the input field
@@ -152,7 +183,7 @@ export default function ShopPage({
         }
         
         // Update price range slider
-        setPriceRange([urlMinPrice, urlMaxPrice]);
+        setPriceRange([validMinPrice, validMaxPrice]);
       }
     }
   }, []);
@@ -164,141 +195,155 @@ export default function ShopPage({
       setSearchQuery(search);
     }
     
+    // Validate price range values
+    const validMinPrice = Math.max(MIN_PRICE, Math.min(MAX_PRICE, minPrice));
+    const validMaxPrice = Math.max(validMinPrice, Math.min(MAX_PRICE, maxPrice));
+    
     // Always update price range slider when URL params change
-    setPriceRange([minPrice, maxPrice]);
+    if (validMinPrice !== priceRange[0] || validMaxPrice !== priceRange[1]) {
+      setPriceRange([validMinPrice, validMaxPrice]);
+    }
     
     // Always update active filters when URL params change
-    setActiveFilters({
-      category,
-      sort,
-      page,
-      minPrice,
-      maxPrice,
-      search
-    });
+    if (category !== activeFilters.category ||
+        sort !== activeFilters.sort ||
+        page !== activeFilters.page ||
+        validMinPrice !== activeFilters.minPrice ||
+        validMaxPrice !== activeFilters.maxPrice ||
+        search !== activeFilters.search) {
+      
+      setActiveFilters({
+        category,
+        sort,
+        page,
+        minPrice: validMinPrice,
+        maxPrice: validMaxPrice,
+        search
+      });
+    }
     
-    console.log('URL params changed, updating filters to:', {
-      category,
-      sort,
-      page,
-      minPrice,
-      maxPrice,
-      search
-    });
-    
-  }, [search, category, sort, page, minPrice, maxPrice]);  // Removed searchQuery dependency to prevent loops
+  }, [search, category, sort, page, minPrice, maxPrice, priceRange, activeFilters, searchQuery]); // Added proper dependencies
   
   // Update URL with filters
   const updateFilters = (newParams: Record<string, string | number | null>) => {
-    // Create a new URLSearchParams object based on current searchParams
-    const params = new URLSearchParams();
-    
-    // Start with current active filters
-    if (activeFilters.category !== 'all') params.set('category', activeFilters.category);
-    if (activeFilters.sort !== 'newest') params.set('sort', activeFilters.sort);
-    if (activeFilters.page !== 1) params.set('page', activeFilters.page.toString());
-    if (activeFilters.minPrice > 0) params.set('minPrice', activeFilters.minPrice.toString());
-    if (activeFilters.maxPrice < 1000) params.set('maxPrice', activeFilters.maxPrice.toString());
-    if (activeFilters.search) params.set('search', activeFilters.search);
-    
-    // Log current params for debugging
-    console.log('Current URL params before update:', Object.fromEntries(params.entries()));
-    
-    // Update with new params
-    Object.entries(newParams).forEach(([key, value]) => {
-      if (value === null) {
-        params.delete(key);
-        console.log(`Deleted param: ${key}`);
-      } else {
-        params.set(key, value.toString());
-        console.log(`Updated param: ${key} = ${value}`);
+    try {
+      // Create a new URLSearchParams object based on current searchParams
+      const params = new URLSearchParams();
+      
+      // Start with current active filters
+      if (activeFilters.category !== 'all') params.set('category', activeFilters.category);
+      if (activeFilters.sort !== 'newest') params.set('sort', activeFilters.sort);
+      if (activeFilters.page !== 1) params.set('page', activeFilters.page.toString());
+      if (activeFilters.minPrice > 0) params.set('minPrice', activeFilters.minPrice.toString());
+      if (activeFilters.maxPrice < MAX_PRICE) params.set('maxPrice', activeFilters.maxPrice.toString());
+      if (activeFilters.search) params.set('search', activeFilters.search);
+      
+      // Log current params for debugging
+      console.log('Current URL params before update:', Object.fromEntries(params.entries()));
+      
+      // Update with new params
+      Object.entries(newParams).forEach(([key, value]) => {
+        if (value === null) {
+          params.delete(key);
+          console.log(`Deleted param: ${key}`);
+        } else {
+          params.set(key, value.toString());
+          console.log(`Updated param: ${key} = ${value}`);
+        }
+      });
+      
+      // Reset page when changing filters other than page
+      if (!('page' in newParams) && Object.keys(newParams).length > 0) {
+        params.set('page', '1');
       }
-    });
-    
-    // Reset page when changing filters other than page
-    if (!('page' in newParams) && Object.keys(newParams).length > 0) {
-      params.set('page', '1');
+      
+      // Build new URL
+      const newUrl = `${pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+      console.log('New URL after update:', newUrl);
+      
+      // Update active filters state
+      setActiveFilters(prev => {
+        const updated = {
+          ...prev,
+          ...Object.fromEntries(
+            Object.entries(newParams).map(([key, value]) => [
+              key, 
+              value === null ? 
+                (key === 'category' ? 'all' : 
+                 key === 'sort' ? 'newest' : 
+                 key === 'page' ? 1 : 
+                 key === 'minPrice' ? MIN_PRICE : 
+                 key === 'maxPrice' ? MAX_PRICE : 
+                 '') : 
+                value
+            ])
+          )
+        };
+        console.log('Updated activeFilters:', updated);
+        return updated;
+      });
+      
+      // Navigate to new URL
+      router.push(newUrl);
+    } catch (error) {
+      console.error('Error updating filters:', error);
     }
-    
-    // Build new URL
-    const newUrl = `${pathname}${params.toString() ? `?${params.toString()}` : ''}`;
-    console.log('New URL after update:', newUrl);
-    
-    // Update active filters state
-    setActiveFilters(prev => {
-      const updated = {
-        ...prev,
-        ...Object.fromEntries(
-          Object.entries(newParams).map(([key, value]) => [
-            key, 
-            value === null ? 
-              (key === 'category' ? 'all' : 
-               key === 'sort' ? 'newest' : 
-               key === 'page' ? 1 : 
-               key === 'minPrice' ? 0 : 
-               key === 'maxPrice' ? 1000 : 
-               '') : 
-              value
-          ])
-        )
-      };
-      console.log('Updated activeFilters:', updated);
-      return updated;
-    });
-    
-    // Navigate to new URL
-    router.push(newUrl);
   };
   
   // Fetch categories
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch('/api/categories?limit=50');
+        const response = await fetch('/api/categories', {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          }
+        });
         
         if (!response.ok) {
-          console.error('Failed to fetch categories:', response.status);
-          setError('Failed to load categories. Please try again later.');
-          // Still use default categories so the UI doesn't break
-          setCategories(defaultCategories);
-          return;
+          throw new Error(`API request failed with status ${response.status}`);
         }
         
         const data = await response.json();
         
-        if (data.categories && Array.isArray(data.categories)) {
-          // Add "All Products" category at the beginning
-          const allCategoriesOption = { id: 'all', name: 'All Products' };
-          const fetchedCategories = [allCategoriesOption, ...data.categories];
-          setCategories(fetchedCategories);
-          console.log('Fetched categories:', fetchedCategories);
+        if (data && Array.isArray(data.categories)) {
+          // Add the "All Products" category at the beginning
+          const allCategories = [
+            { id: 'all', name: 'All Products' },
+            ...data.categories.map((cat: any) => ({
+              id: cat.id || cat._id || cat.slug || '',
+              name: cat.name || '',
+              count: cat.productCount || 0
+            }))
+          ];
+          
+          setCategories(allCategories);
+        } else if (Array.isArray(data)) {
+          // Handle array format response
+          const allCategories = [
+            { id: 'all', name: 'All Products' },
+            ...data.map((cat: any) => ({
+              id: cat.id || cat._id || cat.slug || '',
+              name: cat.name || '',
+              count: cat.productCount || 0
+            }))
+          ];
+          
+          setCategories(allCategories);
         } else {
-          console.log('No categories found in API response, using defaults');
+          console.error('Invalid category data format:', data);
+          // Fallback to default categories
           setCategories(defaultCategories);
         }
       } catch (error) {
         console.error('Error fetching categories:', error);
-        setError('Failed to load categories. Please try again later.');
-        // Still use default categories so the UI doesn't break
+        // Fallback to default categories
         setCategories(defaultCategories);
       }
     };
     
     fetchCategories();
   }, []);
-
-  // Add mock data for testing if needed
-  const mockProducts = Array(12).fill(0).map((_, i) => ({
-    id: `mock-${i}`,
-    name: `Mock Product ${i + 1}`,
-    slug: `mock-product-${i + 1}`,
-    price: 99.99,
-    discountedPrice: i % 3 === 0 ? 79.99 : null,
-    discountPercentage: i % 3 === 0 ? 20 : null,
-    rating: 4.5,
-    image: 'https://via.placeholder.com/500',
-    description: 'This is a mock product for testing when the API is unavailable.'
-  }));
 
   // Fetch products based on filters
   useEffect(() => {
@@ -331,14 +376,6 @@ export default function ShopPage({
         }
         
         console.log('API URL with params:', apiUrl.toString());
-        console.log('Active filters:', {
-          category: activeFilters.category,
-          search: activeFilters.search,
-          sort: activeFilters.sort,
-          page: activeFilters.page,
-          minPrice: activeFilters.minPrice,
-          maxPrice: activeFilters.maxPrice
-        });
         
         // Add a timeout to the fetch to prevent hanging requests
         const controller = new AbortController();
@@ -346,7 +383,10 @@ export default function ShopPage({
         
         try {
           const response = await fetch(apiUrl.toString(), {
-            signal: controller.signal
+            signal: controller.signal,
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+            }
           });
           
           clearTimeout(timeoutId);
@@ -358,23 +398,48 @@ export default function ShopPage({
           
           const data = await response.json();
           
-          // Handle both array format and object with products property
+          // Format products to match ProductCard component expectations
+          const formatProduct = (product: any) => ({
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            price: product.price,
+            discountedPrice: product.discountedPrice || null,
+            discountPercentage: product.discountPercentage || null,
+            rating: product.rating || null,
+            image: product.mediaUrl || '/images/placeholder.jpg',
+            description: product.description || '',
+            // Add any other fields needed
+          });
+          
+          // Handle different response formats
           if (Array.isArray(data)) {
             console.log('Products fetched (array format):', data.length);
-            setProducts(data);
+            const formattedProducts = data.map(formatProduct);
+            setProducts(formattedProducts);
             setTotalProducts(data.length || 0);
           } else if (data.products && Array.isArray(data.products)) {
             console.log('Products fetched:', data.products.length, 'of total:', data.total);
-            if (data.filterSummary) {
-              console.log('Filter summary:', data.filterSummary);
+            const formattedProducts = data.products.map(formatProduct);
+            setProducts(formattedProducts);
+            
+            // Use the actual total from API response
+            const apiTotal = data.total || data.products.length;
+            setTotalProducts(apiTotal);
+          } else if (data.data && Array.isArray(data.data)) {
+            // Handle API response with data property
+            console.log('Products fetched (data property):', data.data.length, 'of total:', data.meta?.total);
+            const formattedProducts = data.data.map(formatProduct);
+            setProducts(formattedProducts);
+            
+            // Use the meta info for pagination
+            if (data.meta) {
+              setTotalProducts(data.meta.total || data.data.length);
+            } else {
+              setTotalProducts(data.data.length);
             }
-            setProducts(data.products);
-            setTotalProducts(data.total || data.products.length || 0);
           } else {
             console.error('Invalid response format from API:', data);
-                         // Use our mock products for testing when API fails
-            setProducts(mockProducts);
-            setTotalProducts(mockProducts.length);
             throw new Error('Invalid response format from API');
           }
         } catch (error: any) {
@@ -387,9 +452,10 @@ export default function ShopPage({
       } catch (error) {
         console.error('Error fetching products:', error);
         setError('Failed to load products. Please try again later.');
-        // Use mock products instead of empty array when there's an error
-        setProducts(mockProducts);
-        setTotalProducts(mockProducts.length);
+        
+        // Set empty products instead of using mock data
+        setProducts([]);
+        setTotalProducts(0);
       } finally {
         // Ensure minimum loading time of 500ms to prevent UI flashing
         const loadTime = Date.now() - loadStartTime;
@@ -413,28 +479,45 @@ export default function ShopPage({
   
   // Update price filter when debounced price range changes
   useEffect(() => {
-    // Only update if the values have actually changed
+    // Only update if the values have actually changed and are different from the active filters
     if (debouncedPriceRange[0] !== activeFilters.minPrice || 
         debouncedPriceRange[1] !== activeFilters.maxPrice) {
-      updateFilters({ 
-        minPrice: debouncedPriceRange[0], 
-        maxPrice: debouncedPriceRange[1],
-        page: 1 // Reset to page 1 when changing price
-      });
+      // Don't auto-update the URL on each slider change
+      // Let the user click the Apply button instead
+      // This prevents too many API calls while sliding
     }
   }, [debouncedPriceRange]);
   
-  // Calculate total pages
+  // Calculate total pages - ensure we properly round up for any remainder
   const totalPages = Math.max(1, Math.ceil(totalProducts / PRODUCTS_PER_PAGE));
+
+  // Force pagination to be visible for testing
+  const shouldShowPagination = true;
+
+  // Debug log for pagination
+  useEffect(() => {
+    console.log('Pagination info:', {
+      totalProducts,
+      PRODUCTS_PER_PAGE,
+      totalPages,
+      currentPage: activeFilters.page,
+      shouldShowPagination
+    });
+  }, [totalProducts, activeFilters.page]);
   
   // Generate page numbers for pagination
   const getPageNumbers = () => {
+    // Calculate total pages based on API response
+    const displayedTotalPages = totalPages;
+    
+    console.log(`Generating page numbers with total: ${totalProducts}, pages: ${displayedTotalPages}`);
+    
     const pages = [];
     const maxVisiblePages = 5;
     
-    if (totalPages <= maxVisiblePages) {
+    if (displayedTotalPages <= maxVisiblePages) {
       // Show all pages if there are few
-      for (let i = 1; i <= totalPages; i++) {
+      for (let i = 1; i <= displayedTotalPages; i++) {
         pages.push(i);
       }
     } else {
@@ -442,14 +525,14 @@ export default function ShopPage({
       pages.push(1);
       
       // Calculate start and end of visible pages
-      let start = Math.max(2, page - 1);
-      let end = Math.min(totalPages - 1, page + 1);
+      let start = Math.max(2, activeFilters.page - 1);
+      let end = Math.min(displayedTotalPages - 1, activeFilters.page + 1);
       
       // Adjust if at the beginning or end
-      if (page <= 2) {
+      if (activeFilters.page <= 2) {
         end = 4;
-      } else if (page >= totalPages - 1) {
-        start = totalPages - 3;
+      } else if (activeFilters.page >= displayedTotalPages - 1) {
+        start = displayedTotalPages - 3;
       }
       
       // Add ellipsis if needed
@@ -463,16 +546,17 @@ export default function ShopPage({
       }
       
       // Add ellipsis if needed
-      if (end < totalPages - 1) {
+      if (end < displayedTotalPages - 1) {
         pages.push('...');
       }
       
       // Always show last page
-      if (totalPages > 1) {
-        pages.push(totalPages);
+      if (displayedTotalPages > 1) {
+        pages.push(displayedTotalPages);
       }
     }
     
+    console.log('Generated page numbers:', pages);
     return pages;
   };
   
@@ -530,7 +614,40 @@ export default function ShopPage({
   
   // Handler for price slider change
   const handlePriceRangeChange = (values: number[]) => {
-    setPriceRange([values[0], values[1]]);
+    try {
+      if (!Array.isArray(values) || values.length !== 2) {
+        console.error('Invalid price range values:', values);
+        return;
+      }
+      
+      // Ensure values are within the valid range
+      const minValue = Math.max(MIN_PRICE, Math.min(MAX_PRICE, values[0]));
+      const maxValue = Math.max(minValue, Math.min(MAX_PRICE, values[1]));
+      
+      setPriceRange([minValue, maxValue]);
+    } catch (error) {
+      console.error('Error updating price range:', error);
+    }
+  };
+
+  // Handler for applying price range
+  const handleApplyPriceRange = () => {
+    console.log('Applying price range:', priceRange);
+    
+    // Validate price range values
+    const validMinPrice = Math.max(MIN_PRICE, Math.min(MAX_PRICE, priceRange[0]));
+    const validMaxPrice = Math.max(validMinPrice, Math.min(MAX_PRICE, priceRange[1]));
+    
+    // Only update if values are different from current active filters
+    if (validMinPrice !== activeFilters.minPrice || validMaxPrice !== activeFilters.maxPrice) {
+      updateFilters({ 
+        minPrice: validMinPrice, 
+        maxPrice: validMaxPrice,
+        page: 1 // Reset to page 1 when changing price range
+      });
+    } else {
+      console.log('Price range unchanged, not updating filters');
+    }
   };
   
   // Format price with currency symbol
@@ -549,6 +666,8 @@ export default function ShopPage({
   // Handler for reset all filters
   const handleResetFilters = () => {
     setSearchQuery('');
+    // Reset price range slider state
+    setPriceRange([MIN_PRICE, MAX_PRICE]);
     updateFilters({
       category: null,
       sort: null,
@@ -578,9 +697,27 @@ export default function ShopPage({
     return 'All Products';
   };
   
+  // Add a useEffect to log when products or pagination info changes
+  useEffect(() => {
+    console.log('Products or pagination updated:', {
+      productsCount: products.length,
+      totalProducts,
+      totalPages,
+      currentPage: activeFilters.page,
+      apiTotalVsDisplayed: `API reports ${totalProducts} total products, showing ${products.length} on current page`
+    });
+    
+    // Check if we need to handle empty results for page > 1
+    if (products.length === 0 && activeFilters.page > 1 && totalProducts > 0) {
+      console.warn('Empty results on page > 1. Redirecting to page 1');
+      updateFilters({ page: 1 });
+    }
+  }, [products.length, totalProducts, totalPages, activeFilters.page, updateFilters]);
+  
   return (
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto px-4 py-8">
+                
         <div className="flex flex-col md:flex-row gap-8">
           {/* Mobile filter button */}
           <div className="md:hidden mb-4">
@@ -705,7 +842,7 @@ export default function ShopPage({
                     defaultValue={priceRange}
                     min={MIN_PRICE}
                     max={MAX_PRICE}
-                    step={10}
+                    step={100}
                     value={priceRange}
                     onValueChange={handlePriceRangeChange}
                     className="mb-6"
@@ -724,7 +861,7 @@ export default function ShopPage({
                     </div>
                   </div>
                   <button 
-                    onClick={() => updateFilters({ minPrice: priceRange[0], maxPrice: priceRange[1] })}
+                    onClick={handleApplyPriceRange}
                     className="mt-3 text-sm text-red-600 hover:text-red-700 font-medium flex items-center mx-auto"
                   >
                     Apply Price Range
@@ -859,12 +996,12 @@ export default function ShopPage({
                       </div>
                     )}
                     
-                    {(activeFilters.minPrice > 0 || activeFilters.maxPrice < 1000) && (
+                    {(activeFilters.minPrice > 0 || activeFilters.maxPrice < MAX_PRICE) && (
                       <div className="bg-red-50 border border-red-100 text-red-700 px-3 py-1.5 rounded-md text-sm flex items-center">
                         <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        ${activeFilters.minPrice} - ${activeFilters.maxPrice === 1000 ? '1000+' : activeFilters.maxPrice}
+                        {formatPrice(activeFilters.minPrice)} - {activeFilters.maxPrice === MAX_PRICE ? `${formatPrice(MAX_PRICE)}+` : formatPrice(activeFilters.maxPrice)}
                         <button 
                           onClick={() => updateFilters({ minPrice: null, maxPrice: null })}
                           className="ml-2 text-red-500 hover:text-red-700 transition-colors"
@@ -1014,50 +1151,35 @@ export default function ShopPage({
                 }>
                   {products.map((product) => (
                     <ProductCard 
-                                          key={product.id}
-                    product={product}
-                    priority={products.indexOf(product) < 6}
-                    viewMode={viewMode}
+                      key={product.id}
+                      product={{
+                        id: product.id,
+                        name: product.name,
+                        slug: product.slug,
+                        price: product.price,
+                        discountedPrice: product.discountedPrice,
+                        discountPercentage: product.discountPercentage,
+                        rating: product.rating,
+                        image: product.image || product.mediaUrl || '/images/placeholder.jpg',
+                        description: product.description,
+                      }}
+                      priority={products.indexOf(product) < 6}
+                      viewMode={viewMode}
                     />
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="bg-white rounded-lg shadow-md border border-gray-100 p-8 text-center">
-                <div className="inline-flex justify-center items-center h-16 w-16 rounded-full bg-red-50 text-red-600 mb-4">
-                  <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-medium mb-2">No products found</h3>
-                <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                  We couldn't find any products matching your criteria. Try adjusting your filters or search terms.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <Button 
-                    onClick={handleResetFilters}
-                    className="bg-red-600 hover:bg-red-700 text-white"
-                  >
-                    <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Reset All Filters
-                  </Button>
-                  {activeFilters.category === 'electronics' && (
-                    <Button 
-                      variant="outline"
-                      onClick={() => window.location.href = "/products?category=electronics"}
-                      className="text-red-600 border-red-200 hover:bg-red-50"
-                    >
-                      Retry Electronics Category
-                    </Button>
-                  )}
-                </div>
-              </div>
+              <NoProductsFound 
+                isError={!!error}
+                errorMessage={error}
+                searchTerm={activeFilters.search}
+                onReset={handleResetFilters}
+              />
             )}
             
             {/* Enhanced Pagination */}
-            {!loading && totalPages > 1 && (
+            {!loading && shouldShowPagination && (
               <div className="mt-10 mb-4">
                 <div className="flex flex-col sm:flex-row items-center justify-between border-t border-gray-200 pt-6">
                   <div className="text-sm text-gray-600 mb-4 sm:mb-0">
@@ -1068,7 +1190,7 @@ export default function ShopPage({
                     <Button 
                       variant="outline" 
                       size="sm"
-                      disabled={activeFilters.page === 1}
+                      disabled={activeFilters.page <= 1}
                       onClick={() => updateFilters({ page: activeFilters.page - 1 })}
                       className="px-3 py-2 mr-1 border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none"
                     >
@@ -1097,24 +1219,15 @@ export default function ShopPage({
                     </div>
                     
                     <div className="md:hidden flex items-center px-3 py-1.5 border border-gray-200 rounded-md mx-1">
-                      <select 
-                        value={activeFilters.page}
-                        onChange={(e) => updateFilters({ page: parseInt(e.target.value) })}
-                        className="bg-transparent px-1 py-0.5 appearance-none focus:outline-none text-sm font-medium text-gray-700"
-                        aria-label="Select page"
-                      >
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(num => (
-                          <option key={num} value={num}>
-                            Page {num} of {totalPages}
-                          </option>
-                        ))}
-                      </select>
+                      <span className="text-sm font-medium">
+                        {activeFilters.page} / {totalPages}
+                      </span>
                     </div>
                     
                     <Button 
                       variant="outline" 
                       size="sm"
-                      disabled={activeFilters.page === totalPages}
+                      disabled={activeFilters.page >= totalPages}
                       onClick={() => updateFilters({ page: activeFilters.page + 1 })}
                       className="px-3 py-2 ml-1 border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none"
                     >

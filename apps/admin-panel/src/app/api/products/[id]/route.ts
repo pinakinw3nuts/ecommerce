@@ -222,6 +222,8 @@ export async function PUT(request: NextRequest, context: { params: { id: string 
       isInStock: productData.isInStock,
       specifications: productData.specifications,
       keywords: productData.keywords,
+      // Include image URL if provided
+      image: productData.image,
       // Ensure seoMetadata is always an object
       seoMetadata: productData.seoMetadata || {
         title: '',

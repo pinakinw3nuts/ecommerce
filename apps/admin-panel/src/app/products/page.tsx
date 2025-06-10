@@ -544,9 +544,9 @@ export default function ProductsPage() {
       cell: ({ row }: { row: Product }) => (
         <div className="flex items-center gap-3">
           <div className="relative h-12 w-12 overflow-hidden rounded-lg">
-            {row.image && row.image.trim() !== '' ? (
+            {row.mediaUrl && row.mediaUrl.trim() !== '' ? (
               <Image
-                src={row.image}
+                src={row.mediaUrl}
                 alt={row.name}
                 fill
                 className="object-cover"

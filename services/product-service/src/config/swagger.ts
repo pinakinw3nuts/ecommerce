@@ -23,7 +23,14 @@ export const swaggerConfig: SwaggerOptions = {
       { name: 'products', description: 'Product related end-points' },
       { name: 'categories', description: 'Category related end-points' },
       { name: 'reviews', description: 'Review related end-points' },
-      { name: 'attributes', description: 'Attribute related end-points' }
+      { name: 'attributes', description: 'Attribute related end-points' },
+      { name: 'admin-products', description: 'Admin product management end-points' },
+      { name: 'admin-categories', description: 'Admin category management end-points' },
+      { name: 'admin-reviews', description: 'Admin review management end-points' },
+      { name: 'admin-attributes', description: 'Admin attribute management end-points' },
+      { name: 'admin-brands', description: 'Admin brand management end-points' },
+      { name: 'admin-tags', description: 'Admin tag management end-points' },
+      { name: 'admin-coupons', description: 'Admin coupon management end-points' }
     ],
     components: {
       schemas: {
@@ -150,7 +157,12 @@ export const swaggerConfig: SwaggerOptions = {
           bearerFormat: 'JWT'
         }
       }
-    }
+    },
+    security: [
+      {
+        bearerAuth: []
+      }
+    ]
   }
 };
 

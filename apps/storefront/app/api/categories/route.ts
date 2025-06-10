@@ -1,69 +1,86 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { API_GATEWAY_URL } from '@/lib/constants';
+import { PRODUCT_API_URL } from '@/lib/constants';
 
 /**
  * GET handler for /api/categories
- * Proxies requests to the API gateway
+ * Proxies requests to the product service
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get query parameters
-    const searchParams = request.nextUrl.searchParams;
-    const limit = searchParams.get('limit') || '10';
-    const page = searchParams.get('page') || '1';
+    // Log request for debugging
+    console.log(`Processing request to /api/categories: ${request.url}`);
     
-    // Use explicit IPv4 address for local development
-    const baseUrl = process.env.NODE_ENV === 'development'
-      ? 'http://127.0.0.1:3000'
-      : API_GATEWAY_URL.endsWith('/api')
-        ? API_GATEWAY_URL.substring(0, API_GATEWAY_URL.length - 4)
-        : API_GATEWAY_URL;
+    // Get query parameters using the URL API to avoid Next.js warning
+    const url = new URL(request.url);
+    const page = url.searchParams.get('page') || '1';
+    const limit = url.searchParams.get('limit') || '50';
     
-    console.log('Making API request to:', `${baseUrl}/v1/categories`);
+    // Build params object with only defined values
+    const params: Record<string, string> = { 
+      page, 
+      limit,
+      isActive: 'true'
+    };
     
-    // Forward request to API gateway
-    const response = await axios.get(`${baseUrl}/v1/categories`, {
-      params: {
-        limit,
-        page,
-      },
+    // Log parameters for debugging
+    console.log('Using API Parameters:', params);
+    
+    // Using the known working endpoint format
+    const apiUrl = `${PRODUCT_API_URL}/categories`;
+    console.log(`Forwarding request to: ${apiUrl}`);
+    
+    // Make the request to the product service API
+    const response = await axios.get(apiUrl, {
+      params,
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
+      timeout: 5000 // 5 second timeout
     });
     
-    // Transform the API response to match the expected format
+    // Log success
+    console.log('Categories API request successful');
+    
+    // Check response format and transform if needed
     const apiData = response.data;
     
-    // Check if the API returned data in the expected format
-    if (apiData && Array.isArray(apiData.data)) {
-      // API returned data in a different format, transform it
+    // Check if the API returned data in the expected format (likely from admin endpoint)
+    if (apiData && apiData.categories) {
+      // Response is already in the expected format
+      return NextResponse.json(apiData);
+    } else if (apiData && apiData.data && Array.isArray(apiData.data)) {
+      // Transform the API response to match the expected format
       const transformedData = {
         categories: apiData.data.map((category: any) => ({
           id: category.id,
           name: category.name,
           slug: category.slug || category.name.toLowerCase().replace(/\s+/g, '-'),
           description: category.description || '',
-          image: category.mediaUrl || '/images/placeholder.jpg',
+          image: category.imageUrl || '/images/placeholder.jpg',
           count: category.productCount || 0
         })),
-        total: apiData.total || apiData.data.length,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil((apiData.total || apiData.data.length) / parseInt(limit))
+        total: apiData.meta?.total || apiData.data.length,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        totalPages: Math.ceil((apiData.meta?.total || apiData.data.length) / parseInt(limit, 10))
       };
       
       return NextResponse.json(transformedData);
     }
     
-    // If the response already has the expected format, return it as is
+    // If the response is in an unexpected format, return it as is
     return NextResponse.json(apiData);
   } catch (error: any) {
-    console.error('Error fetching categories:', error);
+    // Log detailed error information
+    console.error('Error fetching categories from API:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     
-    // Return appropriate error response
+    // Return error response
     return NextResponse.json(
       { error: 'Failed to fetch categories', message: error.message },
       { status: error.response?.status || 500 }

@@ -1,15 +1,22 @@
+'use client';
+
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
-export default function OrderConfirmationPage({
-  searchParams,
-}: {
-  searchParams: { orderId?: string };
-}) {
-  const { orderId } = searchParams;
+export default function OrderConfirmationPage() {
+  const searchParams = useSearchParams();
+  const orderId = searchParams.get('orderId');
 
+  // If no order ID is provided, we'll show a message instead of redirecting
   if (!orderId) {
-    redirect('/');
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <p className="text-gray-600 mb-4">No order information found.</p>
+        <Link href="/" className="block text-sm underline">
+          Return to Home
+        </Link>
+      </div>
+    );
   }
 
   return (

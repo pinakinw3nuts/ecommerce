@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@fastify/cors": "^8.3.0",
-    "@fastify/multipart": "^9.0.3",
+    "@fastify/multipart": "^7.7.3",
+    "@fastify/static": "^7.0.0",
     "@fastify/swagger": "^8.8.0",
     "@fastify/swagger-ui": "^1.9.3",
     "fastify": "^4.21.0",

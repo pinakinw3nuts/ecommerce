@@ -11,6 +11,10 @@ import { authMiddleware } from './middlewares/auth';
 import { couponController } from './controllers/coupon.controller';
 import { tagController } from './controllers/tag.controller';
 import fastifyCors from '@fastify/cors';
+import fastifyMultipart from '@fastify/multipart';
+import path from 'path';
+import fastifyStatic from '@fastify/static';
+import fs from 'fs';
 
 export async function buildApp() {
   const app = fastify({
@@ -24,6 +28,74 @@ export async function buildApp() {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     exposedHeaders: ['Content-Range', 'X-Content-Range']
+  });
+
+  // Register multipart for file uploads
+  await app.register(fastifyMultipart, {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    }
+  });
+
+  // Get the path to the public directory
+  const publicPath = path.join(__dirname, '..', '..', '..', 'public');
+  
+  // Ensure the public directory exists
+  if (!fs.existsSync(publicPath)) {
+    fs.mkdirSync(publicPath, { recursive: true });
+    console.log(`Created public directory at: ${publicPath}`);
+  }
+  
+  // Ensure subdirectories exist
+  const brandsPath = path.join(publicPath, 'brands');
+  const categoriesPath = path.join(publicPath, 'categories');
+  
+  if (!fs.existsSync(brandsPath)) {
+    fs.mkdirSync(brandsPath, { recursive: true });
+    console.log(`Created brands directory at: ${brandsPath}`);
+  }
+  
+  if (!fs.existsSync(categoriesPath)) {
+    fs.mkdirSync(categoriesPath, { recursive: true });
+    console.log(`Created categories directory at: ${categoriesPath}`);
+  }
+  
+  // Log the contents of the public directory for debugging
+  console.log('Public directory structure:');
+  try {
+    const publicDirContents = fs.readdirSync(publicPath);
+    console.log(`${publicPath} contains:`, publicDirContents);
+    
+    // Check brands directory
+    if (fs.existsSync(brandsPath)) {
+      const brandsDirContents = fs.readdirSync(brandsPath);
+      console.log(`${brandsPath} contains:`, brandsDirContents);
+    }
+    
+    // Check categories directory
+    if (fs.existsSync(categoriesPath)) {
+      const categoriesDirContents = fs.readdirSync(categoriesPath);
+      console.log(`${categoriesPath} contains:`, categoriesDirContents);
+    }
+  } catch (error) {
+    console.error('Error reading directory structure:', error);
+  }
+
+  // Serve static files from public directory
+  await app.register(fastifyStatic, {
+    root: publicPath,
+    prefix: '/public/',
+    decorateReply: true,
+  });
+  
+  // Add a route to test static file serving
+  app.get('/test-static', (request, reply) => {
+    reply.send({
+      message: 'Static file test endpoint',
+      publicPath,
+      exists: fs.existsSync(publicPath),
+      contents: fs.existsSync(publicPath) ? fs.readdirSync(publicPath) : []
+    });
   });
 
   // Configure JSON serialization to handle circular references

@@ -144,7 +144,7 @@ export function CategoryForm({ initialData, onSubmit, isEditing = false }: Categ
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/upload', {
+      const response = await fetch('/api/categories/upload-image', {
         method: 'POST',
         body: formData,
       });
@@ -153,8 +153,8 @@ export function CategoryForm({ initialData, onSubmit, isEditing = false }: Categ
         throw new Error('Failed to upload image');
       }
 
-      const { url } = await response.json();
-      setValue('imageUrl', url, { shouldDirty: true });
+      const data = await response.json();
+      setValue('imageUrl', data.imageUrl, { shouldDirty: true });
       toast.success('Image uploaded successfully');
     } catch (error) {
       console.error('Error uploading image:', error);

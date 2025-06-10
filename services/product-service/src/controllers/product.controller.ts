@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { ProductService, ProductFilterOptions, ProductSortOptions, ProductPaginationOptions } from '../services/product.service';
 import { validateRequest } from '../middlewares/validateRequest';
 import { z } from 'zod';
-import { handleFileUpload } from '../utils/fileUpload';
+import { handleFileUpload, handleProductImageUpload } from '../utils/fileUpload';
 import { Product } from '../entities/Product';
 
 const productService = new ProductService();
@@ -997,11 +997,39 @@ export const productController = {
       }
     });
 
-    // POST /products/:identifier/image - Upload a product image
+    // POST /products/upload-image - Upload a product image without associating it with a product
+    fastify.post('/upload-image', {
+      schema: {
+        tags: ['products'],
+        summary: 'Upload a product image without associating it with a product',
+        consumes: ['multipart/form-data'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              imageUrl: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest, reply: FastifyReply) => {
+        try {
+          const imageUrl = await handleProductImageUpload(request);
+          return reply.send({ imageUrl });
+        } catch (error: any) {
+          request.log.error(`Error uploading product image: ${error.message}`);
+          return reply.code(500).send({ 
+            message: error.message || 'Failed to upload image'
+          });
+        }
+      }
+    });
+    
+    // POST /products/:identifier/image - Upload a product image and associate it with a product
     fastify.post('/:identifier/image', {
       schema: {
         tags: ['products'],
-        summary: 'Upload product image',
+        summary: 'Upload product image and associate it with a product',
         params: {
           type: 'object',
           required: ['identifier'],
@@ -1014,7 +1042,7 @@ export const productController = {
           200: {
             type: 'object',
             properties: {
-              message: { type: 'string' }
+              imageUrl: { type: 'string' }
             }
           },
           404: {
@@ -1027,7 +1055,7 @@ export const productController = {
       },
       handler: async (request: FastifyRequest<{ Params: ProductParams }>, reply: FastifyReply) => {
         try {
-          const uploadResult = await handleFileUpload(request);
+          const imageUrl = await handleProductImageUpload(request);
           const product = await productService.getProductById(request.params.identifier);
 
           if (!product) {
@@ -1035,12 +1063,15 @@ export const productController = {
           }
 
           await productService.updateProduct(request.params.identifier, {
-            mediaUrl: uploadResult.filepath
+            mediaUrl: imageUrl
           });
 
-          return reply.send({ message: 'Image uploaded successfully' });
-        } catch (error) {
-          return reply.code(500).send({ message: 'Internal server error' });
+          return reply.send({ imageUrl });
+        } catch (error: any) {
+          request.log.error(`Error uploading product image: ${error.message}`);
+          return reply.code(500).send({ 
+            message: error.message || 'Failed to upload image'
+          });
         }
       }
     });

@@ -44,7 +44,8 @@ export function useAuthCheck() {
         // If no tokens at all, redirect to login
         if (!accessToken && !refreshToken) {
           console.log('No auth tokens found, redirecting to login');
-          router.push(`/login?redirect=${encodeURIComponent(pathname || '')}`);
+          const redirectPath = pathname ? `/login?redirect=${encodeURIComponent(pathname)}` : '/login';
+          router.push(redirectPath);
           return;
         }
         
@@ -69,7 +70,8 @@ export function useAuthCheck() {
             Cookies.remove(REFRESH_TOKEN_NAME, { path: '/' });
             Cookies.remove(`${ACCESS_TOKEN_NAME}_client`, { path: '/' });
             Cookies.remove(`${REFRESH_TOKEN_NAME}_client`, { path: '/' });
-            router.push(`/login?redirect=${encodeURIComponent(pathname || '')}`);
+            const redirectPath = pathname ? `/login?redirect=${encodeURIComponent(pathname)}` : '/login';
+            router.push(redirectPath);
             return;
           }
           
@@ -111,7 +113,8 @@ export function useAuthCheck() {
               if (!refreshToken) {
                 Cookies.remove(ACCESS_TOKEN_NAME, { path: '/' });
                 Cookies.remove(`${ACCESS_TOKEN_NAME}_client`, { path: '/' });
-                router.push(`/login?redirect=${encodeURIComponent(pathname || '')}`);
+                const redirectPath = pathname ? `/login?redirect=${encodeURIComponent(pathname)}` : '/login';
+                router.push(redirectPath);
                 return;
               }
             } else {

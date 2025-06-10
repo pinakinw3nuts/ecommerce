@@ -408,7 +408,6 @@ const proxyRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
             // If all attempts fail, return a mock response for development purposes
             const mockBody = request.body as any;
             const couponCode = mockBody?.code?.toUpperCase() || '';
-            const totalAmount = mockBody?.totalAmount || 100;
             
             // Ensure userId is present in mock body, as it's required
             if (!mockBody?.userId) {
@@ -543,6 +542,137 @@ const proxyRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     }
   });
 
+  // Specific route for API categories
+  fastify.get('/api/v1/categories', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding API categories request',
+        url: `${productServiceUrl}/api/v1/categories${queryString}`,
+        method: 'GET'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/categories${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      // Log successful response
+      logger.debug({
+        msg: 'API categories response received',
+        status: response.status,
+        categoriesCount: response.body && typeof response.body === 'object' && 'categories' in response.body 
+          ? Array.isArray((response.body as any).categories) ? (response.body as any).categories.length : 'unknown'
+          : 'no categories'
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in API categories proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch API categories',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Specific route for getting featured categories
+  fastify.get('/api/v1/categories/featured', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding featured categories request',
+        url: `${productServiceUrl}/api/v1/categories/featured${queryString}`,
+        method: 'GET'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/categories/featured${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      // Log successful response
+      logger.debug({
+        msg: 'Featured categories response received',
+        status: response.status,
+        categoriesCount: response.body && typeof response.body === 'object' && 'categories' in response.body 
+          ? Array.isArray((response.body as any).categories) ? (response.body as any).categories.length : 'unknown'
+          : 'no categories'
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in featured categories proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch featured categories',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Specific route for getting category by ID
+  fastify.get('/api/v1/categories/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding category details request',
+        url: `${productServiceUrl}/api/v1/categories/${id}${queryString}`,
+        method: 'GET',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/categories/${id}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in category details proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch category details',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Specific route for all brands
   fastify.get('/v1/brands', async (request, reply) => {
     try {
@@ -581,6 +711,1096 @@ const proxyRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       return reply.status(500).send({
         success: false,
         message: 'Failed to fetch brands',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Specific route for admin products
+  fastify.get('/api/v1/admin/products', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding admin products request',
+        url: `${productServiceUrl}/api/v1/admin/products${queryString}`,
+        method: 'GET'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/admin/products${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      // Log successful response
+      logger.debug({
+        msg: 'Admin products response received',
+        status: response.status
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin products proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch admin products',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Route for GET admin product by ID
+  fastify.get('/api/v1/admin/products/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding admin product details request',
+        url: `${productServiceUrl}/api/v1/admin/products/${id}${queryString}`,
+        method: 'GET',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/admin/products/${id}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin product details proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch admin product details',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Route for POST admin product (create)
+  fastify.post('/api/v1/admin/products', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      
+      logger.info({
+        msg: 'Forwarding admin product create request',
+        url: `${productServiceUrl}/api/v1/admin/products`,
+        method: 'POST'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'POST',
+        url: `${productServiceUrl}/api/v1/admin/products`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin product create proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to create admin product',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Route for PUT admin product (update)
+  fastify.put('/api/v1/admin/products/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      
+      logger.info({
+        msg: 'Forwarding admin product update request',
+        url: `${productServiceUrl}/api/v1/admin/products/${id}`,
+        method: 'PUT',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'PUT',
+        url: `${productServiceUrl}/api/v1/admin/products/${id}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin product update proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to update admin product',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Route for DELETE admin product
+  fastify.delete('/api/v1/admin/products/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      
+      logger.info({
+        msg: 'Forwarding admin product delete request',
+        url: `${productServiceUrl}/api/v1/admin/products/${id}`,
+        method: 'DELETE',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'DELETE',
+        url: `${productServiceUrl}/api/v1/admin/products/${id}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin product delete proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to delete admin product',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Admin Categories Routes
+  
+  // GET all admin categories
+  fastify.get('/api/v1/admin/categories', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding admin categories request',
+        url: `${productServiceUrl}/api/v1/admin/categories${queryString}`,
+        method: 'GET'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/admin/categories${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin categories proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch admin categories',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // GET admin category by ID
+  fastify.get('/api/v1/admin/categories/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding admin category details request',
+        url: `${productServiceUrl}/api/v1/admin/categories/${id}${queryString}`,
+        method: 'GET',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/admin/categories/${id}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin category details proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch admin category details',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // POST create admin category
+  fastify.post('/api/v1/admin/categories', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      
+      logger.info({
+        msg: 'Forwarding admin category create request',
+        url: `${productServiceUrl}/api/v1/admin/categories`,
+        method: 'POST'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'POST',
+        url: `${productServiceUrl}/api/v1/admin/categories`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin category create proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to create admin category',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // PUT update admin category
+  fastify.put('/api/v1/admin/categories/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      
+      logger.info({
+        msg: 'Forwarding admin category update request',
+        url: `${productServiceUrl}/api/v1/admin/categories/${id}`,
+        method: 'PUT',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'PUT',
+        url: `${productServiceUrl}/api/v1/admin/categories/${id}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin category update proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to update admin category',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // DELETE admin category
+  fastify.delete('/api/v1/admin/categories/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      
+      logger.info({
+        msg: 'Forwarding admin category delete request',
+        url: `${productServiceUrl}/api/v1/admin/categories/${id}`,
+        method: 'DELETE',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'DELETE',
+        url: `${productServiceUrl}/api/v1/admin/categories/${id}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin category delete proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to delete admin category',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // POST bulk delete admin categories
+  fastify.post('/api/v1/admin/categories/bulk-delete', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      
+      logger.info({
+        msg: 'Forwarding admin categories bulk delete request',
+        url: `${productServiceUrl}/api/v1/admin/categories/bulk-delete`,
+        method: 'POST'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'POST',
+        url: `${productServiceUrl}/api/v1/admin/categories/bulk-delete`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin categories bulk delete proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to bulk delete admin categories',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Admin Brands Routes
+  
+  // GET all admin brands
+  fastify.get('/api/v1/admin/brands', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding admin brands request',
+        url: `${productServiceUrl}/api/v1/admin/brands${queryString}`,
+        method: 'GET'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/admin/brands${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin brands proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch admin brands',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // GET admin brand by ID
+  fastify.get('/api/v1/admin/brands/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding admin brand details request',
+        url: `${productServiceUrl}/api/v1/admin/brands/${id}${queryString}`,
+        method: 'GET',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/admin/brands/${id}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin brand details proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch admin brand details',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // POST create admin brand
+  fastify.post('/api/v1/admin/brands', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      
+      logger.info({
+        msg: 'Forwarding admin brand create request',
+        url: `${productServiceUrl}/api/v1/admin/brands`,
+        method: 'POST'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'POST',
+        url: `${productServiceUrl}/api/v1/admin/brands`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin brand create proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to create admin brand',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // PUT update admin brand
+  fastify.put('/api/v1/admin/brands/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      
+      logger.info({
+        msg: 'Forwarding admin brand update request',
+        url: `${productServiceUrl}/api/v1/admin/brands/${id}`,
+        method: 'PUT',
+        id
+      });
+
+      // Debug logging for the brand update request
+      logger.info({
+        msg: 'BRAND UPDATE REQUEST DETAILS',
+        hasBody: !!request.body,
+        bodyType: request.body ? typeof request.body : 'none',
+        bodyContent: request.body ? JSON.stringify(request.body).substring(0, 500) : 'none',
+        contentType: request.headers['content-type'],
+        contentLength: request.headers['content-length']
+      });
+
+      // Check if we have a body
+      let requestBody = request.body;
+      
+      // If we don't have a body but have content-type and content-length, try to get raw body
+      if (!requestBody && request.headers['content-type']?.includes('application/json') && 
+          request.headers['content-length'] && parseInt(request.headers['content-length'] as string, 10) > 0) {
+        logger.info({ msg: 'Attempting to use raw body for brand update' });
+        
+        try {
+          // Create a minimal body if needed
+          requestBody = { _forceNotEmpty: true };
+          
+          logger.info({ 
+            msg: 'Created fallback body for brand update',
+            body: JSON.stringify(requestBody)
+          });
+        } catch (err) {
+          logger.error({ 
+            msg: 'Failed to create fallback body',
+            error: err instanceof Error ? err.message : 'Unknown error'
+          });
+        }
+      }
+
+      // Validate that we have a body for the PUT request
+      if (!requestBody || (typeof requestBody === 'object' && Object.keys(requestBody).length === 0)) {
+        logger.error({ msg: 'Empty body received for brand update' });
+        return reply.status(400).send({
+          success: false,
+          message: 'Request body cannot be empty for brand update',
+          code: 'EMPTY_REQUEST_BODY'
+        });
+      }
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'PUT',
+        url: `${productServiceUrl}/api/v1/admin/brands/${id}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: requestBody
+      });
+      
+      // Debug logging after the request
+      logger.info({
+        msg: 'BRAND UPDATE RESPONSE',
+        status: response.status,
+        responseBodySample: response.body ? 
+          JSON.stringify(response.body).substring(0, 500) : 'none'
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin brand update proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to update admin brand',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // DELETE admin brand
+  fastify.delete('/api/v1/admin/brands/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      
+      logger.info({
+        msg: 'Forwarding admin brand delete request',
+        url: `${productServiceUrl}/api/v1/admin/brands/${id}`,
+        method: 'DELETE',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'DELETE',
+        url: `${productServiceUrl}/api/v1/admin/brands/${id}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin brand delete proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to delete admin brand',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Admin Tags Routes
+  
+  // GET all admin tags
+  fastify.get('/api/v1/admin/tags', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding admin tags request',
+        url: `${productServiceUrl}/api/v1/admin/tags${queryString}`,
+        method: 'GET'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/admin/tags${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin tags proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch admin tags',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // GET admin tag by ID
+  fastify.get('/api/v1/admin/tags/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding admin tag details request',
+        url: `${productServiceUrl}/api/v1/admin/tags/${id}${queryString}`,
+        method: 'GET',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/admin/tags/${id}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin tag details proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch admin tag details',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // POST create admin tag
+  fastify.post('/api/v1/admin/tags', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      
+      logger.info({
+        msg: 'Forwarding admin tag create request',
+        url: `${productServiceUrl}/api/v1/admin/tags`,
+        method: 'POST'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'POST',
+        url: `${productServiceUrl}/api/v1/admin/tags`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin tag create proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to create admin tag',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // PUT update admin tag
+  fastify.put('/api/v1/admin/tags/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      
+      logger.info({
+        msg: 'Forwarding admin tag update request',
+        url: `${productServiceUrl}/api/v1/admin/tags/${id}`,
+        method: 'PUT',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'PUT',
+        url: `${productServiceUrl}/api/v1/admin/tags/${id}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin tag update proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to update admin tag',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // DELETE admin tag
+  fastify.delete('/api/v1/admin/tags/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      
+      logger.info({
+        msg: 'Forwarding admin tag delete request',
+        url: `${productServiceUrl}/api/v1/admin/tags/${id}`,
+        method: 'DELETE',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'DELETE',
+        url: `${productServiceUrl}/api/v1/admin/tags/${id}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin tag delete proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to delete admin tag',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // POST bulk delete admin tags
+  fastify.post('/api/v1/admin/tags/bulk-delete', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      
+      logger.info({
+        msg: 'Forwarding admin tags bulk delete request',
+        url: `${productServiceUrl}/api/v1/admin/tags/bulk-delete`,
+        method: 'POST'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'POST',
+        url: `${productServiceUrl}/api/v1/admin/tags/bulk-delete`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin tags bulk delete proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to bulk delete admin tags',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Admin Coupons Routes
+  
+  // GET all admin coupons
+  fastify.get('/api/v1/admin/coupons', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding admin coupons request',
+        url: `${productServiceUrl}/api/v1/admin/coupons${queryString}`,
+        method: 'GET'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/admin/coupons${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin coupons proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch admin coupons',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // GET admin coupon by ID
+  fastify.get('/api/v1/admin/coupons/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding admin coupon details request',
+        url: `${productServiceUrl}/api/v1/admin/coupons/${id}${queryString}`,
+        method: 'GET',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/admin/coupons/${id}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin coupon details proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch admin coupon details',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // POST create admin coupon
+  fastify.post('/api/v1/admin/coupons', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      
+      logger.info({
+        msg: 'Forwarding admin coupon create request',
+        url: `${productServiceUrl}/api/v1/admin/coupons`,
+        method: 'POST'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'POST',
+        url: `${productServiceUrl}/api/v1/admin/coupons`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin coupon create proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to create admin coupon',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // PUT update admin coupon
+  fastify.put('/api/v1/admin/coupons/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      
+      logger.info({
+        msg: 'Forwarding admin coupon update request',
+        url: `${productServiceUrl}/api/v1/admin/coupons/${id}`,
+        method: 'PUT',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'PUT',
+        url: `${productServiceUrl}/api/v1/admin/coupons/${id}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+        body: request.body
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin coupon update proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to update admin coupon',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // DELETE admin coupon
+  fastify.delete('/api/v1/admin/coupons/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      
+      logger.info({
+        msg: 'Forwarding admin coupon delete request',
+        url: `${productServiceUrl}/api/v1/admin/coupons/${id}`,
+        method: 'DELETE',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'DELETE',
+        url: `${productServiceUrl}/api/v1/admin/coupons/${id}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in admin coupon delete proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to delete admin coupon',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
@@ -700,6 +1920,176 @@ const proxyRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       return reply.status(500).send({
         success: false,
         message: 'Error in debug endpoint',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Specific route for public tags
+  fastify.get('/api/v1/tags', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding tags request',
+        url: `${productServiceUrl}/api/v1/tags${queryString}`,
+        method: 'GET'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/tags${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      // Log successful response
+      logger.debug({
+        msg: 'Tags response received',
+        status: response.status,
+        tagsCount: response.body && typeof response.body === 'object' && 'tags' in response.body 
+          ? Array.isArray((response.body as any).tags) ? (response.body as any).tags.length : 'unknown'
+          : 'no tags'
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in tags proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch tags',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Specific route for getting tag by ID
+  fastify.get('/api/v1/tags/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding tag details request',
+        url: `${productServiceUrl}/api/v1/tags/${id}${queryString}`,
+        method: 'GET',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/tags/${id}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in tag details proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch tag details',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Specific route for public brands
+  fastify.get('/api/v1/brands', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding brands request',
+        url: `${productServiceUrl}/api/v1/brands${queryString}`,
+        method: 'GET'
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/brands${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      // Log successful response
+      logger.debug({
+        msg: 'Brands response received',
+        status: response.status,
+        brandsCount: response.body && typeof response.body === 'object' && 'brands' in response.body 
+          ? Array.isArray((response.body as any).brands) ? (response.body as any).brands.length : 'unknown'
+          : 'no brands'
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in brands proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch brands',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Specific route for getting brand by ID
+  fastify.get('/api/v1/brands/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding brand details request',
+        url: `${productServiceUrl}/api/v1/brands/${id}${queryString}`,
+        method: 'GET',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/brands/${id}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in brand details proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch brand details',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }

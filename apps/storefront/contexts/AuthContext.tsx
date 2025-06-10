@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from '@/lib/constants';
 import api from '@/lib/api';
@@ -34,7 +34,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  // Remove direct useSearchParams call and replace with client-side approach
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+  
+  // Get redirect URL from window.location.search on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirect = urlParams.get('redirect');
+      if (redirect) {
+        setRedirectUrl(redirect);
+      }
+    }
+  }, []);
 
   // Function to refresh authentication
   const refreshAuth = async (): Promise<boolean> => {
@@ -307,20 +319,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await new Promise(resolve => setTimeout(resolve, 300));
       
       // Check if there's a redirect parameter
-      const redirect = searchParams.get('redirect');
+      const redirect = redirectUrl || '/account';
       
-      console.log('Login successful, redirecting to:', redirect || '/account');
+      console.log('Login successful, redirecting to:', redirect);
       console.log('Cookies after login:', {
         accessToken: Cookies.get(ACCESS_TOKEN_NAME) || Cookies.get(`${ACCESS_TOKEN_NAME}_client`),
         refreshToken: !!Cookies.get(REFRESH_TOKEN_NAME) || !!Cookies.get(`${REFRESH_TOKEN_NAME}_client`)
       });
       
       // Use router.replace instead of push to avoid adding to history
-      if (redirect) {
-        router.replace(redirect);
-      } else {
-        router.replace('/account');
-      }
+      router.replace(redirect);
       
       router.refresh(); // Refresh the page to update server components
     } catch (err) {

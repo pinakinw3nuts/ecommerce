@@ -372,6 +372,19 @@ export async function POST(request: NextRequest) {
     // Process date fields - remove them if they're null or invalid
     prepareDateFields(productData);
     
+    // Validate image URL if provided
+    if (productData.image) {
+      // Check if it's a valid image URL
+      const isValidImageUrl = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(productData.image) || 
+                            /^(https?:\/\/.*\.(jpg|jpeg|png|gif|webp|svg))/i.test(productData.image) ||
+                            /^\/storage\/products\/.+$/i.test(productData.image);
+      
+      if (!isValidImageUrl) {
+        console.log(`Invalid image URL detected: ${productData.image} - removing from request`);
+        delete productData.image;
+      }
+    }
+    
     // Ensure seoMetadata is always an object
     if (!productData.seoMetadata || typeof productData.seoMetadata !== 'object') {
       productData.seoMetadata = {

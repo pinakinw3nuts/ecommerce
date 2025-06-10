@@ -1,0 +1,17 @@
+[Unit]
+Description=Storage Sync Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/path/to/project
+ExecStart=/usr/bin/node /path/to/project/scripts/storage-sync.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=storage-sync
+
+[Install]
+WantedBy=multi-user.target 

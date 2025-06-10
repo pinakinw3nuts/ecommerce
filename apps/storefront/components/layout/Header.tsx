@@ -77,12 +77,16 @@ export default function Header() {
   const [error, setError] = useState<string | null>(null);
   const { user, isAuthenticated, logout } = useAuth();
   
-  // Fetch categories from API
+  // Fetch categories from API with retry
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchCategories = async (retryCount = 0) => {
       try {
         setLoading(true);
-        const response = await fetch('/api/categories?limit=50');
+        const response = await fetch('/api/categories?limit=50', {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          }
+        });
         
         if (!response.ok) {
           throw new Error(`Failed to fetch categories: ${response.status}`);
@@ -92,7 +96,7 @@ export default function Header() {
         
         if (data.categories && Array.isArray(data.categories)) {
           setCategories(data.categories);
-          console.log('Fetched categories:', data.categories);
+          console.log('Successfully fetched categories');
         } else {
           console.log('No categories found in API response');
           setCategories([]);
@@ -100,8 +104,25 @@ export default function Header() {
         setError(null);
       } catch (error) {
         console.error('Error fetching categories:', error);
+        
+        // Try again if we haven't exhausted retries
+        if (retryCount < 2) {
+          console.log(`Retrying category fetch (attempt ${retryCount + 1})...`);
+          setTimeout(() => {
+            fetchCategories(retryCount + 1);
+          }, 1000 * (retryCount + 1)); // Exponential backoff
+          return;
+        }
+        
+        // If all retries failed, use fallback categories
         setError('Failed to load categories');
-        setCategories([]);
+        setCategories([
+          { id: 'electronics', name: 'Electronics', slug: 'electronics', description: '', image: '', count: 0 },
+          { id: 'clothing', name: 'Clothing', slug: 'clothing', description: '', image: '', count: 0 },
+          { id: 'home-kitchen', name: 'Home & Kitchen', slug: 'home-kitchen', description: '', image: '', count: 0 },
+          { id: 'beauty', name: 'Beauty', slug: 'beauty', description: '', image: '', count: 0 },
+          { id: 'books', name: 'Books', slug: 'books', description: '', image: '', count: 0 }
+        ]);
       } finally {
         setLoading(false);
       }

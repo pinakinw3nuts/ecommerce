@@ -6,10 +6,21 @@ export const metadata: Metadata = {
   description: 'Browse our collection of high-quality products at great prices.',
 };
 
-export default function ProductsPage({
+export default async function ProductsPage({
   searchParams,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
 }) {
-  return <ShopPage searchParams={searchParams} />;
+  // Create a plain object with the search parameters to avoid using dynamic API synchronously
+  const parsedParams: { [key: string]: string | string[] | undefined } = {};
+  
+  // Safely extract search parameters
+  if (searchParams.category) parsedParams.category = searchParams.category;
+  if (searchParams.sort) parsedParams.sort = searchParams.sort;
+  if (searchParams.page) parsedParams.page = searchParams.page;
+  if (searchParams.minPrice) parsedParams.minPrice = searchParams.minPrice;
+  if (searchParams.maxPrice) parsedParams.maxPrice = searchParams.maxPrice;
+  if (searchParams.search) parsedParams.search = searchParams.search;
+  
+  return <ShopPage searchParams={parsedParams} />;
 } 

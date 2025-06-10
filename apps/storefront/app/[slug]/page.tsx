@@ -11,14 +11,6 @@ type CMSPage = {
   jsonLd?: string;
 };
 
-// Define the params type for Next.js 14 dynamic routes
-type PageParams = {
-  params: {
-    slug: string;
-  };
-  searchParams: Record<string, string | string[] | undefined>;
-};
-
 // Helper function to extract slug safely
 async function extractSlug(params: any): Promise<string> {
   // In Next.js 14, params might be a Promise
@@ -26,7 +18,11 @@ async function extractSlug(params: any): Promise<string> {
   return resolvedParams?.slug || '';
 }
 
-export async function generateMetadata({ params }: PageParams): Promise<Metadata> {
+export async function generateMetadata({ 
+  params 
+}: { 
+  params: { slug: string } 
+}): Promise<Metadata> {
   try {
     // Extract slug safely
     const slug = await extractSlug(params);
@@ -48,7 +44,11 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   }
 }
 
-export default async function CMSPageRenderer({ params }: PageParams) {
+export default async function CMSPageRenderer({ 
+  params 
+}: { 
+  params: { slug: string } 
+}) {
   try {
     // Extract slug safely
     const slug = await extractSlug(params);

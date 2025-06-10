@@ -42,11 +42,12 @@ export interface Product {
   description: string;
   price: number;
   stock: number;
-  image: string;
+  image?: string;
+  mediaUrl?: string; // Added mediaUrl property from API response
   isPublished: boolean;
   isFeatured: boolean;
   slug: string;
-  category: string;
+  category: string | { id: string; name: string; description?: string };
   createdAt: string;
   updatedAt: string;
   status: 'in_stock' | 'low_stock' | 'out_of_stock';

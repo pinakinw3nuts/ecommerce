@@ -72,11 +72,11 @@ export const services: Record<string, ServiceConfig> = {
     adminRoutes: true,
     specialCases: [
       {
-        pattern: /^\/api\/v\d+\/admin\/(products|categories|brands|tags|coupons)(\/.*)?(\?|$)/,
+        pattern: /^\/api\/v\d+\/admin\/(products|categories|brands|tags|coupons)(\/.*)?(\?.*)?$/,
         handler: 'product'
       },
       {
-        pattern: /^\/api\/admin\/(products|categories|brands|tags|coupons)(\/.*)?(\?|$)/,
+        pattern: /^\/api\/admin\/(products|categories|brands|tags|coupons)(\/.*)?(\?.*)?$/,
         handler: 'product'
       },
       {
@@ -193,12 +193,17 @@ function extractBasePath(path: string): string {
 export function findServiceForPath(path: string): ServiceConfig | undefined {
   // Extract base path without query parameters
   const basePath = extractBasePath(path);
+  
+  console.log(`Finding service for path: ${path}, base path: ${basePath}`);
 
   // First check special cases
-  for (const [, service] of Object.entries(services)) {
+  for (const [serviceName, service] of Object.entries(services)) {
     if (service.specialCases) {
       for (const specialCase of service.specialCases) {
-        if (specialCase.pattern.test(path)) {
+        const matches = specialCase.pattern.test(path);
+        console.log(`Testing special case for ${serviceName}: ${specialCase.pattern} - Matches: ${matches}`);
+        if (matches) {
+          console.log(`Found special case match: ${path} -> ${specialCase.handler} service`);
           return services[specialCase.handler];
         }
       }

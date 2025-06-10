@@ -39,6 +39,9 @@ export async function forwardRequest(serviceRequest: ServiceRequest): Promise<Se
   try {
     // Special detailed logging for user service requests
     const isUserServiceRequest = url.includes('user-service') || url.includes('3002');
+    // Special logging for brand update requests
+    const isBrandUpdateRequest = url.includes('/api/v1/admin/brands/') && method === 'PUT';
+    
     if (isUserServiceRequest) {
       logger.info({
         msg: 'Forwarding request to user service',
@@ -58,6 +61,20 @@ export async function forwardRequest(serviceRequest: ServiceRequest): Promise<Se
           bodyKeys: body ? Object.keys(body as object) : [],
         });
       }
+    }
+
+    // Special logging for brand update requests
+    if (isBrandUpdateRequest) {
+      logger.info({
+        msg: 'BRAND UPDATE DEBUG',
+        method,
+        url,
+        contentType: headers['content-type'],
+        bodyType: body ? typeof body : 'none',
+        bodyKeys: body && typeof body === 'object' ? Object.keys(body) : [],
+        bodyString: body ? JSON.stringify(body).substring(0, 500) : 'none',
+        bodyIsEmpty: !body || (typeof body === 'object' && Object.keys(body).length === 0)
+      });
     }
 
     // Log the full URL and headers for debugging

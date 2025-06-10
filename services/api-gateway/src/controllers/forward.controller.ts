@@ -21,6 +21,8 @@ export async function forwardHandler(
       msg: 'Attempting to find service for path',
       path,
       requestId,
+      method: request.method,
+      headers: JSON.stringify(request.headers)
     });
 
     // Find the appropriate service for this path
@@ -31,12 +33,13 @@ export async function forwardHandler(
         msg: 'No service found for path',
         path,
         requestId,
+        method: request.method
       });
 
       return reply.status(404).send({
         status: 404,
         code: 'NOT_FOUND',
-        message: 'No service configured for this path',
+        message: `Route ${request.method}:${path} not found`,
         timestamp: new Date().toISOString(),
         requestId,
       });

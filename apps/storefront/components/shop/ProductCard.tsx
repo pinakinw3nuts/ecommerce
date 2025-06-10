@@ -105,7 +105,13 @@ export function ProductCard({ product, priority = false, className, viewMode = '
               />
             ) : (
               <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                <span className="text-gray-400">No image</span>
+                <Image 
+                  src="https://via.placeholder.com/500x500?text=No+Image"
+                  alt="No image available"
+                  width={500}
+                  height={500}
+                  className="object-cover w-full h-full"
+                />
               </div>
             )}
             
@@ -202,7 +208,13 @@ export function ProductCard({ product, priority = false, className, viewMode = '
                 />
               ) : (
                 <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                  <span className="text-gray-400">No image</span>
+                  <Image 
+                    src="https://via.placeholder.com/300x300?text=No+Image"
+                    alt="No image available"
+                    width={300}
+                    height={300}
+                    className="object-cover w-full h-full"
+                  />
                 </div>
               )}
               

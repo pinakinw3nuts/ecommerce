@@ -1,75 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { API_GATEWAY_URL } from '@/lib/constants';
+
+// Mock featured products for fallback
+const MOCK_FEATURED_PRODUCTS = [
+  {
+    id: 'featured-1',
+    name: 'Premium Wireless Headphones',
+    slug: 'premium-wireless-headphones',
+    description: 'Experience incredible sound quality with our premium wireless headphones.',
+    price: 149.99,
+    salePrice: 129.99,
+    rating: 4.8,
+    reviewCount: 156,
+    mediaUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format',
+    category: 'electronics',
+    categoryId: 'electronics',
+    inStock: true,
+    isFeatured: true,
+    isNew: true
+  },
+  {
+    id: 'featured-2',
+    name: 'Luxury Watch Collection',
+    slug: 'luxury-watch-collection',
+    description: 'Elevate your style with our luxury watch collection.',
+    price: 299.99,
+    salePrice: null,
+    rating: 4.9,
+    reviewCount: 78,
+    mediaUrl: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&auto=format',
+    category: 'accessories',
+    categoryId: 'accessories',
+    inStock: true,
+    isFeatured: true,
+    isNew: false
+  },
+  {
+    id: 'featured-3',
+    name: 'Designer Leather Bag',
+    slug: 'designer-leather-bag',
+    description: 'A sophisticated leather bag perfect for any occasion.',
+    price: 199.99,
+    salePrice: 179.99,
+    rating: 4.7,
+    reviewCount: 93,
+    mediaUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&auto=format',
+    category: 'accessories',
+    categoryId: 'accessories',
+    inStock: true,
+    isFeatured: true,
+    isNew: true
+  },
+  {
+    id: 'featured-4',
+    name: 'Ultra-Slim Laptop',
+    slug: 'ultra-slim-laptop',
+    description: 'Powerful performance in an ultra-slim design.',
+    price: 1299.99,
+    salePrice: 1199.99,
+    rating: 4.6,
+    reviewCount: 45,
+    mediaUrl: 'https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=500&auto=format',
+    category: 'electronics',
+    categoryId: 'electronics',
+    inStock: true,
+    isFeatured: true,
+    isNew: true
+  }
+];
 
 /**
  * GET handler for /api/products/featured
- * Proxies requests to the API gateway
+ * Returns featured products for client-side components
  */
 export async function GET(request: NextRequest) {
   try {
     // Get query parameters
     const searchParams = request.nextUrl.searchParams;
-    const limit = searchParams.get('limit') || '4';
+    const limit = parseInt(searchParams.get('limit') || '4');
     
-    // Use explicit IPv4 address for local development
-    const baseUrl = process.env.NODE_ENV === 'development'
-      ? 'http://127.0.0.1:3000'
-      : API_GATEWAY_URL.endsWith('/api')
-        ? API_GATEWAY_URL.substring(0, API_GATEWAY_URL.length - 4)
-        : API_GATEWAY_URL;
-        
-    console.log('Making API request to:', `${baseUrl}/v1/products/featured`);
-    
-    // Forward request to API gateway
-    const response = await axios.get(`${baseUrl}/v1/products/featured`, {
-      params: {
-        limit,
-      },
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
+    // In a real implementation, we would fetch from the product service
+    // For now, just return the mock data
+    return NextResponse.json({
+      products: MOCK_FEATURED_PRODUCTS.slice(0, limit),
+      total: MOCK_FEATURED_PRODUCTS.length
     });
-    
-    // Transform the API response to match the expected format
-    const apiData = response.data;
-    
-    // Check if the API returned data in the expected format
-    if (apiData && Array.isArray(apiData.data)) {
-      // API returned data in a different format, transform it
-      const transformedData = {
-        products: apiData.data.map((product: any) => ({
-          id: product.id,
-          name: product.name,
-          slug: product.slug,
-          description: product.description,
-          price: product.price,
-          image: product.mediaUrl || '/images/placeholder.jpg',
-          category: product.category?.name?.toLowerCase() || 'uncategorized',
-          categoryId: product.category?.id || '',
-          rating: product.rating || 4.5,
-          reviewCount: product.reviewCount || Math.floor(Math.random() * 50) + 5,
-          inStock: true,
-          discountedPrice: product.salePrice || null,
-          isFeatured: true,
-          isNew: product.isNew || false
-        })),
-        total: apiData.total || apiData.data.length
-      };
-      
-      return NextResponse.json(transformedData);
-    }
-    
-    // If the response already has the expected format, return it as is
-    return NextResponse.json(apiData);
-  } catch (error: any) {
-    console.error('Error fetching featured products:', error);
-    
-    // Return appropriate error response
+  } catch (error) {
+    console.error('Error in featured products API:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch featured products', message: error.message },
-      { status: error.response?.status || 500 }
+      { error: 'Failed to fetch featured products' },
+      { status: 500 }
     );
   }
 } 

@@ -1,16 +1,20 @@
 'use client';
 
-import { Metadata } from 'next';
 import { useSearchParams } from 'next/navigation';
 import ResetPasswordForm from '@/components/auth/ResetPasswordForm';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
-export const metadata: Metadata = {
-  title: 'Reset Password | Shopfinity',
-  description: 'Create a new password for your Shopfinity account.',
-};
+// Loading component
+function ResetPasswordLoading() {
+  return (
+    <div className="container max-w-md mx-auto px-4 py-12 text-center">
+      <div className="animate-pulse">Validating reset link...</div>
+    </div>
+  );
+}
 
-export default function ResetPasswordPage() {
+// Main content component
+function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const [isValidToken, setIsValidToken] = useState<boolean | null>(null);
@@ -89,5 +93,14 @@ export default function ResetPasswordPage() {
       <h1 className="text-2xl font-bold mb-6 text-center">Reset Your Password</h1>
       <ResetPasswordForm token={token} />
     </div>
+  );
+}
+
+// Main exported component with Suspense
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordLoading />}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 } 

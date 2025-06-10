@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Import the mockWishlist from the parent route
+// Create a local mock wishlist
 // In a real implementation, this would be a database query
-import { mockWishlist } from '../route';
+const mockWishlist = [
+  { productId: '1', userId: '123', addedAt: new Date().toISOString() },
+  { productId: '2', userId: '123', addedAt: new Date().toISOString() },
+  { productId: '3', userId: '123', addedAt: new Date().toISOString() }
+];
 
 // Helper function to extract productId safely
 async function extractProductId(params: any): Promise<string> {

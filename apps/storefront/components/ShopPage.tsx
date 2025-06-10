@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import axios from 'axios';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Filter, SlidersHorizontal, Grid3X3, List, ChevronDown, Search } from 'lucide-react';
@@ -34,7 +34,65 @@ type PriceRange = {
 // Items per page
 const ITEMS_PER_PAGE = 6;
 
-export default function ShopPage() {
+// Loading component
+function ShopPageLoading() {
+  return (
+    <div className="container max-w-6xl mx-auto px-4 py-8">
+      <div className="flex items-center text-sm mb-6 text-gray-500">
+        <div className="h-4 w-10 bg-gray-200 rounded animate-pulse"></div>
+        <span className="mx-2">/</span>
+        <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+      
+      <div className="mb-6">
+        <div className="flex">
+          <div className="relative flex-1">
+            <div className="w-full h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="h-10 w-10 bg-gray-300 rounded animate-pulse ml-2"></div>
+        </div>
+      </div>
+      
+      <div className="flex flex-col md:flex-row gap-6">
+        <div className="md:w-60">
+          <div className="h-8 w-20 bg-gray-200 rounded animate-pulse mb-4"></div>
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="h-6 bg-gray-200 rounded animate-pulse"></div>
+            ))}
+          </div>
+        </div>
+        
+        <div className="flex-1">
+          <div className="flex justify-between items-center mb-6">
+            <div className="h-6 w-40 bg-gray-200 rounded animate-pulse"></div>
+            <div className="flex gap-2">
+              <div className="h-8 w-20 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="border rounded-lg overflow-hidden bg-white animate-pulse">
+                <div className="h-40 bg-gray-200"></div>
+                <div className="p-4 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                  <div className="h-6 bg-gray-300 rounded w-1/3 mt-2"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main content component
+function ShopPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
@@ -643,5 +701,14 @@ export default function ShopPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main exported component with Suspense
+export default function ShopPage() {
+  return (
+    <Suspense fallback={<ShopPageLoading />}>
+      <ShopPageContent />
+    </Suspense>
   );
 } 

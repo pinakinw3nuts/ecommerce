@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { API_GATEWAY_URL } from '@/lib/constants';
+import { API_GATEWAY_URL, PRODUCT_API_URL } from '@/lib/constants';
 
 /**
  * GET handler for /api/categories/featured
@@ -12,17 +12,11 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const limit = searchParams.get('limit') || '10';
     
-    // Use explicit IPv4 address for local development
-    const baseUrl = process.env.NODE_ENV === 'development'
-      ? 'http://127.0.0.1:3000'
-      : API_GATEWAY_URL.endsWith('/api')
-        ? API_GATEWAY_URL.substring(0, API_GATEWAY_URL.length - 4)
-        : API_GATEWAY_URL;
-        
-    console.log('Making API request to:', `${baseUrl}/v1/categories/featured`);
+    
+    console.log('Making API request to:', `${PRODUCT_API_URL}/categories/featured`);
     
     // Forward request to API gateway
-    const response = await axios.get(`${baseUrl}/v1/categories/featured`, {
+    const response = await axios.get(`${PRODUCT_API_URL}/categories/featured`, {
       params: {
         limit,
       },

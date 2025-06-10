@@ -3,6 +3,54 @@ import axios from 'axios';
 import { API_GATEWAY_URL } from '@/lib/constants';
 
 /**
+ * Process logo URL to ensure consistency
+ * @param logoUrl Original logo URL from API
+ */
+function processLogoUrl(logoUrl: string | undefined | null, brandName: string): string {
+  // Return placeholder if no logo
+  if (!logoUrl) {
+    return '/images/placeholder.jpg';
+  }
+  
+  // If it's already a full URL, keep it
+  if (logoUrl.startsWith('http')) {
+    return logoUrl;
+  }
+  
+  // If it's already a /storage/ path, use it directly
+  if (logoUrl.startsWith('/storage/')) {
+    return logoUrl;
+  }
+  
+  // Extract the filename for direct access if it contains brands/
+  if (logoUrl.includes('brands/')) {
+    // Get just the filename
+    const segments = logoUrl.split('/');
+    const filename = segments[segments.length - 1];
+    return `/storage/brands/${filename}`;
+  }
+  
+  // If it has a /public/ prefix, remove it
+  if (logoUrl.startsWith('/public/')) {
+    const pathWithoutPublic = logoUrl.replace('/public/', '/');
+    return pathWithoutPublic;
+  }
+  
+  // Last attempt: if it's just a filename without path, assume it's in brands directory
+  if (!logoUrl.includes('/')) {
+    return `/storage/brands/${logoUrl}`;
+  }
+  
+  // Add a leading slash if needed
+  if (!logoUrl.startsWith('/')) {
+    return `/${logoUrl}`;
+  }
+  
+  // Return the path as is
+  return logoUrl;
+}
+
+/**
  * GET handler for /api/brands
  * Proxies requests to the API gateway
  */
@@ -19,8 +67,6 @@ export async function GET(request: NextRequest) {
       : API_GATEWAY_URL.endsWith('/api')
         ? API_GATEWAY_URL.substring(0, API_GATEWAY_URL.length - 4)
         : API_GATEWAY_URL;
-    
-    console.log('Making API request to:', `${baseUrl}/v1/brands`);
     
     // Forward request to API gateway
     const response = await axios.get(`${baseUrl}/v1/brands`, {
@@ -42,15 +88,21 @@ export async function GET(request: NextRequest) {
     if (apiData && Array.isArray(apiData)) {
       // API returned data in the expected format, transform it to our structure
       const transformedData = {
-        brands: apiData.map((brand: any) => ({
-          id: brand.id,
-          name: brand.name,
-          slug: brand.name.toLowerCase().replace(/\s+/g, '-'),
-          description: brand.description || '',
-          logo: brand.logoUrl || '/images/placeholder.jpg',
-          website: brand.website || '#',
-          productCount: brand.products?.length || 0
-        })),
+        brands: apiData.map((brand: any) => {
+          // Process the logo URL
+          const logoUrl = processLogoUrl(brand.logoUrl, brand.name);
+          
+          return {
+            id: brand.id,
+            name: brand.name,
+            slug: brand.name.toLowerCase().replace(/\s+/g, '-'),
+            description: brand.description || '',
+            logo: logoUrl,
+            logoUrl: logoUrl, // Include both for compatibility
+            website: brand.website || '#',
+            productCount: brand.products?.length || 0
+          };
+        }),
         total: apiData.length,
         page: parseInt(page),
         limit: parseInt(limit),

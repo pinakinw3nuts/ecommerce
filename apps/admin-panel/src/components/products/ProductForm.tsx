@@ -44,7 +44,16 @@ const productSchema = z
     isPublished: z.boolean().default(false),
     isFeatured: z.boolean().default(false),
     
-    image: z.string().optional(),
+    // Updated image field with better validation
+    image: z.string()
+      .optional()
+      .refine(
+        val => !val || val === '' || 
+          /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(val) || 
+          /^(https?:\/\/.*\.(jpg|jpeg|png|gif|webp|svg))/i.test(val) ||
+          /^\/storage\/products\/.+$/i.test(val),
+        { message: 'Image must be a valid image URL or path' }
+      ),
     
     brandId: z.string().optional()
       .refine(
@@ -207,7 +216,7 @@ const productSchema = z
 type ProductFormData = z.infer<typeof productSchema>;
 
 interface ProductFormProps {
-  initialData?: Partial<ProductFormData>;
+  initialData?: Partial<ProductFormData> & { id?: string };
   onSubmit: (data: ProductFormData) => Promise<void>;
   isEditing?: boolean;
 }
@@ -687,6 +696,66 @@ export function ProductForm({ initialData, onSubmit, isEditing = false }: Produc
   const handleFormSubmit = async (data: ProductFormData) => {
     try {
       console.log('Form submission data:', data);
+      
+      // Handle image upload first if there's a new image
+      if (imageFile) {
+        try {
+          console.log('Uploading image file:', imageFile.name, 'Size:', imageFile.size, 'Type:', imageFile.type);
+          
+          const formData = new FormData();
+          formData.append('file', imageFile);
+          
+          // If we're editing, include the product ID
+          if (isEditing && initialData?.id) {
+            console.log('Including product ID for image association:', initialData.id);
+            formData.append('productId', initialData.id);
+          }
+          
+          // Show upload progress
+          toast.info('Uploading product image...');
+          
+          const uploadResponse = await fetch('/api/products/upload-image', {
+            method: 'POST',
+            body: formData,
+          });
+          
+          console.log('Upload response status:', uploadResponse.status);
+          
+          const responseText = await uploadResponse.text();
+          console.log('Raw upload response:', responseText);
+          
+          if (!uploadResponse.ok) {
+            let errorMessage = 'Failed to upload image';
+            try {
+              const errorData = JSON.parse(responseText);
+              errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+              // If not valid JSON, use the raw text
+              errorMessage = responseText || errorMessage;
+            }
+            throw new Error(errorMessage);
+          }
+          
+          let uploadData;
+          try {
+            uploadData = JSON.parse(responseText);
+          } catch (e) {
+            throw new Error('Invalid response from server: ' + responseText);
+          }
+          
+          if (uploadData && uploadData.imageUrl) {
+            data.image = uploadData.imageUrl;
+            toast.success('Image uploaded successfully');
+            console.log('Image uploaded successfully:', uploadData.imageUrl);
+          } else {
+            throw new Error('No image URL returned from server');
+          }
+        } catch (uploadError: any) {
+          console.error('Image upload failed:', uploadError);
+          toast.error(`Image upload failed: ${uploadError.message}`);
+          // Continue with form submission without the image
+        }
+      }
       
       // Ensure proper SEO metadata handling
       const formattedSeoMetadata = {

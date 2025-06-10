@@ -1,5 +1,6 @@
 'use client';
 
+import './config.js';
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, CreditCard, MapPin, Package, Truck, ChevronDown, Tag } from 'lucide-react';

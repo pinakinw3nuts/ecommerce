@@ -48,31 +48,96 @@ export function EditBrandClient({ id }: EditBrandClientProps) {
 
   const handleUpdateBrand = async (data: any) => {
     try {
-      console.log('Updating brand with data:', data);
-      const response = await fetch(`/api/brands/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      console.log('Update response status:', response.status);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Error response:', errorData);
-        throw new Error(errorData.message || 'Failed to update brand');
+      // Log the exact data we're sending
+      console.log('Sending brand update data:', data);
+      
+      // Validate the data before sending
+      if (!data || !data.name) {
+        console.error('Invalid brand data - missing required fields');
+        toast.error('Brand name is required');
+        return;
       }
+      
+      // Make sure we have valid content
+      const payload = {
+        name: data.name,
+        description: data.description || '',
+        website: data.website || '',
+        isActive: data.isActive === undefined ? true : data.isActive,
+        ...(data.logoUrl && { logoUrl: data.logoUrl }),
+      };
+      
+      console.log('Formatted payload:', payload);
+      
+      // Validate the payload isn't empty
+      if (Object.keys(payload).length === 0) {
+        console.error('Empty payload generated');
+        toast.error('Cannot update with empty data');
+        return;
+      }
+      
+      // Stringify the payload and validate it's not empty
+      const payloadString = JSON.stringify(payload);
+      if (!payloadString || payloadString === '{}') {
+        console.error('Empty JSON payload generated');
+        toast.error('Cannot update with empty data');
+        return;
+      }
+      
+      console.log('Sending request to API with payload string:', payloadString);
+      
+      // Use the Fetch API with explicit options
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      try {
+        const response = await fetch(`/api/brands/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json;charset=UTF-8',
+            'Accept': 'application/json'
+          },
+          body: payloadString,
+          signal: controller.signal,
+          cache: 'no-cache',
+          credentials: 'same-origin'
+        });
+        
+        clearTimeout(timeoutId);
+        console.log('Update response status:', response.status);
+        
+        // Try to read the response body regardless of status
+        const responseText = await response.text();
+        console.log('Raw response:', responseText);
+        
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (e) {
+          console.error('Failed to parse response as JSON:', e);
+          responseData = { message: responseText || 'Unknown error' };
+        }
+        
+        if (!response.ok) {
+          console.error('Error response data:', responseData);
+          throw new Error(responseData.message || 'Failed to update brand');
+        }
 
-      const updatedBrand = await response.json();
-      console.log('Updated brand:', updatedBrand);
-      toast.success('Brand updated successfully');
-      router.push('/products/brands');
-      router.refresh();
+        console.log('Updated brand:', responseData);
+        toast.success('Brand updated successfully');
+        router.push('/products/brands');
+        router.refresh();
+      } catch (fetchError: unknown) {
+        if ((fetchError as { name?: string })?.name === 'AbortError') {
+          console.error('Request timed out');
+          toast.error('Request timed out. Please try again.');
+        } else {
+          throw fetchError;
+        }
+      }
     } catch (error) {
       console.error('Error updating brand:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to update brand');
-      throw error;
     }
   };
 

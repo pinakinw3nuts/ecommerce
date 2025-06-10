@@ -63,6 +63,7 @@ export class CategoryService {
     parentId?: string | null;
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC';
+    includeParent?: boolean;
   }) {
     const where: FindOptionsWhere<Category> = {};
     
@@ -85,12 +86,18 @@ export class CategoryService {
       orderBy.createdAt = 'DESC';
     }
 
+    // Determine which relations to include
+    const relations = ['products', 'children'];
+    if (options?.includeParent) {
+      relations.push('parent');
+    }
+
     const [categories, total] = await this.categoryRepo.findAndCount({
       where,
       skip: options?.skip,
       take: options?.take,
       order: orderBy,
-      relations: ['products', 'children', 'parent'],
+      relations,
     });
 
     return {

@@ -33,7 +33,7 @@ const createAPI = () => {
   const baseURL = typeof window !== 'undefined' 
     ? '/api' // Client-side: Use relative URL
     : process.env.NODE_ENV === 'development'
-      ? 'http://127.0.0.1:3000/api' // Server-side development (using IPv4 explicitly)
+      ? 'http://127.0.0.1:3003/api/v1' // Server-side development (using IPv4 explicitly)
       : API_GATEWAY_URL; // Server-side in Docker/production
       
   const api = axios.create({
