@@ -495,16 +495,16 @@ export const productController = {
       }
     });
 
-    // GET /products/:identifier - Get a product by ID or slug
-    fastify.get('/:identifier', {
+    // GET /products/slug/:slug - Get a product by slug (NEW ENDPOINT)
+    fastify.get('/slug/:slug', {
       schema: {
         tags: ['products'],
-        summary: 'Get a product by ID or slug',
+        summary: 'Get a product by slug',
         params: {
           type: 'object',
-          required: ['identifier'],
+          required: ['slug'],
           properties: {
-            identifier: { type: 'string', description: 'Product ID or slug' }
+            slug: { type: 'string', description: 'Product slug' }
           }
         },
         response: {
@@ -519,6 +519,7 @@ export const productController = {
               mediaUrl: { type: 'string', nullable: true },
               isFeatured: { type: 'boolean' },
               isPublished: { type: 'boolean' },
+              // Include all other product properties
               salePrice: { type: 'number', nullable: true },
               saleStartDate: { type: 'string', format: 'date-time', nullable: true },
               saleEndDate: { type: 'string', format: 'date-time', nullable: true },
@@ -593,44 +594,16 @@ export const productController = {
           }
         }
       },
-      handler: async (request: FastifyRequest<{ Params: ProductParams }>, reply) => {
+      handler: async (request: FastifyRequest<{ Params: { slug: string } }>, reply) => {
         try {
-          const { identifier } = request.params;
-          console.log(`Getting product with identifier: ${identifier}`);
+          const { slug } = request.params;
+          console.log(`Getting product with slug: ${slug}`);
           
-          let product: Product | null;
-
-          // Try to find by ID first
-          product = await productService.getProductById(identifier);
-          console.log(`Product retrieval result:`, {
-            found: !!product,
-            fields: product ? Object.keys(product) : [],
-            relations: product ? {
-              hasCategory: !!product.category,
-              hasTags: Array.isArray(product.tags) ? product.tags.length : 0,
-              hasVariants: Array.isArray(product.variants) ? product.variants.length : 0,
-              hasBrand: !!product.brand,
-              hasImages: Array.isArray(product.images) ? product.images.length : 0,
-              hasAttributes: Array.isArray(product.attributes) ? product.attributes.length : 0
-            } : null
-          });
-
-          // If not found by ID, try to find by slug
-          if (!product) {
-            console.log(`Product not found by ID, trying by slug...`);
-            const result = await productService.listProducts({
-              filters: { search: identifier },
-              pagination: { page: 1, limit: 1 }
-            });
-            product = result.data.find((p: Product) => p.slug === identifier) || null;
-            console.log(`Search result:`, {
-              found: !!product,
-              totalResults: result.data.length
-            });
-          }
+          // Use the dedicated slug lookup method
+          const product = await productService.getProductBySlug(slug);
 
           if (!product) {
-            console.log(`Product not found with identifier: ${identifier}`);
+            console.log(`Product not found with slug: ${slug}`);
             return reply.code(404).send({ message: 'Product not found' });
           }
 
@@ -640,9 +613,377 @@ export const productController = {
           console.log(`Sending full product response with fields:`, Object.keys(fullProduct));
           return reply.send(fullProduct);
         } catch (error) {
-          console.error(`Error retrieving product:`, error);
+          console.error(`Error retrieving product by slug:`, error);
           request.log.error(error);
           return reply.code(500).send({ message: 'Internal server error', error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+    });
+
+    // GET /products/:id - Get a product by ID (MODIFIED TO BE ID-ONLY)
+    fastify.get('/:id', {
+      schema: {
+        tags: ['products'],
+        summary: 'Get a product by ID',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Product ID (UUID)' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              description: { type: 'string' },
+              price: { type: 'number' },
+              slug: { type: 'string' },
+              mediaUrl: { type: 'string', nullable: true },
+              isFeatured: { type: 'boolean' },
+              isPublished: { type: 'boolean' },
+              // All other product properties remain the same
+              salePrice: { type: 'number', nullable: true },
+              saleStartDate: { type: 'string', format: 'date-time', nullable: true },
+              saleEndDate: { type: 'string', format: 'date-time', nullable: true },
+              stockQuantity: { type: 'number' },
+              isInStock: { type: 'boolean' },
+              specifications: { type: 'string', nullable: true },
+              keywords: { 
+                type: 'array',
+                items: { type: 'string' },
+                nullable: true
+              },
+              seoMetadata: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  title: { type: 'string', nullable: true },
+                  description: { type: 'string', nullable: true },
+                  keywords: { 
+                    type: 'array', 
+                    items: { type: 'string' },
+                    nullable: true
+                  },
+                  ogImage: { type: 'string', nullable: true }
+                }
+              },
+              category: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  description: { type: 'string', nullable: true }
+                }
+              },
+              brand: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' }
+                }
+              },
+              variants: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    sku: { type: 'string' },
+                    price: { type: 'number' },
+                    stock: { type: 'number' }
+                  }
+                }
+              },
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' }
+                  }
+                }
+              }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+        try {
+          const { id } = request.params;
+          console.log(`Getting product with ID: ${id}`);
+          
+          // Only use the ID lookup method
+          const product = await productService.getProductById(id);
+
+          if (!product) {
+            console.log(`Product not found with ID: ${id}`);
+            return reply.code(404).send({ message: 'Product not found' });
+          }
+
+          // Format the product response using the helper function
+          const fullProduct = formatProductResponse(product);
+
+          console.log(`Sending full product response with fields:`, Object.keys(fullProduct));
+          return reply.send(fullProduct);
+        } catch (error) {
+          console.error(`Error retrieving product by ID:`, error);
+          request.log.error(error);
+          return reply.code(500).send({ message: 'Internal server error', error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+    });
+
+    // GET /products/related/:slug - Get related products by slug
+    fastify.get('/related/:slug', {
+      schema: {
+        tags: ['products'],
+        summary: 'Get related products by slug',
+        params: {
+          type: 'object',
+          required: ['slug'],
+          properties: {
+            slug: { type: 'string', description: 'Product slug' }
+          }
+        },
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'number', default: 4, description: 'Number of related products to return' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              relatedProducts: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    slug: { type: 'string' },
+                    price: { type: 'number' },
+                    salePrice: { type: 'number', nullable: true },
+                    thumbnail: { type: 'string', nullable: true },
+                    description: { type: 'string' },
+                    rating: { type: 'number', default: 0 },
+                    isInStock: { type: 'boolean' }
+                  }
+                }
+              }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{ Params: { slug: string }, Querystring: { limit?: number } }>, reply) => {
+        try {
+          const { slug } = request.params;
+          const limit = request.query.limit || 4;
+          
+          console.log(`Getting related products for slug: ${slug}, limit: ${limit}`);
+          
+          // First, get the current product to find its category
+          const product = await productService.getProductBySlug(slug);
+          
+          if (!product) {
+            return reply.code(404).send({ message: 'Product not found' });
+          }
+          
+          // Get products in the same category, excluding the current product
+          const relatedProductsResult = await productService.listProducts({
+            filters: {
+              categoryId: product.category?.id,
+              excludeProductId: product.id
+            },
+            pagination: { page: 1, limit: limit as number }
+          });
+          
+          // If we don't have enough products from the same category, get some featured products
+          let relatedProducts = relatedProductsResult.data;
+          
+          if (relatedProducts.length < limit) {
+            const featuredProductsResult = await productService.listProducts({
+              filters: {
+                isFeatured: true,
+                excludeProductId: product.id
+              },
+              pagination: { page: 1, limit: limit as number - relatedProducts.length }
+            });
+            
+            // Combine results, ensuring no duplicates
+            const featuredIds = new Set(relatedProducts.map(p => p.id));
+            const additionalFeatured = featuredProductsResult.data.filter(p => !featuredIds.has(p.id));
+            
+            relatedProducts = [...relatedProducts, ...additionalFeatured].slice(0, limit as number);
+          }
+          
+          // Format the related products for the response
+          const formattedRelatedProducts = relatedProducts.map(p => ({
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            price: p.price,
+            salePrice: p.salePrice,
+            thumbnail: p.mediaUrl || null,
+            description: p.description,
+            rating: p.rating || 0,
+            isInStock: p.isInStock
+          }));
+          
+          return reply.send({ relatedProducts: formattedRelatedProducts });
+        } catch (error) {
+          request.log.error(error);
+          return reply.code(500).send({ 
+            message: 'Error fetching related products',
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+    });
+
+    // GET /reviews/product-slug/:slug - Get reviews for a product by slug
+    fastify.get('/reviews/product-slug/:slug', {
+      schema: {
+        tags: ['reviews'],
+        summary: 'Get reviews for a product by slug',
+        params: {
+          type: 'object',
+          required: ['slug'],
+          properties: {
+            slug: { type: 'string', description: 'Product slug' }
+          }
+        },
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', default: 5, description: 'Number of reviews to return' },
+            page: { type: 'integer', default: 1, description: 'Page number' },
+            sort: { type: 'string', enum: ['newest', 'oldest', 'highest', 'lowest'], default: 'newest', description: 'Sort order' },
+            rating: { type: 'integer', description: 'Filter by rating' },
+            verified: { type: 'boolean', description: 'Filter by verified purchase reviews' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              reviews: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    title: { type: 'string' },
+                    content: { type: 'string' },
+                    rating: { type: 'number' },
+                    authorName: { type: 'string' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    isVerifiedPurchase: { type: 'boolean' },
+                    helpfulCount: { type: 'integer' }
+                  }
+                }
+              },
+              pagination: {
+                type: 'object',
+                properties: {
+                  page: { type: 'integer' },
+                  limit: { type: 'integer' },
+                  total: { type: 'integer' },
+                  pages: { type: 'integer' }
+                }
+              },
+              productRating: {
+                type: 'object',
+                properties: {
+                  averageRating: { type: 'number' },
+                  totalReviews: { type: 'integer' },
+                  ratingDistribution: {
+                    type: 'object',
+                    additionalProperties: { type: 'integer' }
+                  }
+                }
+              }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{ 
+        Params: { slug: string },
+        Querystring: { 
+          limit?: number,
+          page?: number,
+          sort?: 'newest' | 'oldest' | 'highest' | 'lowest',
+          rating?: number,
+          verified?: boolean
+        } 
+      }>, reply) => {
+        try {
+          const { slug } = request.params;
+          const { limit = 5, page = 1, sort = 'newest' } = request.query;
+          
+          console.log(`Getting reviews for product with slug: ${slug}, page: ${page}, limit: ${limit}, sort: ${sort}`);
+          
+          // First, check if the product exists
+          const product = await productService.getProductBySlug(slug);
+          
+          if (!product) {
+            return reply.code(404).send({ message: 'Product not found' });
+          }
+          
+          // For now, return mock reviews since we don't have a real review system yet
+          const mockReviews = generateMockReviews(product.id, limit);
+          
+          return reply.send({
+            reviews: mockReviews,
+            pagination: {
+              page,
+              limit,
+              total: 25, // Mock total
+              pages: Math.ceil(25 / limit)
+            },
+            productRating: {
+              averageRating: 4.3, // Mock average
+              totalReviews: 25, // Mock total
+              ratingDistribution: {
+                '5': 15,
+                '4': 5,
+                '3': 3,
+                '2': 1,
+                '1': 1
+              }
+            }
+          });
+        } catch (error) {
+          request.log.error(error);
+          return reply.code(500).send({ 
+            message: 'Error fetching product reviews',
+            error: error instanceof Error ? error.message : String(error)
+          });
         }
       }
     });
@@ -796,6 +1137,256 @@ export const productController = {
           return reply.code(201).send(formattedProduct);
         } catch (error) {
           console.error('Error creating product:', error);
+          return reply.code(500).send({ message: 'Internal server error', error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+    });
+
+    // GET /products/slug/:slug - Get a product by slug (protected version)
+    fastify.get('/slug/:slug', {
+      schema: {
+        tags: ['products'],
+        summary: 'Get a product by slug (protected)',
+        params: {
+          type: 'object',
+          required: ['slug'],
+          properties: {
+            slug: { type: 'string', description: 'Product slug' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              description: { type: 'string' },
+              price: { type: 'number' },
+              slug: { type: 'string' },
+              mediaUrl: { type: 'string', nullable: true },
+              isFeatured: { type: 'boolean' },
+              isPublished: { type: 'boolean' },
+              // Include all other product properties
+              salePrice: { type: 'number', nullable: true },
+              saleStartDate: { type: 'string', format: 'date-time', nullable: true },
+              saleEndDate: { type: 'string', format: 'date-time', nullable: true },
+              stockQuantity: { type: 'number' },
+              isInStock: { type: 'boolean' },
+              specifications: { type: 'string', nullable: true },
+              keywords: { 
+                type: 'array',
+                items: { type: 'string' },
+                nullable: true
+              },
+              seoMetadata: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  title: { type: 'string', nullable: true },
+                  description: { type: 'string', nullable: true },
+                  keywords: { 
+                    type: 'array', 
+                    items: { type: 'string' },
+                    nullable: true
+                  },
+                  ogImage: { type: 'string', nullable: true }
+                }
+              },
+              category: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  description: { type: 'string', nullable: true }
+                }
+              },
+              brand: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' }
+                }
+              },
+              variants: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    sku: { type: 'string' },
+                    price: { type: 'number' },
+                    stock: { type: 'number' }
+                  }
+                }
+              },
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' }
+                  }
+                }
+              }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{ Params: { slug: string } }>, reply) => {
+        try {
+          const { slug } = request.params;
+          console.log(`Getting product with slug: ${slug}`);
+          
+          // Use the dedicated slug lookup method
+          const product = await productService.getProductBySlug(slug);
+
+          if (!product) {
+            console.log(`Product not found with slug: ${slug}`);
+            return reply.code(404).send({ message: 'Product not found' });
+          }
+
+          // Format the product response using the helper function
+          const fullProduct = formatProductResponse(product);
+
+          console.log(`Sending full product response with fields:`, Object.keys(fullProduct));
+          return reply.send(fullProduct);
+        } catch (error) {
+          console.error(`Error retrieving product by slug:`, error);
+          request.log.error(error);
+          return reply.code(500).send({ message: 'Internal server error', error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+    });
+    
+    // GET /products/:id - Get a product by ID (protected version)
+    fastify.get('/:id', {
+      schema: {
+        tags: ['products'],
+        summary: 'Get a product by ID (protected)',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Product ID (UUID)' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              description: { type: 'string' },
+              price: { type: 'number' },
+              slug: { type: 'string' },
+              mediaUrl: { type: 'string', nullable: true },
+              isFeatured: { type: 'boolean' },
+              isPublished: { type: 'boolean' },
+              // All other product properties remain the same
+              salePrice: { type: 'number', nullable: true },
+              saleStartDate: { type: 'string', format: 'date-time', nullable: true },
+              saleEndDate: { type: 'string', format: 'date-time', nullable: true },
+              stockQuantity: { type: 'number' },
+              isInStock: { type: 'boolean' },
+              specifications: { type: 'string', nullable: true },
+              keywords: { 
+                type: 'array',
+                items: { type: 'string' },
+                nullable: true
+              },
+              seoMetadata: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  title: { type: 'string', nullable: true },
+                  description: { type: 'string', nullable: true },
+                  keywords: { 
+                    type: 'array', 
+                    items: { type: 'string' },
+                    nullable: true
+                  },
+                  ogImage: { type: 'string', nullable: true }
+                }
+              },
+              category: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  description: { type: 'string', nullable: true }
+                }
+              },
+              brand: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' }
+                }
+              },
+              variants: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    sku: { type: 'string' },
+                    price: { type: 'number' },
+                    stock: { type: 'number' }
+                  }
+                }
+              },
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' }
+                  }
+                }
+              }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
+          }
+        }
+      },
+      handler: async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+        try {
+          const { id } = request.params;
+          console.log(`Getting product with ID: ${id}`);
+          
+          // Only use the ID lookup method
+          const product = await productService.getProductById(id);
+
+          if (!product) {
+            console.log(`Product not found with ID: ${id}`);
+            return reply.code(404).send({ message: 'Product not found' });
+          }
+
+          // Format the product response using the helper function
+          const fullProduct = formatProductResponse(product);
+
+          console.log(`Sending full product response with fields:`, Object.keys(fullProduct));
+          return reply.send(fullProduct);
+        } catch (error) {
+          console.error(`Error retrieving product by ID:`, error);
+          request.log.error(error);
           return reply.code(500).send({ message: 'Internal server error', error: error instanceof Error ? error.message : String(error) });
         }
       }
@@ -1251,157 +1842,73 @@ export const productController = {
         }
       }
     });
+  }
+};
 
-    // Protected GET /products/:identifier - Get a product by ID or slug
-    fastify.get('/:identifier', {
-      schema: {
-        tags: ['products'],
-        summary: 'Get a product by ID or slug (protected)',
-        params: {
-          type: 'object',
-          required: ['identifier'],
-          properties: {
-            identifier: { type: 'string', description: 'Product ID or slug' }
-          }
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' },
-              description: { type: 'string' },
-              price: { type: 'number' },
-              slug: { type: 'string' },
-              mediaUrl: { type: 'string', nullable: true },
-              isFeatured: { type: 'boolean' },
-              isPublished: { type: 'boolean' },
-              salePrice: { type: 'number', nullable: true },
-              saleStartDate: { type: 'string', format: 'date-time', nullable: true },
-              saleEndDate: { type: 'string', format: 'date-time', nullable: true },
-              stockQuantity: { type: 'number' },
-              isInStock: { type: 'boolean' },
-              specifications: { type: 'string', nullable: true },
-              keywords: { 
-                type: 'array',
-                items: { type: 'string' },
-                nullable: true
-              },
-              seoMetadata: {
-                type: 'object',
-                nullable: true,
-                properties: {
-                  title: { type: 'string', nullable: true },
-                  description: { type: 'string', nullable: true },
-                  keywords: { 
-                    type: 'array', 
-                    items: { type: 'string' },
-                    nullable: true
-                  },
-                  ogImage: { type: 'string', nullable: true }
-                }
-              },
-              category: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  name: { type: 'string' },
-                  description: { type: 'string', nullable: true }
-                }
-              },
-              brand: {
-                type: 'object',
-                nullable: true,
-                properties: {
-                  id: { type: 'string' },
-                  name: { type: 'string' }
-                }
-              },
-              variants: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    name: { type: 'string' },
-                    sku: { type: 'string' },
-                    price: { type: 'number' },
-                    stock: { type: 'number' }
-                  }
-                }
-              },
-              tags: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    name: { type: 'string' }
-                  }
-                }
-              }
-            }
-          },
-          404: {
-            type: 'object',
-            properties: {
-              message: { type: 'string' }
-            }
-          }
-        }
-      },
-      handler: async (request: FastifyRequest<{ Params: ProductParams }>, reply) => {
-        try {
-          const { identifier } = request.params;
-          console.log(`Getting product with identifier: ${identifier}`);
-          
-          let product: Product | null;
-
-          // Try to find by ID first
-          product = await productService.getProductById(identifier);
-          console.log(`Product retrieval result:`, {
-            found: !!product,
-            fields: product ? Object.keys(product) : [],
-            relations: product ? {
-              hasCategory: !!product.category,
-              hasTags: Array.isArray(product.tags) ? product.tags.length : 0,
-              hasVariants: Array.isArray(product.variants) ? product.variants.length : 0,
-              hasBrand: !!product.brand,
-              hasImages: Array.isArray(product.images) ? product.images.length : 0,
-              hasAttributes: Array.isArray(product.attributes) ? product.attributes.length : 0
-            } : null
-          });
-
-          // If not found by ID, try to find by slug
-          if (!product) {
-            console.log(`Product not found by ID, trying by slug...`);
-            const result = await productService.listProducts({
-              filters: { search: identifier },
-              pagination: { page: 1, limit: 1 }
-            });
-            product = result.data.find((p: Product) => p.slug === identifier) || null;
-            console.log(`Search result:`, {
-              found: !!product,
-              totalResults: result.data.length
-            });
-          }
-
-          if (!product) {
-            console.log(`Product not found with identifier: ${identifier}`);
-            return reply.code(404).send({ message: 'Product not found' });
-          }
-
-          // Format the product response using the helper function
-          const fullProduct = formatProductResponse(product);
-
-          console.log(`Sending full product response with fields:`, Object.keys(fullProduct));
-          return reply.send(fullProduct);
-        } catch (error) {
-          console.error(`Error retrieving product:`, error);
-          request.log.error(error);
-          return reply.code(500).send({ message: 'Internal server error', error: error instanceof Error ? error.message : String(error) });
-        }
-      }
+// Helper function to generate mock reviews
+function generateMockReviews(productId: string, count: number = 5) {
+  const reviews = [];
+  const titles = [
+    'Great product!',
+    'Exceeded my expectations',
+    'Good value for money',
+    'Decent quality',
+    'Happy with the purchase',
+    'Works as expected',
+    'Would recommend',
+    'Love it!',
+    'Exactly what I needed',
+    'Fast shipping and great product'
+  ];
+  
+  const contents = [
+    'I really love this product. It works exactly as described and the quality is excellent.',
+    'This product exceeded my expectations. The build quality is great and it performs very well.',
+    'Great value for the price. Would definitely buy again.',
+    'Works well for what I need. No complaints.',
+    'I've been using this for a few weeks now and I'm very satisfied with the purchase.',
+    'The product is good, but the shipping was a bit slow.',
+    'Exactly what I was looking for. Very happy with my purchase.',
+    'The quality is outstanding. Definitely worth the money.',
+    'It does the job, but I was expecting a bit more for the price.',
+    'Perfect fit for my needs. Would recommend to others.'
+  ];
+  
+  const names = [
+    'John D.',
+    'Sarah M.',
+    'Michael T.',
+    'Emily R.',
+    'David B.',
+    'Jessica L.',
+    'Robert S.',
+    'Jennifer K.',
+    'William P.',
+    'Elizabeth C.'
+  ];
+  
+  for (let i = 0; i < count; i++) {
+    const titleIndex = Math.floor(Math.random() * titles.length);
+    const contentIndex = Math.floor(Math.random() * contents.length);
+    const nameIndex = Math.floor(Math.random() * names.length);
+    const rating = Math.floor(Math.random() * 3) + 3; // Random rating between 3-5
+    const date = new Date();
+    date.setDate(date.getDate() - Math.floor(Math.random() * 60)); // Random date within last 60 days
+    
+    reviews.push({
+      id: `review-${productId.substring(0, 8)}-${i + 1}`,
+      title: titles[titleIndex],
+      content: contents[contentIndex],
+      rating,
+      authorName: names[nameIndex],
+      createdAt: date.toISOString(),
+      isVerifiedPurchase: Math.random() > 0.3, // 70% chance of being verified
+      helpfulCount: Math.floor(Math.random() * 50)
     });
   }
-}; 
+  
+  // Sort by newest first
+  reviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  
+  return reviews;
+} 

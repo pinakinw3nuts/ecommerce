@@ -1813,8 +1813,9 @@ const proxyRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       const slug = (request.params as any).slug;
       const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
       
+      // Log the request details
       logger.info({
-        msg: 'Forwarding product details request',
+        msg: 'Forwarding product details by slug request',
         url: `${productServiceUrl}/api/v1/products/slug/${slug}${queryString}`,
         method: 'GET',
         slug
@@ -1832,20 +1833,159 @@ const proxyRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
       // Log successful response
       logger.debug({
-        msg: 'Product details response received',
+        msg: 'Product details by slug response received',
         status: response.status
       });
 
       return reply.status(response.status).send(response.body);
     } catch (error) {
       logger.error({
-        msg: 'Error in product details proxy',
+        msg: 'Error in product details by slug proxy',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch product details by slug',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Specific route for related products
+  fastify.get('/v1/products/related/:slug', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const slug = (request.params as any).slug;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      // Log the request details
+      logger.info({
+        msg: 'Forwarding related products request',
+        url: `${productServiceUrl}/api/v1/products/related/${slug}${queryString}`,
+        method: 'GET',
+        slug
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/products/related/${slug}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      // Log successful response
+      logger.debug({
+        msg: 'Related products response received',
+        status: response.status
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in related products proxy',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch related products',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Specific route for product reviews by slug
+  fastify.get('/v1/reviews/product-slug/:slug', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const slug = (request.params as any).slug;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      // Log the request details
+      logger.info({
+        msg: 'Forwarding product reviews by slug request',
+        url: `${productServiceUrl}/api/v1/reviews/product-slug/${slug}${queryString}`,
+        method: 'GET',
+        slug
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/reviews/product-slug/${slug}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      // Log successful response
+      logger.debug({
+        msg: 'Product reviews by slug response received',
+        status: response.status
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in product reviews by slug proxy',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       
       return reply.status(500).send({
         success: false,
-        message: 'Failed to fetch product details',
+        message: 'Failed to fetch product reviews by slug',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Specific route for product details by ID
+  fastify.get('/v1/products/:id', async (request, reply) => {
+    try {
+      const productServiceUrl = config.services.product;
+      const id = (request.params as any).id;
+      const queryString = request.url.includes('?') ? request.url.substring(request.url.indexOf('?')) : '';
+      
+      logger.info({
+        msg: 'Forwarding product details by ID request',
+        url: `${productServiceUrl}/api/v1/products/${id}${queryString}`,
+        method: 'GET',
+        id
+      });
+
+      // Forward directly to product service
+      const response = await forwardRequest({
+        method: 'GET',
+        url: `${productServiceUrl}/api/v1/products/${id}${queryString}`,
+        headers: {
+          ...request.headers as Record<string, string | string[] | undefined>,
+          host: new URL(productServiceUrl).host,
+        },
+      });
+
+      // Log successful response
+      logger.debug({
+        msg: 'Product details by ID response received',
+        status: response.status
+      });
+
+      return reply.status(response.status).send(response.body);
+    } catch (error) {
+      logger.error({
+        msg: 'Error in product details by ID proxy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to fetch product details by ID',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }

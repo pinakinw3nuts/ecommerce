@@ -18,6 +18,7 @@ export interface ProductFilterOptions {
   isFeatured?: boolean;
   isPublished?: boolean;
   hasSalePrice?: boolean;
+  excludeProductId?: string;
 }
 
 export interface ProductSortOptions {
@@ -159,6 +160,35 @@ export class ProductService {
       return product;
     } catch (error) {
       console.error(`Service: Error getting product by id:`, error);
+      throw error;
+    }
+  }
+
+  async getProductBySlug(slug: string) {
+    console.log(`Service: Getting product by slug ${slug}`);
+    try {
+      const product = await this.productRepo.findOne({
+        where: { slug },
+        relations: ['category', 'tags', 'variants', 'brand', 'images', 'attributes'],
+      });
+      
+      console.log(`Service: Product found by slug: ${!!product}, with fields:`, product ? Object.keys(product) : 'none');
+      
+      if (product) {
+        // Ensure all relations are properly loaded
+        console.log(`Service: Relations loaded:`, {
+          hasCategory: !!product.category,
+          hasTags: Array.isArray(product.tags) ? product.tags.length : 0,
+          hasVariants: Array.isArray(product.variants) ? product.variants.length : 0,
+          hasBrand: !!product.brand,
+          hasImages: Array.isArray(product.images) ? product.images.length : 0,
+          hasAttributes: Array.isArray(product.attributes) ? product.attributes.length : 0
+        });
+      }
+      
+      return product;
+    } catch (error) {
+      console.error(`Service: Error getting product by slug:`, error);
       throw error;
     }
   }
@@ -383,7 +413,7 @@ export class ProductService {
       
       // Log filters for debugging
       if (options?.filters) {
-        const { search, categoryId, categoryIds, minPrice, maxPrice, tagIds, isFeatured, isPublished } = options.filters;
+        const { search, categoryId, categoryIds, minPrice, maxPrice, tagIds, isFeatured, isPublished, excludeProductId } = options.filters;
         
         console.log('Filter options received:', {
           search: search ? `"${search}"` : undefined,
@@ -393,7 +423,8 @@ export class ProductService {
           maxPrice,
           tagIds,
           isFeatured,
-          isPublished
+          isPublished,
+          excludeProductId
         });
         
         // Get the effective category ID (use categoryIds if provided, otherwise use categoryId)
@@ -525,6 +556,13 @@ export class ProductService {
         if (isPublished !== undefined) {
           conditions.push(`product."isPublished" = $${paramIndex}`);
           params.push(isPublished);
+          paramIndex++;
+        }
+        
+        // Filter to exclude a specific product ID
+        if (excludeProductId) {
+          conditions.push(`product."id" != $${paramIndex}`);
+          params.push(excludeProductId);
           paramIndex++;
         }
         

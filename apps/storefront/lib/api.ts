@@ -187,7 +187,15 @@ export const productAPI = {
    * Get product by slug
    */
   getProductBySlug: async (slug: string): Promise<Product> => {
-    const response = await api.get(`/products/${slug}`);
+    const response = await api.get(`/v1/products/slug/${slug}`);
+    return response.data;
+  },
+
+  /**
+   * Get product by ID
+   */
+  getProductById: async (id: string): Promise<Product> => {
+    const response = await api.get(`/v1/products/${id}`);
     return response.data;
   },
 
@@ -195,8 +203,8 @@ export const productAPI = {
    * Get related products for a product
    */
   getRelatedProducts: async (slug: string): Promise<RelatedProduct[]> => {
-    const response = await api.get(`/products/related/${slug}`);
-    return response.data.relatedProducts;
+    const response = await api.get(`/v1/products/related/${slug}`);
+    return response.data.relatedProducts || response.data;
   },
 
   /**
@@ -231,7 +239,7 @@ export const productAPI = {
     if (options?.verified !== undefined) params.append('verified', options.verified.toString());
     
     const queryString = params.toString() ? `?${params.toString()}` : '';
-    const response = await api.get(`/reviews/product/${productId}${queryString}`);
+    const response = await api.get(`/v1/reviews/product/${productId}${queryString}`);
     return response.data;
   },
   
@@ -267,7 +275,7 @@ export const productAPI = {
     if (options?.verified !== undefined) params.append('verified', options.verified.toString());
     
     const queryString = params.toString() ? `?${params.toString()}` : '';
-    const response = await api.get(`/reviews/product-slug/${slug}${queryString}`);
+    const response = await api.get(`/v1/reviews/product-slug/${slug}${queryString}`);
     return response.data;
   }
 };
