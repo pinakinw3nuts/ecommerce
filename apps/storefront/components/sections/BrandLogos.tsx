@@ -170,7 +170,7 @@ export default function BrandLogos() {
                       <div className="relative w-full h-full flex items-center justify-center">
                         <img 
                           src={imageUrl}
-                          alt={brand.name}
+                          alt={brand.name || 'Brand logo'}
                           className="max-w-full max-h-full object-contain"
                           onError={() => handleImageError(brand.id, brand.name, imageUrl)}
                           loading="lazy"

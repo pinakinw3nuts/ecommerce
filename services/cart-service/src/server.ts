@@ -27,7 +27,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   try {
     // Register CORS
-    await server.register<FastifyCorsOptions>(cors as any, {
+    await server.register<FastifyCorsOptions>(cors, {
       origin: process.env.CORS_ORIGIN || true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       credentials: true,
@@ -38,7 +38,36 @@ export async function buildServer(): Promise<FastifyInstance> {
     await server.register(swaggerUi, swaggerUiOptions);
 
     // Health check endpoint
-    server.get('/api/v1/health', async (request, reply) => {
+    server.get('/api/v1/health', {
+      schema: {
+        tags: ['system'],
+        summary: 'Health check endpoint',
+        description: 'Returns the health status of the service and its dependencies',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['ok'] },
+              timestamp: { type: 'string', format: 'date-time' },
+              services: {
+                type: 'object',
+                properties: {
+                  database: { type: 'string', enum: ['up', 'down'] }
+                }
+              }
+            }
+          },
+          503: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['error'] },
+              timestamp: { type: 'string', format: 'date-time' },
+              error: { type: 'string' }
+            }
+          }
+        }
+      }
+    }, async (request, reply) => {
       try {
         // Check database connection
         const dbConnected = AppDataSource.isInitialized;
@@ -66,10 +95,17 @@ export async function buildServer(): Promise<FastifyInstance> {
     // Global error handler
     server.setErrorHandler((error, _request, reply) => {
       server.log.error(error);
-      reply.status(error.statusCode || 500).send({
-        error: error.name || 'InternalServerError',
-        message: error.message || 'An internal server error occurred',
-        statusCode: error.statusCode || 500,
+      
+      const statusCode = error.statusCode || 500;
+      const errorName = error.name || 'InternalServerError';
+      const message = error.message || 'An internal server error occurred';
+      
+      // Format the error response according to our schema
+      return reply.status(statusCode).send({
+        error: errorName,
+        message: message,
+        statusCode: statusCode,
+        details: error.validation || undefined
       });
     });
 
@@ -88,6 +124,7 @@ export async function startServer(): Promise<FastifyInstance> {
     const server = await buildServer();
     await server.listen({ port, host });
     server.log.info(`Server is running on ${host}:${port}`);
+    server.log.info(`API documentation available at http://${host}:${port}/documentation`);
     return server;
   } catch (err) {
     console.error('Error starting server:', err);

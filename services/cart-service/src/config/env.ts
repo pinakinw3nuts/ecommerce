@@ -23,7 +23,7 @@ const envSchema = z.object({
 
   // Product service integration
   PRODUCT_SERVICE_URL: z.string()
-    .default('http://localhost:3000')
+    .default('http://localhost:3003')
     .transform(url => url.trim()),
 
   // JWT configuration for auth

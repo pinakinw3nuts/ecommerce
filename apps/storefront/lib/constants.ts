@@ -4,8 +4,8 @@ export const API_GATEWAY_URL =
   (typeof window !== 'undefined' 
     ? '/api' // Client-side: Use relative URL
     : process.env.NODE_ENV === 'development'
-      ? 'http://127.0.0.1:3003/api/v1' // Server-side development (using IPv4 address)
-      : 'http://api-gateway:3000'); // Server-side in Docker/production
+      ? 'http://127.0.0.1:3004/api/v1' // Server-side development (using correct cart service path)
+      : 'http://api-gateway:3000/api/v1'); // Server-side in Docker/production
 
 // Product API URL specifically for product service
 export const PRODUCT_API_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1:3003/api/v1';

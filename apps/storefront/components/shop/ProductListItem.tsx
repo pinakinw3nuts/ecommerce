@@ -8,7 +8,22 @@ import { Button } from '@components/ui/Button';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useToast } from '@components/ui/Toast';
-import { Product } from './ProductPage';
+
+// Define the Product interface directly in this file
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  salePrice?: number;
+  imageUrl: string;
+  slug: string;
+  description?: string;
+  sku?: string;
+  inStock?: boolean;
+  brand?: string;
+  rating?: number;
+  reviewCount?: number;
+}
 
 interface ProductListItemProps {
   product: Product;
@@ -30,10 +45,14 @@ export default function ProductListItem({ product }: ProductListItemProps) {
     
     addToCart({
       id: product.id,
+      productId: product.id,
       name: product.name,
-      price: product.price,
+      price: hasDiscount && product.salePrice ? product.salePrice : product.price,
       quantity: 1,
-      imageUrl: product.imageUrl,
+      imageUrl: product.imageUrl || '/api/placeholder',
+      description: product.description || product.name,
+      sku: product.sku || `SKU-${product.id.substring(0, 8)}`,
+      inStock: product.inStock !== false
     });
     
     showToast({

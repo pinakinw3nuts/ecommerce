@@ -15,7 +15,8 @@
     "migration:generate": "npm run typeorm migration:generate",
     "migration:run": "npm run typeorm migration:run",
     "migration:revert": "npm run typeorm migration:revert",
-    "db:reset": "cross-env NODE_ENV=development RESET_DB=true ts-node scripts/resetDb.ts"
+    "db:reset": "cross-env NODE_ENV=development RESET_DB=true ts-node scripts/resetDb.ts",
+    "cleanup:carts": "ts-node scripts/cleanup-expired-carts.ts"
   },
   "_moduleAliases": {
     "@": "src",

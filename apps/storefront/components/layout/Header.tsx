@@ -336,7 +336,7 @@ export default function Header() {
                             <div className="w-8 h-8 flex-shrink-0 mr-3">
                               <Image 
                                 src={category.image} 
-                                alt={category.name}
+                                alt={category.name || 'Category image'}
                                 width={32}
                                 height={32}
                                 className="object-contain"

@@ -50,7 +50,7 @@ export function Testimonials() {
                 {t.avatar ? (
                   <img
                     src={t.avatar}
-                    alt={t.name}
+                    alt={`${t.name}'s profile picture`}
                     className="w-14 h-14 rounded-full object-cover border border-gray-200 mx-auto"
                   />
                 ) : (

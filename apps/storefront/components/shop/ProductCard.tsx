@@ -22,6 +22,8 @@ interface ProductCardProps {
     rating?: number;
     image: string;
     description?: string;
+    sku?: string;
+    inStock?: boolean;
   };
   priority?: boolean;
   className?: string;
@@ -41,10 +43,15 @@ export function ProductCard({ product, priority = false, className, viewMode = '
     
     addItem({
       id: product.id,
+      productId: product.id,
       name: product.name,
       price: product.discountedPrice || product.price,
       quantity: 1,
-      imageUrl: product.image,
+      imageUrl: product.image || '/api/placeholder',
+      variantId: undefined, // Let the API handle it as null
+      description: product.description || product.name,
+      sku: product.sku || `SKU-${product.id.substring(0, 8)}`,
+      inStock: product.inStock !== false
     });
     
     // Show a toast notification

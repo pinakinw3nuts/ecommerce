@@ -40,10 +40,14 @@ export default function ProductCard({
     
     addToCart({
       id: productId,
+      productId: productId,
       name: title,
       price: parseFloat(price.replace(/[^0-9.]/g, '')),
       quantity: 1,
-      imageUrl: imageUrl,
+      imageUrl: imageUrl || '/api/placeholder',
+      description: title,
+      sku: `SKU-${productId.substring(0, 8)}`,
+      inStock: true
     });
     
     showToast({

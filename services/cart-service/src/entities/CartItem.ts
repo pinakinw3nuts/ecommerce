@@ -9,6 +9,15 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Cart } from './Cart';
+import { SerializedCartItem } from './Cart';
+
+export interface ProductSnapshot {
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  variantName?: string;
+  metadata?: Record<string, unknown>;
+}
 
 @Entity('cart_items')
 export class CartItem {
@@ -32,13 +41,7 @@ export class CartItem {
   variantId!: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
-  productSnapshot!: {
-    name: string;
-    description?: string;
-    imageUrl?: string;
-    variantName?: string;
-    metadata?: Record<string, unknown>;
-  };
+  productSnapshot!: ProductSnapshot;
 
   @ManyToOne(() => Cart, (cart) => cart.items, {
     onDelete: 'CASCADE',
@@ -56,7 +59,8 @@ export class CartItem {
    * Calculate item total
    */
   getTotal(): number {
-    return this.quantity * Number(this.price);
+    const numericPrice = typeof this.price === 'string' ? Number(this.price) : this.price;
+    return this.quantity * numericPrice;
   }
 
   /**
@@ -72,17 +76,23 @@ export class CartItem {
   /**
    * Convert item to JSON for response
    */
-  toJSON() {
+  toJSON(): SerializedCartItem {
+    // Ensure price is properly converted to a number
+    const price = typeof this.price === 'string' ? Number(this.price) : 
+                  typeof this.price === 'number' ? this.price : 0;
+    
     return {
       id: this.id,
       productId: this.productId,
       variantId: this.variantId,
       quantity: this.quantity,
-      price: this.price,
-      total: this.getTotal(),
-      productSnapshot: this.productSnapshot,
-      createdAt: this.createdAt,
-      updatedAt: this.updatedAt,
+      price: price,
+      total: this.quantity * price,
+      productSnapshot: this.productSnapshot || {
+        name: 'Unknown Product'
+      },
+      createdAt: this.createdAt instanceof Date ? this.createdAt.toISOString() : String(this.createdAt),
+      updatedAt: this.updatedAt instanceof Date ? this.updatedAt.toISOString() : String(this.updatedAt),
     };
   }
 } 

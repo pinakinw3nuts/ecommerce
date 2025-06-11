@@ -39,7 +39,7 @@ export default function FeaturedBanners() {
             <div key={banner.id} className="relative h-64 rounded-lg overflow-hidden">
               <Image
                 src={banner.image}
-                alt={banner.title}
+                alt={banner.title || 'Featured banner'}
                 fill
                 className="object-cover"
               />
