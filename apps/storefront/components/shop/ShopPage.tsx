@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -116,6 +116,9 @@ export default function ShopPage({
     minPrice,
     maxPrice
   ]);
+  
+  // Ref to track if user is currently dragging the slider
+  const isDraggingRef = useRef(false);
   
   // State for view mode (grid or list)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -477,16 +480,31 @@ export default function ShopPage({
     }
   }, [debouncedSearch]);
   
-  // Update price filter when debounced price range changes
+  // Apply debounced price range filter when values change
   useEffect(() => {
-    // Only update if the values have actually changed and are different from the active filters
-    if (debouncedPriceRange[0] !== activeFilters.minPrice || 
-        debouncedPriceRange[1] !== activeFilters.maxPrice) {
-      // Don't auto-update the URL on each slider change
-      // Let the user click the Apply button instead
-      // This prevents too many API calls while sliding
+    // Skip initial render and only apply if user is dragging or has dragged
+    if (isDraggingRef.current) {
+      console.log('Applying debounced price range:', debouncedPriceRange);
+      updateFilters({ 
+        minPrice: debouncedPriceRange[0] === MIN_PRICE ? null : debouncedPriceRange[0],
+        maxPrice: debouncedPriceRange[1] === MAX_PRICE ? null : debouncedPriceRange[1],
+        page: 1 // Reset to page 1 when changing price range
+      });
     }
   }, [debouncedPriceRange]);
+  
+  // Update price filter state when URL parameters change
+  useEffect(() => {
+    // Only update slider if user is not currently dragging it
+    if (!isDraggingRef.current) {
+      // Update price range slider based on URL parameters
+      const urlMinPrice = typeof searchParams.minPrice === 'string' ? parseInt(searchParams.minPrice) || MIN_PRICE : MIN_PRICE;
+      const urlMaxPrice = typeof searchParams.maxPrice === 'string' ? parseInt(searchParams.maxPrice) || MAX_PRICE : MAX_PRICE;
+      
+      console.log('Updating slider from URL params:', { urlMinPrice, urlMaxPrice });
+      setPriceRange([urlMinPrice, urlMaxPrice]);
+    }
+  }, [searchParams.minPrice, searchParams.maxPrice]);
   
   // Calculate total pages - ensure we properly round up for any remainder
   const totalPages = Math.max(1, Math.ceil(totalProducts / PRODUCTS_PER_PAGE));
@@ -620,13 +638,24 @@ export default function ShopPage({
         return;
       }
       
+      // Set dragging flag to true
+      isDraggingRef.current = true;
+      
       // Ensure values are within the valid range
       const minValue = Math.max(MIN_PRICE, Math.min(MAX_PRICE, values[0]));
       const maxValue = Math.max(minValue, Math.min(MAX_PRICE, values[1]));
       
+      // Just update state - the useEffect with debounced values will handle updating filters
       setPriceRange([minValue, maxValue]);
+      console.log('Price range updated:', [minValue, maxValue]);
+      
+      // Reset dragging flag after a delay to allow debounced effect to fire
+      setTimeout(() => {
+        isDraggingRef.current = false;
+      }, 1000);
     } catch (error) {
       console.error('Error updating price range:', error);
+      isDraggingRef.current = false;
     }
   };
 
@@ -641,8 +670,8 @@ export default function ShopPage({
     // Only update if values are different from current active filters
     if (validMinPrice !== activeFilters.minPrice || validMaxPrice !== activeFilters.maxPrice) {
       updateFilters({ 
-        minPrice: validMinPrice, 
-        maxPrice: validMaxPrice,
+        minPrice: validMinPrice === MIN_PRICE ? null : validMinPrice,
+        maxPrice: validMaxPrice === MAX_PRICE ? null : validMaxPrice,
         page: 1 // Reset to page 1 when changing price range
       });
     } else {
@@ -671,7 +700,7 @@ export default function ShopPage({
     updateFilters({
       category: null,
       sort: null,
-      page: null,
+      page: 1,
       minPrice: null,
       maxPrice: null,
       search: null
@@ -839,10 +868,9 @@ export default function ShopPage({
                 </h3>
                 <div className="px-2">
                   <Slider
-                    defaultValue={priceRange}
                     min={MIN_PRICE}
                     max={MAX_PRICE}
-                    step={100}
+                    step={50}
                     value={priceRange}
                     onValueChange={handlePriceRangeChange}
                     className="mb-6"
@@ -860,8 +888,18 @@ export default function ShopPage({
                       {formatPrice(priceRange[1])}
                     </div>
                   </div>
-                  <button 
-                    onClick={handleApplyPriceRange}
+                  <button
+                    onClick={() => {
+                      isDraggingRef.current = true;
+                      updateFilters({ 
+                        minPrice: priceRange[0] === MIN_PRICE ? null : priceRange[0],
+                        maxPrice: priceRange[1] === MAX_PRICE ? null : priceRange[1],
+                        page: 1
+                      });
+                      setTimeout(() => {
+                        isDraggingRef.current = false;
+                      }, 1000);
+                    }}
                     className="mt-3 text-sm text-red-600 hover:text-red-700 font-medium flex items-center mx-auto"
                   >
                     Apply Price Range

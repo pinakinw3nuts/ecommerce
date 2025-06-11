@@ -14,13 +14,15 @@ export default async function ProductsPage({
   // Create a plain object with the search parameters to avoid using dynamic API synchronously
   const parsedParams: { [key: string]: string | string[] | undefined } = {};
   
-  // Safely extract search parameters
-  if (searchParams.category) parsedParams.category = searchParams.category;
-  if (searchParams.sort) parsedParams.sort = searchParams.sort;
-  if (searchParams.page) parsedParams.page = searchParams.page;
-  if (searchParams.minPrice) parsedParams.minPrice = searchParams.minPrice;
-  if (searchParams.maxPrice) parsedParams.maxPrice = searchParams.maxPrice;
-  if (searchParams.search) parsedParams.search = searchParams.search;
+  // Safely extract search parameters - await the searchParams object first
+  const params = await Promise.resolve(searchParams);
+  
+  if (params.category) parsedParams.category = params.category;
+  if (params.sort) parsedParams.sort = params.sort;
+  if (params.page) parsedParams.page = params.page;
+  if (params.minPrice) parsedParams.minPrice = params.minPrice;
+  if (params.maxPrice) parsedParams.maxPrice = params.maxPrice;
+  if (params.search) parsedParams.search = params.search;
   
   return <ShopPage searchParams={parsedParams} />;
 } 

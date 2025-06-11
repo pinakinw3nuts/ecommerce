@@ -60,14 +60,16 @@ export async function GET(request: NextRequest) {
     }
     
     // Only add other parameters if they exist
-    if (category) params.category = category;
+    if (category && category !== 'all') params.categoryIds = category;
     if (search) params.search = search;
-    if (minPrice) params.minPrice = minPrice;
-    if (maxPrice) params.maxPrice = maxPrice;
+    
+    // Only include price filters if they're meaningful values
+    if (minPrice && parseInt(minPrice) > 0) params.minPrice = minPrice;
+    if (maxPrice && parseInt(maxPrice) < 10000) params.maxPrice = maxPrice;
     
     // Using the known working endpoint format
     const apiUrl = `${PRODUCT_API_URL}/products`;
-    console.log(`Forwarding request to: ${apiUrl}`);
+    console.log(`Forwarding request to: ${apiUrl}`, { params });
     
     // Make the request to the product service API
     const response = await axios.get(apiUrl, {
