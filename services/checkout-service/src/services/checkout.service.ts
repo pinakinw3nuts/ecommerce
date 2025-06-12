@@ -1,16 +1,9 @@
 import { Repository } from 'typeorm';
-import { CheckoutSession, CheckoutStatus } from '../entities/CheckoutSession';
-import { CouponService } from './coupon.service';
+import { CheckoutSession, CheckoutStatus, CartItem, Coupon } from '../entities/CheckoutSession';
 import { ShippingService } from './shipping.service';
 import { logger } from '../utils/logger';
-
-interface CartItem {
-  productId: string;
-  quantity: number;
-  price: number;
-  name: string;
-  metadata?: Record<string, any> | undefined;
-}
+import axios from 'axios';
+import { config } from '../config/env';
 
 interface OrderPreview {
   subtotal: number;
@@ -21,12 +14,9 @@ interface OrderPreview {
   items: CartItem[];
 }
 
-const TAX_RATE = 0.10; // 10% tax rate
-
 export class CheckoutService {
   constructor(
     private readonly checkoutSessionRepository: Repository<CheckoutSession>,
-    private readonly couponService: CouponService,
     private readonly shippingService: ShippingService
   ) {}
 
@@ -36,19 +26,76 @@ export class CheckoutService {
     );
   }
 
-  private calculateTax(subtotal: number): number {
-    return Number((subtotal * TAX_RATE).toFixed(2));
+  private async calculateTax(subtotal: number, shippingAddress?: any): Promise<number> {
+    try {
+      // If we have a shipping address, use the tax API for accurate calculation
+      if (shippingAddress) {
+        const response = await axios.post(`${config.services.tax}/calculate`, {
+          subtotal,
+          address: shippingAddress
+        });
+        return Number(response.data.taxAmount.toFixed(2));
+      }
+      
+      // Default tax calculation (fallback)
+      const TAX_RATE = 0.10; // 10% tax rate
+      return Number((subtotal * TAX_RATE).toFixed(2));
+    } catch (error) {
+      logger.error('Error calculating tax, using default rate:', error);
+      // Fallback to default calculation
+      const TAX_RATE = 0.10; // 10% tax rate
+      return Number((subtotal * TAX_RATE).toFixed(2));
+    }
   }
 
-  private async calculateShippingCost(subtotal: number): Promise<number> {
-    // Use shipping service to calculate cost
+  private async calculateShippingCost(subtotal: number, shippingAddress?: any): Promise<number> {
+    if (shippingAddress) {
+      // Use shipping service to calculate cost based on address
+      return this.shippingService.calculateShippingCostByAddress(subtotal, shippingAddress);
+    }
+    // Use basic shipping service calculation
     return this.shippingService.calculateShippingCost(subtotal);
+  }
+
+  async fetchCoupon(couponCode: string): Promise<Coupon | null> {
+    try {
+      const response = await axios.get(`${config.services.product}/coupons/${couponCode}`);
+      if (response.data && response.data.success) {
+        return response.data.coupon;
+      }
+      return null;
+    } catch (error) {
+      logger.warn(`Failed to fetch coupon ${couponCode}:`, error);
+      return null;
+    }
+  }
+
+  async calculateDiscount(subtotal: number, couponCode?: string): Promise<number> {
+    if (!couponCode) return 0;
+    
+    try {
+      const coupon = await this.fetchCoupon(couponCode);
+      if (!coupon) return 0;
+      
+      let discount = 0;
+      if (coupon.discountType === 'PERCENTAGE') {
+        discount = (subtotal * coupon.discountAmount) / 100;
+      } else if (coupon.discountType === 'FIXED') {
+        discount = coupon.discountAmount;
+      }
+      
+      return Number(discount.toFixed(2));
+    } catch (error) {
+      logger.error(`Error calculating discount for coupon ${couponCode}:`, error);
+      return 0;
+    }
   }
 
   async calculateOrderPreview(
     userId: string,
     cartItems: CartItem[],
-    couponCode?: string
+    couponCode?: string,
+    shippingAddress?: any
   ): Promise<OrderPreview> {
     logger.info({ userId, itemCount: cartItems.length }, 'Calculating order preview');
 
@@ -58,23 +105,11 @@ export class CheckoutService {
 
     // Calculate base amounts
     const subtotal = this.calculateSubtotal(cartItems);
-    const tax = this.calculateTax(subtotal);
-    const shippingCost = await this.calculateShippingCost(subtotal);
+    const tax = await this.calculateTax(subtotal, shippingAddress);
+    const shippingCost = await this.calculateShippingCost(subtotal, shippingAddress);
 
     // Calculate discount if coupon provided
-    let discount = 0;
-    if (couponCode) {
-      try {
-        const { discountAmount } = await this.couponService.applyCoupon(
-          couponCode,
-          subtotal
-        );
-        discount = discountAmount;
-      } catch (error: any) {
-        // If coupon is invalid, continue with zero discount
-        logger.warn({ userId, couponCode, error: error.message }, 'Invalid coupon applied');
-      }
-    }
+    const discount = await this.calculateDiscount(subtotal, couponCode);
 
     // Calculate final total
     const total = Number(
@@ -97,9 +132,16 @@ export class CheckoutService {
   async createCheckoutSession(
     userId: string,
     cartItems: CartItem[],
-    couponCode?: string
+    couponCode?: string,
+    shippingAddress?: any,
+    billingAddress?: any
   ): Promise<CheckoutSession> {
-    const orderPreview = await this.calculateOrderPreview(userId, cartItems, couponCode);
+    const orderPreview = await this.calculateOrderPreview(
+      userId, 
+      cartItems, 
+      couponCode,
+      shippingAddress
+    );
 
     const sessionData = {
       userId,
@@ -115,7 +157,9 @@ export class CheckoutService {
       tax: orderPreview.tax,
       discountCode: couponCode,
       status: CheckoutStatus.PENDING,
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000) // 30 minutes expiry
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes expiry
+      shippingAddress,
+      billingAddress
     } as Partial<CheckoutSession>;
 
     const session = this.checkoutSessionRepository.create(sessionData);
@@ -124,22 +168,45 @@ export class CheckoutService {
 
   async getCheckoutSession(sessionId: string): Promise<CheckoutSession | null> {
     return this.checkoutSessionRepository.findOne({
-      where: { id: sessionId },
-      relations: ['coupon']
+      where: { id: sessionId }
+    });
+  }
+
+  async updateCheckoutSession(
+    sessionId: string, 
+    updateData: Partial<CheckoutSession>
+  ): Promise<CheckoutSession | null> {
+    await this.checkoutSessionRepository.update(
+      { id: sessionId },
+      updateData
+    );
+    
+    return this.getCheckoutSession(sessionId);
+  }
+
+  async completeCheckoutSession(
+    sessionId: string, 
+    paymentIntentId: string
+  ): Promise<CheckoutSession | null> {
+    return this.updateCheckoutSession(sessionId, {
+      status: CheckoutStatus.COMPLETED,
+      paymentIntentId
     });
   }
 
   async expireCheckoutSession(sessionId: string): Promise<void> {
-    const session = await this.getCheckoutSession(sessionId);
-    
-    if (session?.discountCode) {
-      // Release the coupon if it was used
-      await this.couponService.releaseCoupon(session.discountCode);
-    }
-
     await this.checkoutSessionRepository.update(
       { id: sessionId },
       { status: CheckoutStatus.EXPIRED }
+    );
+  }
+
+  async failCheckoutSession(sessionId: string, reason?: string): Promise<void> {
+    logger.warn(`Checkout session ${sessionId} failed: ${reason || 'No reason provided'}`);
+    
+    await this.checkoutSessionRepository.update(
+      { id: sessionId },
+      { status: CheckoutStatus.FAILED }
     );
   }
 } 

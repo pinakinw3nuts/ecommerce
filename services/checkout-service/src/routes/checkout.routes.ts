@@ -1,8 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { CheckoutService } from '../services/checkout.service';
-import { CouponService } from '../services/coupon.service';
 import { ShippingService } from '../services/shipping.service';
+import { CheckoutStatus } from '../entities/CheckoutSession';
+import { logger } from '../utils/logger';
 
 // Validation schemas
 const cartItemSchema = {
@@ -17,6 +18,18 @@ const cartItemSchema = {
       type: 'object',
       additionalProperties: true
     }
+  }
+};
+
+const addressSchema = {
+  type: 'object',
+  required: ['street', 'city', 'state', 'zipCode', 'country'],
+  properties: {
+    street: { type: 'string' },
+    city: { type: 'string' },
+    state: { type: 'string' },
+    zipCode: { type: 'string' },
+    country: { type: 'string', minLength: 2, maxLength: 2 }
   }
 };
 
@@ -43,7 +56,6 @@ const previewOrderResponseSchema = {
 
 interface RouteOptions {
   checkoutService: CheckoutService;
-  couponService: CouponService;
   shippingService: ShippingService;
 }
 
@@ -51,12 +63,17 @@ export default fp(async function checkoutRoutes(
   fastify: FastifyInstance,
   opts: RouteOptions
 ) {
-  const { checkoutService, couponService, shippingService } = opts;
+  const { checkoutService, shippingService } = opts;
 
   // Register schemas
   fastify.addSchema({
     $id: 'cartItem',
     ...cartItemSchema
+  });
+
+  fastify.addSchema({
+    $id: 'address',
+    ...addressSchema
   });
 
   // Get order preview
@@ -71,9 +88,10 @@ export default fp(async function checkoutRoutes(
           userId: { type: 'string', format: 'uuid' },
           cartItems: {
             type: 'array',
-            items: cartItemSchema
+            items: { $ref: 'cartItem#' }
           },
-          couponCode: { type: 'string' }
+          couponCode: { type: 'string' },
+          shippingAddress: { $ref: 'address#' }
         }
       },
       response: {
@@ -88,32 +106,43 @@ export default fp(async function checkoutRoutes(
         }
       }
     },
-    handler: async (request) => {
-      const { userId, cartItems, couponCode } = request.body as any;
-      const orderPreview = await checkoutService.calculateOrderPreview(
-        userId,
-        cartItems,
-        couponCode
-      );
-      return { success: true, data: orderPreview };
+    handler: async (request, reply) => {
+      try {
+        const { userId, cartItems, couponCode, shippingAddress } = request.body as any;
+        
+        const orderPreview = await checkoutService.calculateOrderPreview(
+          userId,
+          cartItems,
+          couponCode,
+          shippingAddress
+        );
+        
+        return { success: true, data: orderPreview };
+      } catch (error) {
+        logger.error('Error calculating order preview:', error);
+        return reply.status(400).send({
+          success: false,
+          error: 'Preview Calculation Error',
+          message: error instanceof Error ? error.message : 'Failed to calculate order preview'
+        });
+      }
     }
   });
 
-  // Apply coupon
-  fastify.post('/apply-coupon', {
+  // Estimate delivery dates
+  fastify.post('/delivery-estimate', {
     schema: {
-      description: 'Apply a coupon code to the order',
-      tags: ['checkout'],
+      description: 'Get estimated delivery dates for a shipping method to a country',
+      tags: ['shipping'],
       body: {
         type: 'object',
-        required: ['userId', 'cartItems', 'couponCode'],
+        required: ['method', 'country'],
         properties: {
-          userId: { type: 'string', format: 'uuid' },
-          cartItems: {
-            type: 'array',
-            items: cartItemSchema
+          method: { 
+            type: 'string',
+            enum: ['STANDARD', 'EXPRESS', 'OVERNIGHT', 'INTERNATIONAL']
           },
-          couponCode: { type: 'string', minLength: 1 }
+          country: { type: 'string', minLength: 2, maxLength: 2 }
         }
       },
       response: {
@@ -124,63 +153,105 @@ export default fp(async function checkoutRoutes(
             data: {
               type: 'object',
               properties: {
-                discountAmount: { type: 'number' },
-                coupon: {
-                  type: 'object',
-                  properties: {
-                    code: { type: 'string' },
-                    type: { type: 'string', enum: ['PERCENTAGE', 'FIXED'] },
-                    value: { type: 'number' }
-                  }
-                }
+                earliest: { type: 'string', format: 'date-time' },
+                latest: { type: 'string', format: 'date-time' },
+                estimatedDays: { type: 'string' }
               }
             }
           }
         }
       }
     },
-    handler: async (request) => {
-      const { userId, cartItems, couponCode } = request.body as any;
-      
-      // Get current cart total first
-      const preview = await checkoutService.calculateOrderPreview(userId, cartItems);
-      
-      const result = await couponService.applyCoupon(
-        couponCode,
-        preview.subtotal
-      );
+    handler: async (request, reply) => {
+      try {
+        const { method, country } = request.body as any;
+        
+        const dates = await shippingService.estimateDeliveryDate(method, country);
+        
+        // Get the estimated days text
+        const isDomestic = country === 'US';
+        const estimatedDays = shippingService.getDeliveryEstimate(method, isDomestic);
+        
+        return {
+          success: true,
+          data: {
+            earliest: dates.earliest.toISOString(),
+            latest: dates.latest.toISOString(),
+            estimatedDays
+          }
+        };
+      } catch (error) {
+        logger.error('Error estimating delivery dates:', error);
+        return reply.status(400).send({
+          success: false,
+          error: 'Estimation Error',
+          message: error instanceof Error ? error.message : 'Failed to estimate delivery dates'
+        });
+      }
+    }
+  });
 
-      return {
-        success: true,
-        data: {
-          discountAmount: result.discountAmount,
-          coupon: {
-            code: result.coupon.code,
-            type: result.coupon.type,
-            value: result.coupon.value
+  // Validate postal/zip code
+  fastify.post('/validate-pincode', {
+    schema: {
+      description: 'Validate postal/zip code for a specific country',
+      tags: ['shipping'],
+      body: {
+        type: 'object',
+        required: ['pincode', 'country'],
+        properties: {
+          pincode: { type: 'string' },
+          country: { type: 'string', minLength: 2, maxLength: 2 }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                valid: { type: 'boolean' }
+              }
+            }
           }
         }
-      };
+      }
+    },
+    handler: async (request, reply) => {
+      try {
+        const { pincode, country } = request.body as any;
+        
+        const isValid = await shippingService.validatePincode(pincode, country);
+        
+        return {
+          success: true,
+          data: {
+            valid: isValid
+          }
+        };
+      } catch (error) {
+        logger.error('Error validating pincode:', error);
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation Error',
+          message: error instanceof Error ? error.message : 'Failed to validate pincode'
+        });
+      }
     }
   });
 
   // Get shipping options
-  fastify.get('/shipping-options', {
+  fastify.post('/shipping-options', {
     schema: {
       description: 'Get available shipping options for the order',
-      tags: ['checkout'],
-      querystring: {
+      tags: ['shipping'],
+      body: {
         type: 'object',
-        required: ['cartItems', 'country'],
+        required: ['address'],
         properties: {
-          cartItems: {
-            type: 'array',
-            items: cartItemSchema
-          },
-          country: { type: 'string', minLength: 2, maxLength: 2 },
-          pincode: { type: 'string' },
-          state: { type: 'string' },
-          city: { type: 'string' },
+          address: { $ref: 'address#' },
           orderWeight: { type: 'number', minimum: 0 }
         }
       },
@@ -198,7 +269,9 @@ export default fp(async function checkoutRoutes(
                     type: 'object',
                     properties: {
                       method: { type: 'string' },
+                      carrier: { type: 'string' },
                       cost: { type: 'number' },
+                      estimatedDays: { type: 'string' },
                       estimatedDelivery: {
                         type: 'object',
                         properties: {
@@ -208,76 +281,70 @@ export default fp(async function checkoutRoutes(
                       }
                     }
                   }
-                },
-                weightUsed: { type: 'number' }
+                }
               }
             }
           }
         }
       }
     },
-    handler: async (request) => {
-      const {
-        cartItems,
-        country,
-        pincode,
-        state,
-        city,
-        orderWeight
-      } = request.query as any;
+    handler: async (request, reply) => {
+      try {
+        const { address, orderWeight = 1 } = request.body as any;
 
-      // Calculate final weight
-      let finalWeight = orderWeight;
-      if (!finalWeight) {
-        finalWeight = cartItems.reduce(
-          (total: number, item: { metadata?: { weight?: number }; quantity: number }) => 
-            total + (item.metadata?.weight || 0.1) * item.quantity,
-          0
+        // Validate pincode if provided
+        if (address.zipCode) {
+          const isValid = await shippingService.validatePincode(address.zipCode, address.country);
+          if (!isValid) {
+            return reply.status(400).send({
+              success: false,
+              error: 'Validation Error',
+              message: 'Invalid postal code for the selected country'
+            });
+          }
+        }
+
+        const shippingOptions = await shippingService.getShippingOptions(
+          {
+            country: address.country,
+            pincode: address.zipCode,
+            state: address.state,
+            city: address.city
+          },
+          orderWeight
         );
+
+        // Add estimated delivery dates
+        const optionsWithDates = await Promise.all(
+          shippingOptions.map(async (option) => {
+            const dates = await shippingService.estimateDeliveryDate(
+              option.method,
+              address.country
+            );
+            return {
+              ...option,
+              estimatedDelivery: {
+                earliest: dates.earliest.toISOString(),
+                latest: dates.latest.toISOString()
+              }
+            };
+          })
+        );
+
+        return {
+          success: true,
+          data: {
+            options: optionsWithDates
+          }
+        };
+      } catch (error) {
+        logger.error('Error getting shipping options:', error);
+        return reply.status(400).send({
+          success: false,
+          error: 'Shipping Calculation Error',
+          message: error instanceof Error ? error.message : 'Failed to calculate shipping options'
+        });
       }
-
-      // Validate pincode if provided
-      if (pincode) {
-        const isValid = await shippingService.validatePincode(pincode, country);
-        if (!isValid) {
-          throw fastify.httpErrors.notFound('Invalid pincode for the selected country');
-        }
-      }
-
-      const shippingOptions = await shippingService.getShippingOptions(
-        {
-          country,
-          pincode: pincode || '',
-          state: state || '',
-          city: city || ''
-        },
-        finalWeight
-      );
-
-      // Add estimated delivery dates
-      const optionsWithDates = await Promise.all(
-        shippingOptions.map(async (option) => {
-          const dates = await shippingService.estimateDeliveryDate(
-            option.method,
-            country
-          );
-          return {
-            ...option,
-            estimatedDelivery: {
-              earliest: dates.earliest.toISOString(),
-              latest: dates.latest.toISOString()
-            }
-          };
-        })
-      );
-
-      return {
-        success: true,
-        data: {
-          options: optionsWithDates,
-          weightUsed: finalWeight
-        }
-      };
     }
   });
 
@@ -293,9 +360,11 @@ export default fp(async function checkoutRoutes(
           userId: { type: 'string', format: 'uuid' },
           cartItems: {
             type: 'array',
-            items: cartItemSchema
+            items: { $ref: 'cartItem#' }
           },
-          couponCode: { type: 'string' }
+          couponCode: { type: 'string' },
+          shippingAddress: { $ref: 'address#' },
+          billingAddress: { $ref: 'address#' }
         }
       },
       response: {
@@ -303,19 +372,199 @@ export default fp(async function checkoutRoutes(
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: {              type: 'object',              required: ['id', 'userId', 'status'],              properties: {                id: { type: 'string', format: 'uuid' },                userId: { type: 'string', format: 'uuid' },                cartSnapshot: {                  type: 'array',                  items: cartItemSchema                },                status: {                  type: 'string',                  enum: ['PENDING', 'COMPLETED', 'EXPIRED', 'FAILED']                },                totals: {                  type: 'object',                  properties: {                    subtotal: { type: 'number' },                    tax: { type: 'number' },                    shippingCost: { type: 'number' },                    discount: { type: 'number' },                    total: { type: 'number' }                  }                },                shippingAddress: {                  type: 'object',                  properties: {                    street: { type: 'string' },                    city: { type: 'string' },                    state: { type: 'string' },                    zipCode: { type: 'string' },                    country: { type: 'string' }                  }                },                billingAddress: {                  type: 'object',                  properties: {                    street: { type: 'string' },                    city: { type: 'string' },                    state: { type: 'string' },                    zipCode: { type: 'string' },                    country: { type: 'string' }                  }                },                discountCode: { type: 'string' },                paymentIntentId: { type: 'string' },                expiresAt: { type: 'string', format: 'date-time' },                createdAt: { type: 'string', format: 'date-time' },                updatedAt: { type: 'string', format: 'date-time' }              }            }
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                userId: { type: 'string', format: 'uuid' },
+                status: { 
+                  type: 'string',
+                  enum: Object.values(CheckoutStatus)
+                },
+                totals: {
+                  type: 'object',
+                  properties: {
+                    subtotal: { type: 'number' },
+                    tax: { type: 'number' },
+                    shippingCost: { type: 'number' },
+                    discount: { type: 'number' },
+                    total: { type: 'number' }
+                  }
+                },
+                expiresAt: { type: 'string', format: 'date-time' }
+              }
+            }
           }
         }
       }
     },
-    handler: async (request) => {
-      const { userId, cartItems, couponCode } = request.body as any;
-      const session = await checkoutService.createCheckoutSession(
-        userId,
-        cartItems,
-        couponCode
-      );
+    handler: async (request, reply) => {
+      try {
+        const { userId, cartItems, couponCode, shippingAddress, billingAddress } = request.body as any;
+        
+        const session = await checkoutService.createCheckoutSession(
+          userId,
+          cartItems,
+          couponCode,
+          shippingAddress,
+          billingAddress
+        );
+        
+        return { 
+          success: true, 
+          data: session 
+        };
+      } catch (error) {
+        logger.error('Error creating checkout session:', error);
+        return reply.status(400).send({
+          success: false,
+          error: 'Session Creation Error',
+          message: error instanceof Error ? error.message : 'Failed to create checkout session'
+        });
+      }
+    }
+  });
+
+  // Get checkout session
+  fastify.get('/session/:id', {
+    schema: {
+      description: 'Get checkout session by ID',
+      tags: ['checkout'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                status: { 
+                  type: 'string',
+                  enum: Object.values(CheckoutStatus)
+                },
+                // Other session properties
+              }
+            }
+          }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            message: { type: 'string' }
+          }
+        }
+      }
+    },
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const session = await checkoutService.getCheckoutSession(id);
+      
+      if (!session) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Not Found',
+          message: `Checkout session with ID ${id} not found`
+        });
+      }
+      
       return { success: true, data: session };
+    }
+  });
+
+  // Complete checkout session (after payment)
+  fastify.post('/session/:id/complete', {
+    schema: {
+      description: 'Complete a checkout session after successful payment',
+      tags: ['checkout'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['paymentIntentId'],
+        properties: {
+          paymentIntentId: { type: 'string' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                status: { 
+                  type: 'string',
+                  enum: [CheckoutStatus.COMPLETED]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    handler: async (request, reply) => {
+      try {
+        const { id } = request.params as { id: string };
+        const { paymentIntentId } = request.body as { paymentIntentId: string };
+        
+        const session = await checkoutService.getCheckoutSession(id);
+        
+        if (!session) {
+          return reply.status(404).send({
+            success: false,
+            error: 'Not Found',
+            message: `Checkout session with ID ${id} not found`
+          });
+        }
+        
+        if (session.status !== CheckoutStatus.PENDING) {
+          return reply.status(400).send({
+            success: false,
+            error: 'Invalid Status',
+            message: `Checkout session is already ${session.status}`
+          });
+        }
+        
+        if (session.isExpired()) {
+          await checkoutService.expireCheckoutSession(id);
+          return reply.status(400).send({
+            success: false,
+            error: 'Session Expired',
+            message: 'Checkout session has expired'
+          });
+        }
+        
+        const completedSession = await checkoutService.completeCheckoutSession(id, paymentIntentId);
+        
+        return { 
+          success: true, 
+          data: completedSession 
+        };
+      } catch (error) {
+        logger.error('Error completing checkout session:', error);
+        return reply.status(500).send({
+          success: false,
+          error: 'Completion Error',
+          message: error instanceof Error ? error.message : 'Failed to complete checkout session'
+        });
+      }
     }
   });
 }); 

@@ -1,58 +1,94 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Mock order data
-function getMockOrder(id: string) {
-  return {
-    id,
-    status: "Processing",
-    createdAt: new Date().toISOString(),
-    total: 145.36,
-    items: [
-      {
-        name: "Classic T-Shirt",
-        image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1480&auto=format&fit=crop",
-        price: 19.99,
-        quantity: 2
-      },
-      {
-        name: "Wireless Headphones",
-        image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=1470&auto=format&fit=crop",
-        price: 89.99,
-        quantity: 1
-      }
-    ]
-  };
-}
-
-// Helper function to extract id safely
-async function extractId(params: any): Promise<string> {
-  // In Next.js 14, params might be a Promise
-  const resolvedParams = params && typeof params.then === 'function' ? await params : params;
-  return resolvedParams?.id || '';
-}
+import axios from 'axios';
+import { API_GATEWAY_URL } from '@/lib/constants';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // For demo purposes, we'll skip authentication
-    // In a real implementation, we would verify the JWT token
+    const token = req.cookies.get('accessToken')?.value;
     
-    // Extract id safely
-    const id = await extractId(params);
-    
-    if (!id) {
-      return new NextResponse('Order ID is required', { status: 400 });
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    if (!params.id) {
+      return NextResponse.json(
+        { error: 'Order ID is required' },
+        { status: 400 }
+      );
     }
     
-    // In a real implementation, we would fetch the order details from a database
-    // For now, return mock data
-    const orderDetails = getMockOrder(id);
+    const response = await axios.get(`${API_GATEWAY_URL}/v1/orders/${params.id}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
     
-    return NextResponse.json(orderDetails);
-  } catch (error) {
+    return NextResponse.json(response.data);
+  } catch (error: any) {
     console.error('Error fetching order details:', error);
-    return new NextResponse('Failed to fetch order details', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch order details', message: error.message },
+      { status: error.response?.status || 500 }
+    );
   }
-} 
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const token = req.cookies.get('accessToken')?.value;
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    if (!params.id) {
+      return NextResponse.json(
+        { error: 'Order ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    const { action } = await req.json();
+    
+    if (action === 'cancel') {
+      const response = await axios.post(
+        `${API_GATEWAY_URL}/v1/orders/${params.id}/cancel`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      
+      return NextResponse.json(response.data);
+    }
+    
+    return NextResponse.json(
+      { error: 'Invalid action' },
+      { status: 400 }
+    );
+  } catch (error: any) {
+    console.error('Error processing order action:', error);
+    return NextResponse.json(
+      { error: 'Failed to process order action', message: error.message },
+      { status: error.response?.status || 500 }
+    );
+  }
+}

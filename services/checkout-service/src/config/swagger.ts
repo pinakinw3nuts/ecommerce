@@ -1,7 +1,7 @@
 import { SwaggerOptions } from '@fastify/swagger';
 import { FastifySwaggerUiOptions } from '@fastify/swagger-ui';
 import { config } from './env';
-import { CouponType } from '../entities/Coupon';
+import { CheckoutStatus } from '../entities/CheckoutSession';
 
 const version = '1.0.0';
 
@@ -9,19 +9,27 @@ export const swaggerConfig: SwaggerOptions = {
   openapi: {
     info: {
       title: 'Checkout Service API',
-      description: 'Checkout service API documentation',
+      description: 'Checkout service API documentation for e-commerce platform',
       version,
+      contact: {
+        name: 'API Support',
+        email: 'support@ecommerce.com'
+      }
     },
     servers: [
       {
-        url: `http://localhost:${config.server.port}/api/v1`
+        url: `http://localhost:${config.server.port}/api/v1`,
+        description: 'Development server'
+      },
+      {
+        url: 'https://api.ecommerce.com/checkout/api/v1',
+        description: 'Production server'
       }
     ],
     tags: [
       { name: 'checkout', description: 'Checkout related end-points' },
-      { name: 'coupons', description: 'Coupon related end-points' },
-      { name: 'shipping', description: 'Shipping related end-points' },
-      { name: 'health', description: 'Health check end-points' }
+      { name: 'shipping', description: 'Shipping options and delivery estimation' },
+      { name: 'health', description: 'Health check and system status' }
     ],
     components: {
       securitySchemes: {
@@ -46,26 +54,46 @@ export const swaggerConfig: SwaggerOptions = {
             }
           }
         },
-        Coupon: {
+        Address: {
           type: 'object',
-          required: ['id', 'code', 'type', 'value', 'isActive'],
+          required: ['street', 'city', 'state', 'zipCode', 'country'],
           properties: {
-            id: { type: 'string', format: 'uuid' },
-            code: { type: 'string', minLength: 3, maxLength: 50 },
-            type: { type: 'string', enum: [CouponType.PERCENTAGE, CouponType.FIXED_AMOUNT] },
-            value: { type: 'number', minimum: 0 },
-            expiresAt: { type: 'string', format: 'date-time', nullable: true },
-            maxUses: { type: 'integer', minimum: 1, nullable: true },
-            minimumPurchaseAmount: { type: 'number', minimum: 0, nullable: true },
-            applicableProducts: {
-              type: 'array',
-              items: { type: 'string' },
-              nullable: true
+            street: { type: 'string' },
+            city: { type: 'string' },
+            state: { type: 'string' },
+            zipCode: { type: 'string' },
+            country: { type: 'string', minLength: 2, maxLength: 2 }
+          }
+        },
+        PriceTotals: {
+          type: 'object',
+          required: ['subtotal', 'tax', 'shippingCost', 'discount', 'total'],
+          properties: {
+            subtotal: { type: 'number' },
+            tax: { type: 'number' },
+            shippingCost: { type: 'number' },
+            discount: { type: 'number' },
+            total: { type: 'number' }
+          }
+        },
+        ShippingOption: {
+          type: 'object',
+          required: ['method', 'carrier', 'cost', 'estimatedDays'],
+          properties: {
+            method: { 
+              type: 'string',
+              enum: ['STANDARD', 'EXPRESS', 'OVERNIGHT', 'INTERNATIONAL']
             },
-            isActive: { type: 'boolean' },
-            usageCount: { type: 'integer', minimum: 0 },
-            createdAt: { type: 'string', format: 'date-time' },
-            updatedAt: { type: 'string', format: 'date-time' }
+            carrier: { type: 'string' },
+            cost: { type: 'number' },
+            estimatedDays: { type: 'string' },
+            estimatedDelivery: {
+              type: 'object',
+              properties: {
+                earliest: { type: 'string', format: 'date-time' },
+                latest: { type: 'string', format: 'date-time' }
+              }
+            }
           }
         },
         CheckoutSession: {
@@ -80,47 +108,31 @@ export const swaggerConfig: SwaggerOptions = {
             },
             status: {
               type: 'string',
-              enum: ['PENDING', 'COMPLETED', 'EXPIRED', 'FAILED']
+              enum: Object.values(CheckoutStatus)
             },
-            totals: {
-              type: 'object',
-              properties: {
-                subtotal: { type: 'number' },
-                tax: { type: 'number' },
-                shippingCost: { type: 'number' },
-                discount: { type: 'number' },
-                total: { type: 'number' }
-              }
-            },
-            shippingAddress: {
-              type: 'object',
-              properties: {
-                street: { type: 'string' },
-                city: { type: 'string' },
-                state: { type: 'string' },
-                zipCode: { type: 'string' },
-                country: { type: 'string' }
-              }
-            },
-            billingAddress: {
-              type: 'object',
-              properties: {
-                street: { type: 'string' },
-                city: { type: 'string' },
-                state: { type: 'string' },
-                zipCode: { type: 'string' },
-                country: { type: 'string' }
-              }
-            },
+            totals: { $ref: '#/components/schemas/PriceTotals' },
+            shippingAddress: { $ref: '#/components/schemas/Address' },
+            billingAddress: { $ref: '#/components/schemas/Address' },
             discountCode: { type: 'string' },
             paymentIntentId: { type: 'string' },
             expiresAt: { type: 'string', format: 'date-time' },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' }
           }
+        },
+        Error: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            message: { type: 'string' }
+          }
         }
       }
-    }
+    },
+    security: [
+      { bearerAuth: [] }
+    ]
   }
 };
 
@@ -128,7 +140,8 @@ export const swaggerUiOptions: FastifySwaggerUiOptions = {
   routePrefix: '/documentation',
   uiConfig: {
     docExpansion: 'list',
-    deepLinking: true
+    deepLinking: true,
+    persistAuthorization: true
   },
   uiHooks: {
     onRequest: function (_request, _reply, next) {

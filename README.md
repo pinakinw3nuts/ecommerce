@@ -34,6 +34,7 @@ This platform is built with a microservices architecture, consisting of:
 - Node.js 18+
 - Docker and Docker Compose
 - pnpm (or npm/yarn)
+- PostgreSQL
 
 ## Quick Start
 
@@ -136,6 +137,83 @@ pnpm run migration:run
 cd services/service-name
 pnpm run migration:create
 ```
+
+## Checkout Service
+
+The checkout service handles the entire checkout process, from calculating order totals to creating and managing checkout sessions. It provides the following functionality:
+
+### API Endpoints
+
+The checkout service API runs on port 3005 and provides the following endpoints:
+
+- `POST /api/v1/preview` - Calculate order preview with shipping and discount
+- `POST /api/v1/session` - Create a checkout session
+- `GET /api/v1/session?sessionId={id}` - Get a specific checkout session
+- `POST /api/v1/session/complete?sessionId={id}` - Complete a checkout session
+- `POST /api/v1/shipping-options` - Get available shipping options
+- `POST /api/v1/validate-pincode` - Validate postal/zip code
+
+### Database Schema
+
+The checkout service uses a PostgreSQL database with the following schema:
+
+```sql
+CREATE TABLE "checkout_sessions" (
+  "id" UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  "user_id" VARCHAR NOT NULL,
+  "status" "checkout_status_enum" NOT NULL DEFAULT 'PENDING',
+  "cart_snapshot" JSONB NOT NULL,
+  "totals" JSONB NOT NULL,
+  "shipping_cost" DECIMAL(10,2) NOT NULL,
+  "tax" DECIMAL(10,2) NOT NULL,
+  "discount" DECIMAL(10,2) NOT NULL DEFAULT 0,
+  "discount_code" VARCHAR,
+  "payment_intent_id" VARCHAR,
+  "shipping_method" VARCHAR NOT NULL DEFAULT 'STANDARD',
+  "shipping_address" JSONB,
+  "billing_address" JSONB,
+  "metadata" JSONB,
+  "expires_at" TIMESTAMP NOT NULL,
+  "completed_at" TIMESTAMP,
+  "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+  "updated_at" TIMESTAMP NOT NULL DEFAULT now()
+)
+```
+
+### Checkout Flow
+
+1. User adds items to cart
+2. User proceeds to checkout
+3. User enters shipping information
+4. System calculates shipping options and costs
+5. User selects shipping method
+6. User enters payment information
+7. System creates checkout session
+8. System processes payment
+9. System completes checkout session
+10. User is redirected to success page
+
+### Environment Variables
+
+The checkout service expects the following environment variables:
+
+```
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USERNAME=postgres
+DATABASE_PASSWORD=postgres
+DATABASE_NAME=checkout_service
+PORT=3005
+NODE_ENV=development
+```
+
+The storefront application expects:
+
+```
+NEXT_PUBLIC_CHECKOUT_API_URL=http://localhost:3005/api/v1
+```
+
+**Important**: The API expects `userId` to be in a valid UUID format (e.g., `cc0c7021-e693-412e-9549-6c80ef327e39`).
 
 ## Deployment
 

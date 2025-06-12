@@ -25,7 +25,13 @@ const TypeormPlugin: FastifyPluginAsync = fp(async (fastify: FastifyInstance) =>
       url: config.database.url,
       entities: [CheckoutSession],
       synchronize: config.isDevelopment, // Disable in production
-      logging: false // Disable query logging
+      logging: config.isDevelopment ? ['error', 'warn'] : false,
+      maxQueryExecutionTime: 1000, // Log slow queries (>1s)
+      migrations: [`${__dirname}/../migrations/**/*.{ts,js}`],
+      migrationsRun: !config.isDevelopment, // Run migrations in production
+      ssl: config.isProduction ? {
+        rejectUnauthorized: false // Required for some cloud providers
+      } : false
     });
 
     await dataSource.initialize();

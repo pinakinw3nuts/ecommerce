@@ -192,10 +192,34 @@ export class ShippingService {
     return { earliest, latest };
   }
 
+  async calculateShippingCostByAddress(subtotal: number, address: any): Promise<number> {
+    // Check for free shipping threshold first
+    if (subtotal >= FREE_SHIPPING_THRESHOLD) {
+      return 0;
+    }
+    
+    // Get the shipping zone based on country
+    const zone = this.getShippingZone(address.country);
+    
+    // Calculate base cost with zone multiplier
+    let cost = BASE_SHIPPING_COST * zone.rateMultiplier;
+    
+    // Apply premium pincode surcharge if applicable
+    if (address.pincode && this.isPremiumPincode(address.pincode)) {
+      cost *= 1.2; // 20% surcharge for premium areas
+    }
+    
+    return Number(cost.toFixed(2));
+  }
+
   calculateShippingCost(subtotal: number): number {
     if (subtotal >= FREE_SHIPPING_THRESHOLD) {
       return 0;
     }
     return BASE_SHIPPING_COST;
+  }
+  
+  getDeliveryEstimate(method: ShippingMethod, isDomestic: boolean): string {
+    return this.deliveryEstimates[method][isDomestic ? 'domestic' : 'international'];
   }
 } 

@@ -4,11 +4,8 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
   Index
 } from 'typeorm';
-import { Coupon } from './coupon.entity';
 
 export enum CheckoutStatus {
   PENDING = 'PENDING',
@@ -17,7 +14,7 @@ export enum CheckoutStatus {
   FAILED = 'FAILED'
 }
 
-interface CartItem {
+export interface CartItem {
   productId: string;
   quantity: number;
   price: number;
@@ -25,12 +22,18 @@ interface CartItem {
   metadata?: Record<string, any>;
 }
 
-interface PriceTotals {
+export interface PriceTotals {
   subtotal: number;
   tax: number;
   shippingCost: number;
   discount: number;
   total: number;
+}
+
+export interface CouponData {
+  code: string;
+  discountType: 'PERCENTAGE' | 'FIXED';
+  discountAmount: number;
 }
 
 @Entity('checkout_sessions')
@@ -56,10 +59,6 @@ export class CheckoutSession {
 
   @Column({ nullable: true })
   discountCode: string;
-
-  @ManyToOne(() => Coupon, { nullable: true })
-  @JoinColumn({ name: 'discount_code', referencedColumnName: 'code' })
-  coupon: Coupon;
 
   @Column({
     type: 'enum',
@@ -99,7 +98,7 @@ export class CheckoutSession {
   updatedAt: Date;
 
   // Helper method to calculate totals
-  calculateTotals(coupon?: Coupon): PriceTotals {
+  calculateTotals(couponData?: CouponData): PriceTotals {
     // Calculate subtotal
     const subtotal = this.cartSnapshot.reduce(
       (sum, item) => sum + item.price * item.quantity,
@@ -107,7 +106,14 @@ export class CheckoutSession {
     );
 
     // Calculate discount if coupon is provided and valid
-    const discount = coupon?.calculateDiscount(subtotal) || 0;
+    let discount = 0;
+    if (couponData) {
+      if (couponData.discountType === 'PERCENTAGE') {
+        discount = (subtotal * Number(couponData.discountAmount)) / 100;
+      } else if (couponData.discountType === 'FIXED') {
+        discount = Number(couponData.discountAmount);
+      }
+    }
 
     // Calculate final total
     const total = subtotal + this.shippingCost + this.tax - discount;

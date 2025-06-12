@@ -7,12 +7,9 @@ import { TypeormPlugin } from './plugins/typeorm';
 import { swaggerConfig, swaggerUiOptions } from './config/swagger';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
-import { CouponService } from './services/coupon.service';
 import { CheckoutService } from './services/checkout.service';
 import { ShippingService } from './services/shipping.service';
-import { Coupon } from './entities/Coupon';
 import { CheckoutSession } from './entities/CheckoutSession';
-import adminCouponRoutes from './routes/admin/coupon.routes';
 import checkoutRoutes from './routes/checkout.routes';
 import { config } from './config/env';
 import { authGuard } from './middleware/auth.guard';
@@ -65,7 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get('/health', {
     schema: {
       description: 'Health check endpoint',
-      tags: ['Health'],
+      tags: ['health'],
       response: {
         200: {
           type: 'object',
@@ -90,11 +87,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(TypeormPlugin);
 
   // Initialize services
-  const couponService = new CouponService(app.typeorm.getRepository(Coupon));
   const shippingService = new ShippingService();
   const checkoutService = new CheckoutService(
     app.typeorm.getRepository(CheckoutSession),
-    couponService,
     shippingService
   );
 
@@ -104,7 +99,6 @@ export async function buildApp(): Promise<FastifyInstance> {
     await publicApp.register(checkoutRoutes, { 
       prefix: '/checkout',
       checkoutService,
-      couponService,
       shippingService
     });
   }, { prefix: '/api/v1' });
@@ -118,10 +112,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     protectedApp.addHook('preHandler', authGuard);
     
     // Register protected admin routes
-    await protectedApp.register(adminCouponRoutes, { 
-      prefix: '/admin/coupons',
-      couponService 
-    });
+    // (No coupon routes)
   }, { prefix: '/api/v1' });
 
   // Global error handler

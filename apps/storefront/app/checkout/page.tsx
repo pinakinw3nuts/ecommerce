@@ -1,7 +1,7 @@
 'use client';
 
 import './config.js';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, CreditCard, MapPin, Package, Truck, ChevronDown, Tag } from 'lucide-react';
 
@@ -12,6 +12,9 @@ import { useCart } from '@/contexts/CartContext';
 import { formatPrice } from '@/lib/utils';
 import CouponForm from '@/components/coupon/CouponForm';
 import AppliedCoupon from '@/components/coupon/AppliedCoupon';
+import * as checkoutService from '@/services/checkout';
+import { useToast } from '@/components/ui/Toast';
+import toast from 'react-hot-toast';
 
 // Simple Label component
 function Label({ htmlFor, children, className = "" }: { 
@@ -85,6 +88,7 @@ type FormData = {
   city: string;
   state: string;
   zipCode: string;
+  country: string;
 };
 
 type FormErrors = Partial<FormData>;
@@ -103,6 +107,7 @@ type Address = {
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const { 
     items, 
     subtotal, 
@@ -116,8 +121,12 @@ export default function CheckoutPage() {
     removeCoupon 
   } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [shippingMethod, setShippingMethod] = useState<'standard' | 'express' | 'next-day'>('standard');
+  const [shippingMethod, setShippingMethod] = useState<'STANDARD' | 'EXPRESS' | 'OVERNIGHT' | 'INTERNATIONAL'>('STANDARD');
   const [paymentMethod, setPaymentMethod] = useState<'credit' | 'paypal' | 'applepay'>('credit');
+  const [shippingOptions, setShippingOptions] = useState<checkoutService.ShippingOption[]>([]);
+  const [isLoadingShipping, setIsLoadingShipping] = useState(false);
+  const [orderPreview, setOrderPreview] = useState<checkoutService.OrderPreview | null>(null);
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   
   // Form state
   const [formData, setFormData] = useState<FormData>({
@@ -129,6 +138,7 @@ export default function CheckoutPage() {
     city: '',
     state: '',
     zipCode: '',
+    country: 'US',
   });
   
   const [formErrors, setFormErrors] = useState<FormErrors>({});
@@ -176,17 +186,171 @@ export default function CheckoutPage() {
         [name]: '',
       });
     }
+    
+    // If country or zipCode changes, fetch shipping options
+    if (name === 'country' || name === 'zipCode') {
+      fetchShippingOptions();
+    }
   };
   
-  // Watch for shipping method changes to update totals
-  const shippingCost = {
-    standard: shipping,
-    express: shipping + 10,
-    'next-day': shipping + 20,
-  }[shippingMethod] || 0;
+  // Fetch shipping options when address is complete
+  const fetchShippingOptions = async () => {
+    // Check if we have enough address data to fetch shipping options
+    if (!formData.country || !formData.zipCode) {
+      return;
+    }
+    
+    try {
+      setIsLoadingShipping(true);
+      
+      const address: checkoutService.Address = {
+        street: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zipCode: formData.zipCode,
+        country: formData.country,
+      };
+      
+      const options = await checkoutService.getShippingOptions(address);
+      setShippingOptions(options);
+      
+      // Set default shipping method if we have options
+      if (options.length > 0) {
+        setShippingMethod(options[0].method);
+      }
+    } catch (error) {
+      console.error('Error fetching shipping options:', error);
+      toast.error('Failed to fetch shipping options. Please check your address.');
+    } finally {
+      setIsLoadingShipping(false);
+    }
+  };
   
-  // Use total from cart context which includes discount
-  const finalTotal = total + (shippingMethod === 'standard' ? 0 : shippingMethod === 'express' ? 10 : 20);
+  // Calculate order preview when items, shipping method, or coupon changes
+  const calculateOrderPreview = async () => {
+    if (items.length === 0) return;
+    
+    try {
+      // Convert cart items to checkout service format
+      const cartItems: checkoutService.CartItem[] = items.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: item.price,
+        name: item.name,
+        metadata: {
+          imageUrl: item.imageUrl,
+          variant: item.variant,
+          sku: item.sku,
+        }
+      }));
+      
+      // Create address object if we have address data
+      let shippingAddress: checkoutService.Address | undefined;
+      if (formData.address && formData.city && formData.state && formData.zipCode && formData.country) {
+        shippingAddress = {
+          street: formData.address,
+          city: formData.city,
+          state: formData.state,
+          zipCode: formData.zipCode,
+          country: formData.country,
+        };
+      }
+      
+      // Use a valid UUID format for userId
+      const userId = 'cc0c7021-e693-412e-9549-6c80ef327e39'; // In a real app, get this from authentication
+      
+      const preview = await checkoutService.calculateOrderPreview(
+        userId,
+        cartItems,
+        coupon?.code,
+        shippingAddress
+      );
+      
+      setOrderPreview(preview);
+    } catch (error) {
+      console.error('Error calculating order preview:', error);
+      toast.error('Failed to calculate order preview. Please try again.');
+    }
+  };
+  
+  // Fetch order preview when relevant data changes
+  useEffect(() => {
+    calculateOrderPreview();
+  }, [items, shippingMethod, coupon]);
+  
+  // Handle shipping method change
+  const handleShippingMethodChange = (method: 'STANDARD' | 'EXPRESS' | 'OVERNIGHT' | 'INTERNATIONAL') => {
+    setShippingMethod(method);
+  };
+  
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    // Validate form
+    if (!validateForm()) {
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Convert cart items to checkout service format
+      const cartItems: checkoutService.CartItem[] = items.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: item.price,
+        name: item.name,
+        metadata: {
+          imageUrl: item.imageUrl,
+          variant: item.variant,
+          sku: item.sku,
+        }
+      }));
+      
+      // Create address objects
+      const shippingAddress: checkoutService.Address = {
+        street: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zipCode: formData.zipCode,
+        country: formData.country,
+      };
+      
+      // Use shipping address as billing address for now
+      const billingAddress = shippingAddress;
+      
+      // Use a valid UUID format for userId
+      const userId = 'cc0c7021-e693-412e-9549-6c80ef327e39'; // In a real app, get this from authentication
+      
+      // Create checkout session using the service
+      const session = await checkoutService.createCheckoutSession(
+        userId,
+        cartItems,
+        coupon?.code,
+        shippingAddress,
+        billingAddress
+      );
+      
+      setCheckoutSessionId(session.id);
+      
+      // In a real app, you would redirect to payment processing
+      // For now, simulate payment and complete the session
+      const paymentIntentId = `pi_${Math.random().toString(36).substring(2, 15)}`;
+      
+      // Complete the checkout session
+      const completedSession = await checkoutService.completeCheckoutSession(session.id, paymentIntentId);
+      
+      // Clear cart and redirect to success page
+      clearCart();
+      router.push(`/checkout/success?sessionId=${session.id}`);
+    } catch (error: any) {
+      console.error('Error submitting order:', error);
+      toast.error(error.message || 'Failed to process your order. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   
   // Validate form
   const validateForm = () => {
@@ -237,41 +401,6 @@ export default function CheckoutPage() {
     return isValid;
   };
   
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    // Validate form
-    if (!validateForm()) {
-      return;
-    }
-    
-    setIsSubmitting(true);
-    
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      console.log('Order submitted:', { 
-        ...formData, 
-        shippingMethod,
-        paymentMethod,
-        items,
-        subtotal,
-        shipping: shippingCost,
-        tax,
-        total: finalTotal 
-      });
-      
-      // Clear cart and redirect to success page
-      clearCart();
-      router.push('/checkout/success');
-    } catch (error) {
-      console.error('Error submitting order:', error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  
   // Function to select an address
   const selectAddress = (address: Address) => {
     setFormData({
@@ -283,12 +412,21 @@ export default function CheckoutPage() {
       city: address.city,
       state: address.state,
       zipCode: address.zipCode,
+      country: 'US',
     });
     setSelectedAddressId(address.id);
     setShowAddressDropdown(false);
     // Clear any form errors when selecting an address
     setFormErrors({});
   };
+  
+  // Calculate shipping cost based on method
+  const shippingCost = shippingMethod === 'STANDARD' ? shipping :
+                      shippingMethod === 'EXPRESS' ? shipping + 10 :
+                      shipping + 20;
+
+  // Calculate final total
+  const finalTotal = subtotal - discount + shippingCost + tax;
   
   if (items.length === 0) {
     return (
@@ -361,6 +499,7 @@ export default function CheckoutPage() {
                                   city: '',
                                   state: '',
                                   zipCode: '',
+                                  country: 'US',
                                 });
                                 setSelectedAddressId(null);
                                 setShowAddressDropdown(false);
@@ -518,32 +657,32 @@ export default function CheckoutPage() {
               <CardContent className="space-y-3">
                 <RadioButton
                   id="standard"
-                  value="standard"
+                  value="STANDARD"
                   label="Standard Shipping"
                   sublabel="Delivery in 3-5 business days"
-                  checked={shippingMethod === 'standard'}
+                  checked={shippingMethod === 'STANDARD'}
                   price={shipping === 0 ? "Free" : shipping}
-                  onChange={(val) => setShippingMethod(val as 'standard' | 'express' | 'next-day')}
+                  onChange={(val) => setShippingMethod(val as 'STANDARD' | 'EXPRESS' | 'OVERNIGHT' | 'INTERNATIONAL')}
                 />
                 
                 <RadioButton
                   id="express"
-                  value="express"
+                  value="EXPRESS"
                   label="Express Shipping"
                   sublabel="Delivery in 2-3 business days"
-                  checked={shippingMethod === 'express'}
+                  checked={shippingMethod === 'EXPRESS'}
                   price={shipping + 10}
-                  onChange={(val) => setShippingMethod(val as 'standard' | 'express' | 'next-day')}
+                  onChange={(val) => setShippingMethod(val as 'STANDARD' | 'EXPRESS' | 'OVERNIGHT' | 'INTERNATIONAL')}
                 />
                 
                 <RadioButton
-                  id="next-day"
-                  value="next-day"
+                  id="overnight"
+                  value="OVERNIGHT"
                   label="Next Day Delivery"
                   sublabel="Delivery tomorrow if ordered before 2pm"
-                  checked={shippingMethod === 'next-day'}
+                  checked={shippingMethod === 'OVERNIGHT'}
                   price={shipping + 20}
-                  onChange={(val) => setShippingMethod(val as 'standard' | 'express' | 'next-day')}
+                  onChange={(val) => setShippingMethod(val as 'STANDARD' | 'EXPRESS' | 'OVERNIGHT' | 'INTERNATIONAL')}
                 />
               </CardContent>
             </Card>

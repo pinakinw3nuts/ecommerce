@@ -1,10 +1,10 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { CheckoutService } from '../services/checkout.service';
-import { CouponService } from '../services/coupon.service';
 import { ShippingService } from '../services/shipping.service';
 import { validateZodSchema } from '../utils/validate-schema';
 import { logger } from '../utils/logger';
+import { CartItem } from '../entities/checkout-session.entity';
 
 // Cart item schema
 const cartItemSchema = z.object({
@@ -18,14 +18,7 @@ const cartItemSchema = z.object({
 // Input validation schemas
 const previewOrderSchema = z.object({
   userId: z.string().uuid(),
-  cartItems: z.array(cartItemSchema),
-  couponCode: z.string().optional()
-});
-
-const applyCouponSchema = z.object({
-  userId: z.string().uuid(),
-  cartItems: z.array(cartItemSchema),
-  couponCode: z.string().min(1)
+  cartItems: z.array(cartItemSchema)
 });
 
 const shippingOptionsSchema = z.object({
@@ -41,19 +34,17 @@ const shippingOptionsSchema = z.object({
 export async function checkoutController(
   fastify: FastifyInstance,
   checkoutService: CheckoutService,
-  couponService: CouponService,
   shippingService: ShippingService
 ) {
   // Get order preview
   fastify.post('/checkout/preview', {
     handler: async (request) => {
-      const { userId, cartItems, couponCode } = validateZodSchema(previewOrderSchema, request.body);
+      const { userId, cartItems } = validateZodSchema(previewOrderSchema, request.body);
 
       try {
         const orderPreview = await checkoutService.calculateOrderPreview(
           userId,
-          cartItems,
-          couponCode
+          cartItems as CartItem[]
         );
 
         return {
@@ -62,41 +53,7 @@ export async function checkoutController(
         };
       } catch (error: any) {
         if (error.message === 'Cart is empty') {
-          throw fastify.httpErrors.notFound('Cart is empty');
-        }
-        throw error;
-      }
-    }
-  });
-
-  // Apply coupon
-  fastify.post('/checkout/apply-coupon', {
-    handler: async (request) => {
-      const { userId, cartItems, couponCode } = validateZodSchema(applyCouponSchema, request.body);
-
-      try {
-        // Get current cart total first
-        const preview = await checkoutService.calculateOrderPreview(userId, cartItems);
-        
-        const result = await couponService.applyCoupon(
-          couponCode,
-          preview.subtotal
-        );
-
-        return {
-          success: true,
-          data: {
-            discountAmount: result.discountAmount,
-            coupon: {
-              code: result.coupon.code,
-              type: result.coupon.type,
-              value: result.coupon.value
-            }
-          }
-        };
-      } catch (error: any) {
-        if (error.name === 'CouponValidationError') {
-          throw fastify.httpErrors.notFound(error.message);
+          throw new Error('Cart is empty');
         }
         throw error;
       }
@@ -133,7 +90,7 @@ export async function checkoutController(
           const isValid = await shippingService.validatePincode(pincode, country);
           if (!isValid) {
             logger.warn({ userId, country, pincode }, 'Invalid pincode provided');
-            throw fastify.httpErrors.notFound('Invalid pincode for the selected country');
+            throw new Error('Invalid pincode for the selected country');
           }
         }
 
@@ -175,7 +132,7 @@ export async function checkoutController(
         };
       } catch (error: any) {
         if (error.message === 'Cart is empty') {
-          throw fastify.httpErrors.notFound('Cart is empty');
+          throw new Error('Cart is empty');
         }
         throw error;
       }
