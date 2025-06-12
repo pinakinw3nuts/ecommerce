@@ -28,4 +28,24 @@ export const authGuard = async (
   }
 
   request.user = decoded;
-}; 
+};
+
+// In services/cart-service/src/middleware/auth.ts
+export const attachUserIfPresent = async (
+  request: FastifyRequest,
+  _reply: FastifyReply
+): Promise<void> => {
+  const authHeader = request.headers.authorization;
+  console.log('Auth header:', authHeader);
+  if (!authHeader) return;
+  const token = authHeader.startsWith('Bearer ')
+    ? authHeader.substring(7)
+    : authHeader;
+  console.log('Token:', token);
+  const decoded = decodeToken(token);
+  console.log('Decoded token:', decoded);
+  if (decoded) {
+    request.user = decoded;
+    console.log('User attached to request:', request.user);
+  }
+};

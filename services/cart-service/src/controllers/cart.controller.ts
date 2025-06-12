@@ -89,7 +89,8 @@ export class CartController {
       const item = await this.cartItemService.addItem(
         cart.id,
         userId,
-        validatedData
+        validatedData,
+        deviceId
       );
 
       reply.code(201).send(item.toJSON());

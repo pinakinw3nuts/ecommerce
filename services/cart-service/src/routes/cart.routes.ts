@@ -8,7 +8,7 @@ import { createValidationMiddleware } from '../middleware/validation';
 import { AppDataSource } from '../config/database';
 import { Cart } from '../entities/Cart';
 import { CartItem } from '../entities/CartItem';
-import { authGuard } from '../middleware/auth';
+import { authGuard, attachUserIfPresent } from '../middleware/auth';
 
 // Request validation schemas
 const addItemSchema = z.object({
@@ -255,6 +255,9 @@ const cartRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // Initialize validation service with Fastify instance
   const cartValidationService = new CartValidationService(cartRepository, fastify);
   const validateCart = createValidationMiddleware(cartValidationService);
+  
+  // Add middleware to attach user if JWT token is present
+  fastify.addHook('preHandler', attachUserIfPresent);
 
   // Get cart
   fastify.get<{
@@ -362,7 +365,8 @@ const cartRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
           await cartItemService.addItem(
             cart.id,
             context.userId,
-            request.body
+            request.body,
+            context.deviceId
           );
           
           // Fetch updated cart to return
@@ -451,7 +455,8 @@ const cartRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
           await cartItemService.addItem(
             cart.id,
             context.userId,
-            request.body
+            request.body,
+            context.deviceId
           );
           
           // Fetch updated cart to return

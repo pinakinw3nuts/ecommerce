@@ -162,7 +162,7 @@ export class CartService {
   /**
    * Get or create user cart
    */
-  async getUserCart(userId: string): Promise<Cart> {
+  async getUserCart(userId: string, deviceId?: string): Promise<Cart> {
     let cart = await this.cartRepository.findOne({
       where: { userId, isCheckedOut: false },
       relations: ['items'],
@@ -172,13 +172,18 @@ export class CartService {
       cart = this.cartRepository.create({
         userId,
         expiresAt: new Date(Date.now() + this.CART_TTL * 1000),
+        metadata: deviceId ? { deviceId } : {},
       });
       await this.cartRepository.save(cart);
-      
-      // Initialize items array
       cart.items = [];
+    } else if (deviceId) {
+      // Ensure deviceId is set in metadata if not already
+      if (!cart.metadata) cart.metadata = {};
+      if (cart.metadata.deviceId !== deviceId) {
+        cart.metadata.deviceId = deviceId;
+        await this.cartRepository.save(cart);
+      }
     }
-
     return cart;
   }
 
@@ -309,10 +314,29 @@ export class CartService {
   async addItem(
     cartId: string,
     userId: string | null,
-    data: CartItemData
+    data: CartItemData,
+    deviceId?: string | null
   ): Promise<Cart> {
+    console.log('Cart addItem ==>', cartId, userId, data, deviceId);
     const cart = await this.getCartById(cartId, userId);
     if (!cart) throw new Error('Cart not found');
+
+    // Ensure both userId and deviceId are set if available
+    let updated = false;
+    if (userId && cart.userId !== userId) {
+      cart.userId = userId;
+      updated = true;
+    }
+    if (deviceId) {
+      if (!cart.metadata) cart.metadata = {};
+      if (cart.metadata.deviceId !== deviceId) {
+        cart.metadata.deviceId = deviceId;
+        updated = true;
+      }
+    }
+    if (updated) {
+      await this.cartRepository.save(cart);
+    }
 
     // Special handling for iPhone 13
     if (data.productId === '66c70c61-4d97-4355-af5f-24817ea51b59') {
@@ -458,7 +482,9 @@ export class CartService {
     const guestCart = await this.getCartById(guestCartId);
     if (!guestCart) throw new Error('Guest cart not found');
 
-    const userCart = await this.getUserCart(userId);
+    // Pass deviceId from guest cart to user cart
+    const deviceId = guestCart.metadata?.deviceId;
+    const userCart = await this.getUserCart(userId, deviceId);
 
     // Move items from guest cart to user cart
     for (const item of guestCart.items) {
@@ -492,6 +518,15 @@ export class CartService {
 
     // Delete guest cart
     await this.cartRepository.remove(guestCart);
+
+    // After merging, ensure deviceId is set
+    if (deviceId) {
+      if (!userCart.metadata) userCart.metadata = {};
+      if (userCart.metadata.deviceId !== deviceId) {
+        userCart.metadata.deviceId = deviceId;
+        await this.cartRepository.save(userCart);
+      }
+    }
 
     return userCart;
   }

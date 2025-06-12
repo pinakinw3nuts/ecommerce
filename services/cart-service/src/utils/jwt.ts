@@ -30,14 +30,19 @@ export const decodeToken = (token: string): JwtPayload | null => {
   try {
     // Remove 'Bearer ' if present
     const tokenString = token.startsWith('Bearer ') ? token.slice(7) : token;
+    console.log('JWT Secret:', config.jwtSecret);
+    console.log('Token to verify:', tokenString);
 
     // Verify and decode the token
     const decoded = jwt.verify(tokenString, config.jwtSecret) as JwtPayload;
+    console.log('Successfully decoded token:', decoded);
     return decoded;
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
+      console.error('JWT Error:', error.message);
       logger.warn({ error: error.message }, 'Invalid JWT token');
     } else {
+      console.error('Other Error:', error);
       logger.error({ error }, 'Error decoding JWT token');
     }
     return null;

@@ -1866,7 +1866,7 @@ function generateMockReviews(productId: string, count: number = 5) {
     'This product exceeded my expectations. The build quality is great and it performs very well.',
     'Great value for the price. Would definitely buy again.',
     'Works well for what I need. No complaints.',
-    'I've been using this for a few weeks now and I'm very satisfied with the purchase.',
+    `I've been using this for a few weeks now and I'm very satisfied with the purchase.`,
     'The product is good, but the shipping was a bit slow.',
     'Exactly what I was looking for. Very happy with my purchase.',
     'The quality is outstanding. Definitely worth the money.',

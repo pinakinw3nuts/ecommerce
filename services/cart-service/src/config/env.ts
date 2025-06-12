@@ -28,7 +28,7 @@ const envSchema = z.object({
 
   // JWT configuration for auth
   JWT_SECRET: z.string()
-    .default('development_secret_key_min_32_chars_long')
+    .default('your-super-secret-jwt-key-min-32-chars-here')
     .transform(secret => secret.trim()),
 });
 

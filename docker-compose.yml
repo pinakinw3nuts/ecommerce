@@ -217,6 +217,7 @@ services:
       - DB_NAME=cart_db
       - REDIS_URL=redis://redis:6379
       - CORS_ORIGINS=http://localhost:3000
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret-key}
     depends_on:
       postgres:
         condition: service_healthy

@@ -109,9 +109,11 @@ export class CartItemService {
   async addItem(
     cartId: string,
     userId: string | null,
-    data: AddItemRequest
+    data: AddItemRequest,
+    deviceId?: string | null
   ): Promise<CartItem> {
     try {
+      console.log('CartItemService addItem ==>', cartId, userId, data);
       // Validate the data
       if (!data.productId) {
         throw new Error('Product ID is required');
@@ -143,14 +145,14 @@ export class CartItemService {
           },
         };
 
-        // Add item to cart with fixed price
-        const cart = await this.cartService.addItem(cartId, userId, {
+              // Add item to cart with fixed price and userId to ensure it's stored
+      const cart = await this.cartService.addItem(cartId, userId, {
               productId: data.productId,
               variantId: data.variantId,
           quantity: data.quantity,
           price: 150,
           productSnapshot,
-        });
+        }, deviceId);
 
         // Return the newly added item
         const newItem = cart.items.find(
@@ -178,16 +180,7 @@ export class CartItemService {
         productImageUrl
       } = this.extractProductDetails(productData, data.variantId ?? undefined, fallbackMode);
       
-      // Log price information for debugging
-      this.logger.info({
-        cartId,
-        productId: data.productId,
-        variantId: data.variantId,
-        price,
-        fallbackMode,
-        productPrice: productData?.price
-      }, 'Price determined for cart item');
-
+      
       // Create product snapshot
       const productSnapshot: ProductSnapshot = {
         name: productName,
@@ -211,14 +204,14 @@ export class CartItemService {
         fallbackMode
       }, 'Adding item to cart');
 
-      // Add item to cart
+      // Add item to cart with userId to ensure it's stored
       const cart = await this.cartService.addItem(cartId, userId, {
         productId: data.productId,
         variantId: data.variantId,
         quantity: data.quantity,
         price,
         productSnapshot,
-      });
+      }, deviceId);
 
       // Return the newly added item
       const newItem = cart.items.find(
