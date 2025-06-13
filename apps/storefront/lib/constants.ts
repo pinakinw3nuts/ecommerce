@@ -10,6 +10,9 @@ export const API_GATEWAY_URL =
 // Product API URL specifically for product service
 export const PRODUCT_API_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1:3003/api/v1';
 
+// Order API URL specifically for order service
+export const ORDER_API_URL = process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:3005/api/v1';
+
 // Flag to use mock data when API is not available
 export const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true' || false;
 

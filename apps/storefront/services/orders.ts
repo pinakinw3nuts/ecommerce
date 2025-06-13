@@ -1,6 +1,6 @@
 import { Order, OrdersResponse } from '@/lib/types/order';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = process.env.ORDER_SERVICE_URL || 'http://localhost:3006/api/va';
 
 export async function fetchOrders(params: {
   page?: number;
@@ -49,4 +49,55 @@ export async function cancelOrder(orderId: string): Promise<void> {
   if (!response.ok) {
     throw new Error('Failed to cancel order');
   }
+}
+
+export async function createOrder(orderData: {
+  items: { productId: string; quantity: number }[];
+  shippingAddress: {
+    street: string;
+    city: string;
+    state: string;
+    country: string;
+    postalCode: string;
+  };
+  billingAddress?: {
+    street: string;
+    city: string;
+    state: string;
+    country: string;
+    postalCode: string;
+  };
+}): Promise<Order> {
+  const response = await fetch(`${API_URL}/api/orders`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(orderData),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to create order');
+  }
+
+  return response.json();
+}
+
+export async function updateOrderStatus(orderId: string, status: string): Promise<Order> {
+  const response = await fetch(`${API_URL}/api/orders/${orderId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ status }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to update order status');
+  }
+
+  return response.json();
 }

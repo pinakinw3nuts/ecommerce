@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { API_GATEWAY_URL } from '@/lib/constants';
+import { ORDER_API_URL } from '@/lib/constants';
+
+// Import the mapping function from the parent route
+import { mapOrderFromApi } from '../route';
 
 export async function GET(
   req: NextRequest,
@@ -23,7 +26,7 @@ export async function GET(
       );
     }
     
-    const response = await axios.get(`${API_GATEWAY_URL}/v1/orders/${params.id}`, {
+    const response = await axios.get(`${ORDER_API_URL}/orders/${params.id}`, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json',
@@ -31,11 +34,62 @@ export async function GET(
       },
     });
     
-    return NextResponse.json(response.data);
+    // Map the response to match our frontend expected format
+    const order = mapOrderFromApi(response.data);
+    
+    return NextResponse.json(order);
   } catch (error: any) {
     console.error('Error fetching order details:', error);
     return NextResponse.json(
       { error: 'Failed to fetch order details', message: error.message },
+      { status: error.response?.status || 500 }
+    );
+  }
+}
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const token = req.cookies.get('accessToken')?.value;
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    if (!params.id) {
+      return NextResponse.json(
+        { error: 'Order ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    const body = await req.json();
+    
+    const response = await axios.put(
+      `${ORDER_API_URL}/orders/${params.id}`,
+      body,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    
+    // Map the response to match our frontend expected format
+    const order = mapOrderFromApi(response.data);
+    
+    return NextResponse.json(order);
+  } catch (error: any) {
+    console.error('Error updating order:', error);
+    return NextResponse.json(
+      { error: 'Failed to update order', message: error.message },
       { status: error.response?.status || 500 }
     );
   }
@@ -66,7 +120,7 @@ export async function POST(
     
     if (action === 'cancel') {
       const response = await axios.post(
-        `${API_GATEWAY_URL}/v1/orders/${params.id}/cancel`,
+        `${ORDER_API_URL}/orders/${params.id}/cancel`,
         {},
         {
           headers: {
@@ -77,7 +131,10 @@ export async function POST(
         }
       );
       
-      return NextResponse.json(response.data);
+      // Map the response to match our frontend expected format
+      const order = mapOrderFromApi(response.data);
+      
+      return NextResponse.json(order);
     }
     
     return NextResponse.json(
