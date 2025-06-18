@@ -10,6 +10,7 @@ import proxyRoutes from './routes/proxy.routes';
 import rootRoutes from './routes/root.routes';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user.routes';
+import ecommerceRoutes from './routes/ecommerce.routes';
 import { httpLogger as logger } from './utils/logger';
 
 export class Server {
@@ -65,6 +66,7 @@ export class Server {
       await this.server.register(healthRoutes);
       await this.server.register(userRoutes, { prefix: '/api' });
       await this.server.register(authRoutes, { prefix: '/api/auth' });
+      await this.server.register(ecommerceRoutes, { prefix: '/api' });
       await this.server.register(proxyRoutes);
 
       logger.info('Server configured successfully');

@@ -11,6 +11,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatPrice(price: number): string {
+  if (typeof price !== 'number' || isNaN(price)) {
+    return '$0.00'; // Return a default value for invalid numbers
+  }
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',

@@ -26,7 +26,7 @@ const envSchema = z.object({
   DB_DATABASE: z.string().optional(),
   
   // JWT
-  JWT_SECRET: z.string().default('supersecret'),
+  JWT_SECRET: z.string().default('your-super-secret-jwt-key-min-32-chars-here'),
   JWT_EXPIRES_IN: z.string().default('1d'),
   
   // FedEx API credentials

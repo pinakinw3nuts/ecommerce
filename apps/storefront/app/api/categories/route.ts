@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import { PRODUCT_API_URL } from '@/lib/constants';
 
+// Force IPv4 by replacing localhost with 127.0.0.1 in the API URL
+function getIpv4Url(url: string): string {
+  return url.replace('localhost', '127.0.0.1');
+}
+
 /**
  * GET handler for /api/categories
  * Proxies requests to the product service
@@ -26,8 +31,8 @@ export async function GET(request: NextRequest) {
     // Log parameters for debugging
     console.log('Using API Parameters:', params);
     
-    // Using the known working endpoint format
-    const apiUrl = `${PRODUCT_API_URL}/categories`;
+    // Using the known working endpoint format with IPv4 forcing
+    const apiUrl = getIpv4Url(`${PRODUCT_API_URL}/categories`);
     console.log(`Forwarding request to: ${apiUrl}`);
     
     // Make the request to the product service API

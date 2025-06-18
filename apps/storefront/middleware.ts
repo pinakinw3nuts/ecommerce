@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from '@/lib/constants';
+import { redirectToSuccessPage } from './lib/checkout-middleware';
+
+// Check if a path is related to the cart page
+const isCartPage = (path: string) => {
+  return path === '/cart' || path.startsWith('/cart/');
+};
 
 // Paths that don't require authentication
 const publicPaths = [
@@ -30,6 +36,15 @@ const isPublicPath = (path: string) => {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  
+  // Check for order completion and redirect to success page if on cart page
+  if (isCartPage(pathname)) {
+    // Check for order completion flag to redirect to success page
+    const orderCompletedFlag = request.cookies.get('order_completed')?.value === 'true';
+    if (orderCompletedFlag) {
+      return redirectToSuccessPage(request);
+    }
+  }
   
   // Skip middleware for public paths and static assets
   if (isPublicPath(pathname)) {

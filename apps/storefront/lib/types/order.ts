@@ -5,6 +5,7 @@ export interface OrderItem {
   name: string;
   image?: string;
   sku?: string;
+  status?: string;
 }
 
 export interface Order {
@@ -14,6 +15,9 @@ export interface Order {
   items: OrderItem[];
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
+  paymentMethod?: string;
+  trackingNumber?: string;
+  shippingCarrier?: string;
   shippingAddress: {
     firstName: string;
     lastName: string;

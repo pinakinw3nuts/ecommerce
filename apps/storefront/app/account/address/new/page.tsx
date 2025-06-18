@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import * as shippingService from '@/services/shipping';
+import { AddressInput } from '@/services/shipping';
+import toast from 'react-hot-toast';
 
 export default function NewAddressPage() {
   const router = useRouter();
@@ -14,20 +17,27 @@ export default function NewAddressPage() {
 
     const formData = new FormData(event.currentTarget);
     
+    const addressData: AddressInput = {
+      addressLine1: formData.get('addressLine1') as string,
+      addressLine2: formData.get('addressLine2') as string,
+      city: formData.get('city') as string,
+      state: formData.get('state') as string,
+      pincode: formData.get('pincode') as string,
+      country: formData.get('country') as string,
+      fullName: formData.get('fullName') as string,
+      phone: formData.get('phone') as string,
+      type: formData.get('type') as 'shipping' | 'billing' | 'both',
+    };
+
     try {
-      // For demo purposes, we'll just simulate a successful submission
-      // In a real implementation, we would send this to an API endpoint
-      console.log('New address submitted:', Object.fromEntries(formData));
+      await shippingService.addShippingAddress(addressData);
+      toast.success('Address added successfully!');
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Redirect back to addresses page or checkout
       const returnUrl = new URLSearchParams(window.location.search).get('returnUrl');
       router.push(returnUrl || '/account/addresses');
     } catch (error) {
       console.error('Error adding address:', error);
-      alert('Failed to add address. Please try again.');
+      toast.error('Failed to add address. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -50,20 +60,20 @@ export default function NewAddressPage() {
                 required
                 className="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-black focus:border-black transition"
               >
-                <option value="home">Home</option>
-                <option value="work">Work</option>
-                <option value="other">Other</option>
+                <option value="shipping">Shipping</option>
+                <option value="billing">Billing</option>
+                <option value="both">Both</option>
               </select>
             </div>
 
             <div className="col-span-1">
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
                 Full Name
               </label>
               <input
                 type="text"
-                id="name"
-                name="name"
+                id="fullName"
+                name="fullName"
                 required
                 placeholder="John Doe"
                 className="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-black focus:border-black transition"
@@ -86,13 +96,13 @@ export default function NewAddressPage() {
           </div>
 
           <div>
-            <label htmlFor="line1" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="addressLine1" className="block text-sm font-medium text-gray-700 mb-1">
               Address Line 1
             </label>
             <input
               type="text"
-              id="line1"
-              name="line1"
+              id="addressLine1"
+              name="addressLine1"
               required
               placeholder="123 Main St"
               className="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-black focus:border-black transition"
@@ -100,13 +110,13 @@ export default function NewAddressPage() {
           </div>
 
           <div>
-            <label htmlFor="line2" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="addressLine2" className="block text-sm font-medium text-gray-700 mb-1">
               Address Line 2 <span className="text-gray-500 font-normal">(Optional)</span>
             </label>
             <input
               type="text"
-              id="line2"
-              name="line2"
+              id="addressLine2"
+              name="addressLine2"
               placeholder="Apt 4B, Floor 2, etc."
               className="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-black focus:border-black transition"
             />

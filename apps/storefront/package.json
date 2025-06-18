@@ -4,9 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 3100",
+    "dev:real-api": "DISABLE_MOCK_DATA=true next dev --turbopack -p 3100",
     "build": "next build",
     "build:skip-checks": "next build --no-lint",
     "start": "next start -p 3100",
+    "start:api-services": "node start-api-services.js",
+    "start:order-service": "node start-order-service.js",
     "lint": "next lint"
   },
   "dependencies": {

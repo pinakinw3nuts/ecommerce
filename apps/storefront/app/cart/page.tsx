@@ -41,6 +41,42 @@ export default function CartPage() {
   // Handle client-side rendering
   useEffect(() => {
     setIsClient(true);
+    
+    // Check if there's a recently completed order and redirect to success page
+    const checkForOrderCompletion = () => {
+      if (typeof window !== 'undefined') {
+        const orderCompleted = localStorage.getItem('order_completed') === 'true';
+        const preventRedirect = sessionStorage.getItem('prevent_cart_redirect') === 'true';
+        
+        if (orderCompleted || preventRedirect) {
+          // Get redirect URL based on stored order/session IDs
+          const redirectUrl = '/checkout/success';
+          
+          const orderId = localStorage.getItem('last_order_id');
+          const sessionId = localStorage.getItem('last_session_id') || localStorage.getItem('checkout_session_id');
+          
+          let fullUrl = redirectUrl;
+          const params = new URLSearchParams();
+          
+          if (orderId) {
+            params.set('orderId', orderId);
+          }
+          
+          if (sessionId) {
+            params.set('sessionId', sessionId);
+          }
+          
+          if (params.toString()) {
+            fullUrl += `?${params.toString()}`;
+          }
+          
+          // Navigate to the success page
+          window.location.href = fullUrl;
+        }
+      }
+    };
+    
+    checkForOrderCompletion();
   }, []);
 
   // Handle item quantity update with debounce

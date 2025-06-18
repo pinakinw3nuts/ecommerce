@@ -8,7 +8,7 @@ import {
   Index,
   JoinColumn,
 } from 'typeorm';
-import { Order } from './Order';
+import { Order, OrderStatus } from './Order';
 
 @Entity('order_items')
 export class OrderItem {
@@ -26,6 +26,21 @@ export class OrderItem {
   @Column('uuid', { nullable: true })
   @Index()
   variantId: string | null = null;
+  
+  @Column({ nullable: true })
+  name?: string;
+  
+  @Column({ nullable: true })
+  sku?: string;
+  
+  @Column({ nullable: true })
+  image?: string;
+  
+  @Column({
+    type: 'varchar',
+    nullable: true
+  })
+  status?: string;
 
   @Column('decimal', { precision: 10, scale: 2 })
   price!: number;
@@ -61,5 +76,20 @@ export class OrderItem {
   // Helper methods
   getSubtotal(): number {
     return this.price * this.quantity - this.discountAmount;
+  }
+  
+  // Get item name from metadata or fallback
+  getName(): string {
+    return this.name || this.metadata?.name || `Product ${this.productId.substring(0, 8)}`;
+  }
+  
+  // Get item SKU from metadata or fallback
+  getSku(): string | undefined {
+    return this.sku || this.metadata?.sku;
+  }
+  
+  // Get item image from metadata or fallback
+  getImage(): string | undefined {
+    return this.image || this.metadata?.image;
   }
 } 

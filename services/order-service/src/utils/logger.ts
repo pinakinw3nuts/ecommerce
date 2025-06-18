@@ -1,61 +1,41 @@
 import pino from 'pino';
-import { config } from '../config/env';
+import { NODE_ENV } from '../config/env';
 
-interface LoggerConfig {
-  isDevelopment: boolean;
-}
-
-const LOG_LEVELS = {
-  fatal: 60,
-  error: 50,
-  warn: 40,
-  info: 30,
-  debug: 20,
-  trace: 10,
-} as const;
-
-export const configureLogger = ({ isDevelopment }: LoggerConfig) => {
-  return pino({
-    name: 'order-service',
-    level: isDevelopment ? 'debug' : 'info',
-    customLevels: LOG_LEVELS,
-    useOnlyCustomLevels: true,
-    formatters: {
-      level: (label) => {
-        return { level: label };
-      },
+// Configure pretty printing for development
+const prettyPrint = NODE_ENV === 'development' ? {
+  transport: {
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+      levelFirst: true,
+      translateTime: 'UTC:yyyy-mm-dd HH:MM:ss.l',
     },
-    timestamp: () => `,"timestamp":"${new Date(Date.now()).toISOString()}"`,
-    base: {
-      env: isDevelopment ? 'development' : 'production',
-      service: 'order-service',
-      version: '1.0.0',
-    },
-    transport: isDevelopment
-      ? {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'SYS:standard',
-            ignore: 'pid,hostname',
-            messageFormat: '{service} - {msg}',
-            levelFirst: true,
-          },
-        }
-      : undefined,
-  });
-};
+  },
+} : undefined;
 
-// Export type-safe log level methods
-export type LogFn = (msg: string, ...args: any[]) => void;
-export interface Logger {
-  fatal: LogFn;
-  error: LogFn;
-  warn: LogFn;
-  info: LogFn;
-  debug: LogFn;
-  trace: LogFn;
-}
+// Create logger instance
+const loggerInstance = pino({
+  name: 'order-service',
+  level: process.env.LOG_LEVEL || 'info',
+  timestamp: pino.stdTimeFunctions.isoTime,
+  ...prettyPrint,
+  // Redact sensitive information
+  redact: {
+    paths: ['*.password', '*.email', 'DATABASE_URL'],
+    remove: true,
+  },
+  // Add service version
+  base: {
+    env: NODE_ENV,
+    version: process.env.npm_package_version,
+  },
+});
 
-// Create the logger instance using environment configuration
-export const logger = configureLogger({ isDevelopment: config.isDevelopment }); 
+// Export logger instance
+export default loggerInstance;
+
+// Export named logger for compatibility with existing code
+export const logger = loggerInstance;
+
+// Export type for use in other files
+export type Logger = typeof loggerInstance; 

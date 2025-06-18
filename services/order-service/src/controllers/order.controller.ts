@@ -71,10 +71,11 @@ interface RequestParams {
 }
 
 export class OrderController {
-  private orderService: OrderService;
+  public orderService: OrderService;
 
-  constructor() {
-    this.orderService = new OrderService();
+  constructor(orderService?: OrderService) {
+    // Use provided service or create a new one
+    this.orderService = orderService || new OrderService();
   }
 
   /**

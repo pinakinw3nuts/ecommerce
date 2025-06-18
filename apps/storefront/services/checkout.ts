@@ -1,7 +1,9 @@
-import axios from 'axios';
+import { createApiClient } from '../lib/apiClient';
+import { AddressInput } from '../services/shipping';
+import * as shippingService from '../services/shipping';
+import { ApiResponse } from '../lib/apiClient';
 
-// Use the real checkout service API URL
-const CHECKOUT_API_URL = process.env.NEXT_PUBLIC_CHECKOUT_API_URL || 'http://localhost:3005/api/v1';
+const checkoutServiceApi = createApiClient(process.env.NEXT_PUBLIC_CHECKOUT_API_URL || 'http://localhost:3005/api/v1');
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -19,6 +21,10 @@ export interface Address {
   state: string;
   zipCode: string;
   country: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
 }
 
 export interface OrderPreview {
@@ -57,6 +63,7 @@ export interface CheckoutSession {
   discountCode?: string;
   paymentIntentId?: string;
   shippingMethod?: string;
+  paymentMethod?: string;
   shippingAddress?: Address;
   billingAddress?: Address;
   expiresAt: string;
@@ -65,73 +72,30 @@ export interface CheckoutSession {
   updatedAt?: string;
 }
 
-export interface ShippingOption {
-  method: 'STANDARD' | 'EXPRESS' | 'OVERNIGHT' | 'INTERNATIONAL';
-  carrier: string;
-  cost: number;
-  estimatedDays: string;
-  estimatedDelivery: {
-    earliest: string;
-    latest: string;
-  };
-}
-
 // Calculate order preview with shipping and discount
 export async function calculateOrderPreview(
   userId: string,
   cartItems: CartItem[],
   couponCode?: string,
   shippingAddress?: Address
-): Promise<OrderPreview> {
-  try {
-    const response = await axios.post(`${CHECKOUT_API_URL}/preview`, {
-      userId,
-      cartItems,
-      couponCode,
-      shippingAddress
-    });
-    
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to calculate order preview');
-    }
-    
-    return response.data.data;
-  } catch (error: any) {
-    console.error('Error calculating order preview:', error.message);
-    
-    if (error.response) {
-      throw new Error(error.response.data?.message || 'Failed to calculate order preview');
-    }
-    
-    throw error;
-  }
+): Promise<ApiResponse<OrderPreview>> {
+  const response = await checkoutServiceApi.post<ApiResponse<OrderPreview>>('/preview', {
+    userId,
+    cartItems,
+    couponCode,
+    shippingAddress
+  });
+  return response;
 }
 
-// Get available shipping options
-export async function getShippingOptions(
-  address: Address,
+// Get available shipping options - now delegates to shippingService
+export async function fetchShippingOptions(
+  address: AddressInput,
   orderWeight?: number
-): Promise<ShippingOption[]> {
-  try {
-    const response = await axios.post(`${CHECKOUT_API_URL}/shipping-options`, {
-      address,
-      orderWeight
-    });
-    
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to get shipping options');
-    }
-    
-    return response.data.data.options;
-  } catch (error: any) {
-    console.error('Error getting shipping options:', error.message);
-    
-    if (error.response) {
-      throw new Error(error.response.data?.message || 'Failed to get shipping options');
-    }
-    
-    throw error;
-  }
+): Promise<shippingService.ShippingOption[]> {
+  // Pass only required fields (pincode, country) from address to getAvailableShippingMethods
+  const { pincode, country } = address;
+  return shippingService.getAvailableShippingMethods({ pincode, country });
 }
 
 // Validate postal/zip code
@@ -139,26 +103,10 @@ export async function validatePincode(
   pincode: string,
   country: string
 ): Promise<boolean> {
-  try {
-    const response = await axios.post(`${CHECKOUT_API_URL}/validate-pincode`, {
-      pincode,
-      country
-    });
-    
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to validate pincode');
-    }
-    
-    return response.data.data.valid;
-  } catch (error: any) {
-    console.error('Error validating pincode:', error.message);
-    
-    if (error.response) {
-      throw new Error(error.response.data?.message || 'Failed to validate pincode');
-    }
-    
-    throw error;
-  }
+  return checkoutServiceApi.post<boolean>('/validate-pincode', {
+    pincode,
+    country
+  });
 }
 
 // Create checkout session
@@ -168,56 +116,32 @@ export async function createCheckoutSession(
   couponCode?: string,
   shippingAddress?: Address,
   billingAddress?: Address
-): Promise<CheckoutSession> {
-  try {
-    const response = await axios.post(`${CHECKOUT_API_URL}/session`, {
-      userId,
-      cartItems,
-      couponCode,
-      shippingAddress,
-      billingAddress
-    });
-    
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to create checkout session');
-    }
-    
-    return response.data.data;
-  } catch (error: any) {
-    console.error('Error creating checkout session:', error.message);
-    
-    if (error.response) {
-      throw new Error(error.response.data?.message || 'Failed to create checkout session');
-    }
-    
-    throw error;
-  }
+): Promise<ApiResponse<CheckoutSession>> {
+  return checkoutServiceApi.post<ApiResponse<CheckoutSession>>('/session', {
+    userId,
+    cartItems,
+    couponCode,
+    shippingAddress,
+    billingAddress
+  });
 }
 
 // Get checkout session
-export async function getCheckoutSession(sessionId: string): Promise<CheckoutSession> {
-  try {
-    console.log(`Fetching checkout session with ID: ${sessionId}`);
-    const response = await axios.get(`${CHECKOUT_API_URL}/session/${sessionId}`);
-    
-    console.log('Raw API response:', response.data);
-    console.log('API response structure:', JSON.stringify(response.data, null, 2));
-    
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to get checkout session');
-    }
-    
-    // Return the data property from the API response
-    let sessionData = response.data.data;
-    console.log('Extracted session data:', sessionData);
-    console.log('Session data structure:', JSON.stringify(sessionData, null, 2));
-    
-    // If the session data is missing totals, try to enhance it with a hardcoded total
-    // This is a temporary fix until the API is updated
-    if (!sessionData.totals) {
-      console.log('Session data is missing totals, adding default values');
-      sessionData = {
-        ...sessionData,
+export async function getCheckoutSession(sessionId: string): Promise<ApiResponse<CheckoutSession>> {
+  console.log(`Fetching checkout session with ID: ${sessionId}`);
+  const sessionData = await checkoutServiceApi.get<ApiResponse<CheckoutSession>>(`/session/${sessionId}`);
+  
+  console.log('Extracted session data:', sessionData);
+  console.log('Session data structure:', JSON.stringify(sessionData, null, 2));
+  
+  if (!sessionData.data.totals) {
+    console.log('Session data is missing totals, adding default values');
+    // This part of the code should ideally not be reached if the API always returns totals.
+    // If it does, the default values should be applied to sessionData.data
+    return {
+      ...sessionData,
+      data: {
+        ...sessionData.data,
         totals: {
           subtotal: 2500,
           tax: 250,
@@ -225,20 +149,10 @@ export async function getCheckoutSession(sessionId: string): Promise<CheckoutSes
           discount: 0,
           total: 2750
         }
-      };
-    }
-    
-    return sessionData;
-  } catch (error: any) {
-    console.error('Error getting checkout session:', error.message);
-    
-    if (error.response) {
-      console.error('Error response:', error.response.data);
-      throw new Error(error.response.data?.message || 'Failed to get checkout session');
-    }
-    
-    throw error;
+      }
+    };
   }
+  return sessionData;
 }
 
 // Complete checkout session (after payment)
@@ -246,23 +160,54 @@ export async function completeCheckoutSession(
   sessionId: string,
   paymentIntentId: string
 ): Promise<CheckoutSession> {
-  try {
-    const response = await axios.post(`${CHECKOUT_API_URL}/session/${sessionId}/complete`, {
-      paymentIntentId
-    });
-    
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to complete checkout session');
-    }
-    
-    return response.data.data;
-  } catch (error: any) {
-    console.error('Error completing checkout session:', error.message);
-    
-    if (error.response) {
-      throw new Error(error.response.data?.message || 'Failed to complete checkout session');
-    }
-    
-    throw error;
-  }
+  return checkoutServiceApi.post<CheckoutSession>(`/session/${sessionId}/complete`, {
+    paymentIntentId
+  });
+}
+
+export async function updateShippingMethod(
+  sessionId: string,
+  shippingMethod: string
+): Promise<CheckoutSession> {
+  return checkoutServiceApi.put<CheckoutSession>(`/session/${sessionId}/shipping-method`, {
+    shippingMethod
+  });
+}
+
+export async function applyDiscountCode(
+  sessionId: string,
+  discountCode: string
+): Promise<CheckoutSession> {
+  return checkoutServiceApi.post<CheckoutSession>(`/session/${sessionId}/apply-discount`, {
+    discountCode
+  });
+}
+
+export async function removeDiscountCode(sessionId: string): Promise<CheckoutSession> {
+  return checkoutServiceApi.post<CheckoutSession>(`/session/${sessionId}/remove-discount`, {});
+}
+
+export async function updateShippingAddress(
+  sessionId: string,
+  address: Address
+): Promise<CheckoutSession> {
+  return checkoutServiceApi.put<CheckoutSession>(`/session/${sessionId}/shipping-address`, {
+    address
+  });
+}
+
+export async function updateBillingAddress(
+  sessionId: string,
+  address: Address
+): Promise<CheckoutSession> {
+  return checkoutServiceApi.put<CheckoutSession>(`/session/${sessionId}/billing-address`, {
+    address
+  });
+}
+
+export async function createPaymentIntent(
+  sessionId: string,
+  amount: number
+): Promise<{ clientSecret: string }> {
+  return checkoutServiceApi.post<{ clientSecret: string }>(`/session/${sessionId}/create-payment-intent`, { amount });
 } 

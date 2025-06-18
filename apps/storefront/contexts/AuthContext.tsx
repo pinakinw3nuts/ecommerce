@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from '@/lib/constants';
 import api from '@/lib/api';
+import { v4 as uuidv4 } from 'uuid';
 
 // Define user type
 export interface User {
@@ -59,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       
+      console.log('Attempting to refresh token...');
       // Call refresh token endpoint
       const refreshResponse = await fetch('/api/auth/refresh-token', {
         method: 'POST',
@@ -76,11 +78,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         Cookies.remove(REFRESH_TOKEN_NAME, { path: '/' });
         Cookies.remove(`${ACCESS_TOKEN_NAME}_client`, { path: '/' });
         Cookies.remove(`${REFRESH_TOKEN_NAME}_client`, { path: '/' });
-        console.log('Token refresh failed, cleared cookies');
+        console.log('Token refresh failed, cleared cookies.');
         return false;
       }
       
       const refreshData = await refreshResponse.json();
+      console.log('Token refresh successful. New access token received.');
       
       // Ensure client-side cookies are set as backup
       if (refreshData.accessToken) {
@@ -89,10 +92,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           expires: 1/48, // 30 minutes
           sameSite: 'lax'
         });
+        
+        // Also set a redundant cookie with non-standard name that won't be overwritten
+        // This is a backup in case the other cookie gets cleared
+        Cookies.set(`auth_backup_token`, refreshData.accessToken, {
+          path: '/',
+          expires: 1/24, // 1 hour
+          sameSite: 'lax'
+        });
       }
       
       if (refreshData.refreshToken) {
         Cookies.set(`${REFRESH_TOKEN_NAME}_client`, refreshData.refreshToken, {
+          path: '/',
+          expires: 7, // 7 days
+          sameSite: 'lax'
+        });
+        
+        // Backup refresh token with different name
+        Cookies.set(`auth_backup_refresh`, refreshData.refreshToken, {
           path: '/',
           expires: 7, // 7 days
           sameSite: 'lax'
@@ -127,9 +145,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Function to create a standard user object from token or default values
   const createStandardUser = (accessToken: string | undefined) => {
-    let userId = 'authenticated-user';
+    let userId = '';
     let name = 'User';
     let email = 'user@example.com';
+
+    // Regex to validate UUID format
+    const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
     
     if (accessToken) {
       try {
@@ -137,15 +158,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const tokenParts = accessToken.split('.');
         if (tokenParts.length === 3) {
           const payload = JSON.parse(atob(tokenParts[1]));
-          userId = payload.userId || payload.sub || userId;
+          const decodedUserId = payload.userId || payload.sub;
+          if (decodedUserId && isUUID(decodedUserId)) {
+            userId = decodedUserId;
+          } else {
+            console.warn('Decoded userId from token is not a valid UUID or is missing. Generating a new one for this session.');
+            userId = uuidv4();
+          }
           name = payload.name || name;
           email = payload.email || email;
         }
       } catch (error) {
         console.error('Error decoding token:', error);
+        userId = uuidv4();
       }
+    } else {
+      // If no access token, this is likely a guest user or unauthenticated state. Generate a UUID.
+      userId = uuidv4();
     }
-    
+
     return {
       id: userId,
       name: name,
@@ -160,16 +191,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(true);
         
         // Check for access token - try both httpOnly and client cookies
-        const accessToken = Cookies.get(ACCESS_TOKEN_NAME) || Cookies.get(`${ACCESS_TOKEN_NAME}_client`);
-        const refreshToken = Cookies.get(REFRESH_TOKEN_NAME) || Cookies.get(`${REFRESH_TOKEN_NAME}_client`);
+        const accessToken = Cookies.get(ACCESS_TOKEN_NAME) || 
+                           Cookies.get(`${ACCESS_TOKEN_NAME}_client`) ||
+                           Cookies.get('auth_backup_token');
+                           
+        const refreshToken = Cookies.get(REFRESH_TOKEN_NAME) || 
+                            Cookies.get(`${REFRESH_TOKEN_NAME}_client`) ||
+                            Cookies.get('auth_backup_refresh');
         
-        console.log('Auth check - Tokens found:', { 
-          accessToken: !!accessToken, 
-          refreshToken: !!refreshToken 
+        console.log('Auth check - Initial tokens:', { 
+          accessToken: accessToken ? 'present' : 'missing',
+          refreshToken: refreshToken ? 'present' : 'missing',
         });
+        
+        // If we have backup tokens but not primary tokens, restore them
+        if ((!Cookies.get(ACCESS_TOKEN_NAME) && !Cookies.get(`${ACCESS_TOKEN_NAME}_client`)) && 
+            Cookies.get('auth_backup_token')) {
+          console.log('Restoring from backup token');
+          Cookies.set(`${ACCESS_TOKEN_NAME}_client`, Cookies.get('auth_backup_token') || '', {
+            path: '/',
+            expires: 1/48, // 30 minutes
+            sameSite: 'lax'
+          });
+        }
+        
+        if ((!Cookies.get(REFRESH_TOKEN_NAME) && !Cookies.get(`${REFRESH_TOKEN_NAME}_client`)) && 
+            Cookies.get('auth_backup_refresh')) {
+          console.log('Restoring from backup refresh token');
+          Cookies.set(`${REFRESH_TOKEN_NAME}_client`, Cookies.get('auth_backup_refresh') || '', {
+            path: '/',
+            expires: 7, // 7 days
+            sameSite: 'lax'
+          });
+        }
         
         // If no tokens, user is not authenticated
         if (!accessToken && !refreshToken) {
+          console.log('Auth check - No tokens found, setting user to null.');
           setUser(null);
           setIsLoading(false);
           return;
@@ -188,6 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           if (response.ok) {
             const data = await response.json();
+            console.log('Auth check - User data fetched successfully:', data.user);
             setUser(data.user);
             setIsLoading(false);
             return;
@@ -196,6 +255,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // If we get a 404, the route might not be available
           // In this case, we'll create a mock user based on the token
           if (response.status === 404 && accessToken) {
+            console.log('Auth check - /api/auth/me returned 404, creating standard user from token.');
             setUser(createStandardUser(accessToken));
             setIsLoading(false);
             return;
@@ -203,10 +263,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // If unauthorized and we have a refresh token, try to refresh
           if ((response.status === 401 || response.status === 403) && refreshToken) {
+            console.log('Auth check - Token unauthorized, attempting refresh...');
             const success = await refreshAuth();
             if (!success) {
+              console.log('Auth check - Token refresh failed, setting user to null.');
               setUser(null);
             } else {
+              console.log('Auth check - Token refreshed successfully, re-fetching user data.');
               // After successful refresh, try to get user data again
               const meResponse = await fetch('/api/auth/me', {
                 headers: {
@@ -219,16 +282,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               
               if (meResponse.ok) {
                 const userData = await meResponse.json();
+                console.log('Auth check - User data re-fetched after refresh:', userData.user);
                 setUser(userData.user);
               } else if (meResponse.status === 404 && accessToken) {
                 // If we get a 404 again, create a mock user
+                console.log('Auth check - /api/auth/me returned 404 after refresh, creating standard user.');
                 setUser(createStandardUser(accessToken));
               } else {
+                console.log('Auth check - Failed to re-fetch user data after refresh, setting user to null.');
                 setUser(null);
               }
             }
           } else {
             // Not authenticated and no refresh token or refresh failed
+            console.log('Auth check - Not authenticated and no refresh token or refresh failed, setting user to null.');
             setUser(null);
           }
         } catch (error) {
@@ -236,6 +303,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // If there's an error but we have a token, assume authenticated
           if (accessToken) {
+            console.log('Auth check - Error occurred, but access token present. Creating standard user from token.');
             setUser(createStandardUser(accessToken));
             setIsLoading(false);
             return;
@@ -243,19 +311,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // Try to refresh token if available
           if (refreshToken) {
+            console.log('Auth check - Error occurred, attempting refresh from error block...');
             const success = await refreshAuth();
             if (!success) {
+              console.log('Auth check - Refresh from error block failed, setting user to null.');
               setUser(null);
             }
           } else {
+            console.log('Auth check - No access token or refresh token after error, setting user to null.');
             setUser(null);
           }
+        } finally {
+          setIsLoading(false);
         }
       } catch (err) {
         console.error('Auth check error:', err);
         setUser(null);
       }
-      setIsLoading(false);
     };
 
     checkAuthStatus();
@@ -265,6 +337,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     return () => clearInterval(intervalId);
   }, []);
+
+  // Derived state for isAuthenticated
+  const isAuthenticated = !!user && !isLoading;
 
   // Login function
   const login = async (email: string, password: string) => {
@@ -383,7 +458,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = {
     user,
     isLoading,
-    isAuthenticated: !!user,
+    isAuthenticated,
     login,
     logout,
     error,

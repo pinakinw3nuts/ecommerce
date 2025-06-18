@@ -77,7 +77,7 @@ export class AddressService {
       return await this.addressRepository.save(address);
     } catch (error) {
       logger.error('Error creating address', error);
-      throw new Error('Failed to create address');
+      throw error;
     }
   }
 

@@ -2,16 +2,19 @@
   "name": "order-service",
   "version": "1.0.0",
   "description": "Order management service for e-commerce platform",
-  "main": "dist/server.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js",
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "setup-jwt": "node setup-jwt.js",
+    "test-auth": "node test-auth-middleware.js",
+    "create-test-order": "node create-test-order.js"
   },
   "dependencies": {
     "@fastify/cors": "^8.3.0",

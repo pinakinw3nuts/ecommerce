@@ -1,5 +1,5 @@
 import { FindOptionsWhere, Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
-import { AppDataSource } from '../config/database';
+import { AppDataSource } from '../data-source';
 import { Order, OrderStatus } from '../entities/Order';
 import { OrderItem } from '../entities/OrderItem';
 import { OrderNote } from '../entities/OrderNote';
@@ -60,6 +60,7 @@ export interface UpdateOrderDto {
 }
 
 export interface OrderFilters {
+  userId?: string;
   status?: OrderStatus;
   startDate?: Date;
   endDate?: Date;
@@ -94,6 +95,7 @@ export class OrderService {
     order.shippingAddress = dto.shippingAddress;
     order.billingAddress = dto.billingAddress || dto.shippingAddress;
     order.metadata = dto.metadata || {};
+    order.generateOrderNumber(); // Generate a unique order number
 
     // Create order items
     order.items = dto.items.map(itemDto => {
@@ -102,12 +104,21 @@ export class OrderService {
       item.quantity = itemDto.quantity;
       item.price = itemDto.price;
       item.variantId = itemDto.variantId ?? null;
-      item.metadata = itemDto.metadata || {};
+      
+      // Set properties from metadata if available
+      if (itemDto.metadata) {
+        item.metadata = itemDto.metadata;
+        item.name = itemDto.metadata.name;
+        item.sku = itemDto.metadata.sku;
+        item.image = itemDto.metadata.image;
+      }
+      
       return item;
     });
 
-    // Calculate total amount
+    // Calculate total and subtotal
     order.updateTotalAmount();
+    order.updateSubtotal();
 
     try {
       const savedOrder = await this.orderRepository.save(order);
@@ -132,6 +143,58 @@ export class OrderService {
     } catch (error) {
       logger.error(`Failed to get order ${id}:`, error);
       throw new Error('Failed to get order');
+    }
+  }
+
+  /**
+   * Get all orders with pagination and filters (for admin and internal use)
+   */
+  async getOrders(
+    filters: OrderFilters = {},
+    pagination: PaginationOptions
+  ): Promise<[Order[], number]> {
+    try {
+      const where: FindOptionsWhere<Order> = {};
+      
+      // Apply filters
+      if (filters.userId) {
+        where.userId = filters.userId;
+      }
+      
+      if (filters.status) {
+        where.status = filters.status;
+      }
+      
+      if (filters.startDate || filters.endDate) {
+        where.createdAt = Between(
+          filters.startDate || new Date(0),
+          filters.endDate || new Date()
+        );
+      }
+      
+      if (filters.minAmount) {
+        where.totalAmount = MoreThanOrEqual(filters.minAmount);
+      }
+      
+      if (filters.maxAmount) {
+        where.totalAmount = LessThanOrEqual(filters.maxAmount);
+      }
+
+      // Get the orders with pagination
+      const [orders, total] = await this.orderRepository.findAndCount({
+        where,
+        relations: ['items'],
+        skip: (pagination.page - 1) * pagination.limit,
+        take: pagination.limit,
+        order: {
+          [pagination.sortBy || 'createdAt']: pagination.order || 'DESC',
+        },
+      });
+
+      return [orders, total];
+    } catch (error) {
+      logger.error('Failed to get orders:', error);
+      throw new Error('Failed to get orders');
     }
   }
 

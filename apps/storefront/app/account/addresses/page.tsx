@@ -2,24 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import axios from 'axios';
-
-type Address = {
-  id: string;
-  type: 'home' | 'work' | 'other';
-  name: string;
-  phone: string;
-  line1: string;
-  line2?: string;
-  city: string;
-  state: string;
-  country: string;
-  pincode: string;
-  isDefault?: boolean;
-};
+import * as shippingService from '@/services/shipping';
+import { SavedAddress, AddressInput } from '@/services/shipping';
+import toast from 'react-hot-toast';
 
 export default function AddressPage() {
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,10 +16,10 @@ export default function AddressPage() {
     const fetchAddresses = async () => {
       try {
         setLoading(true);
-        const response = await axios.get('/api/addresses');
+        const response = await shippingService.fetchUserAddresses();
         
-        if (response.data && Array.isArray(response.data)) {
-          setAddresses(response.data);
+        if (response && Array.isArray(response)) {
+          setAddresses(response);
         } else {
           setAddresses([]);
         }
@@ -39,6 +27,7 @@ export default function AddressPage() {
       } catch (err) {
         console.error('Error fetching addresses:', err);
         setError('Failed to load addresses. Please try again.');
+        toast.error('Failed to load addresses.');
       } finally {
         setLoading(false);
       }
@@ -47,7 +36,7 @@ export default function AddressPage() {
     fetchAddresses();
   }, []);
 
-  const handleEdit = (addr: Address) => {
+  const handleEdit = (addr: SavedAddress) => {
     window.location.href = `/account/address/edit/${addr.id}`;
   };
 
@@ -55,11 +44,12 @@ export default function AddressPage() {
     if (confirm('Are you sure you want to delete this address?')) {
       setIsSubmitting(true);
       try {
-        await axios.delete(`/api/addresses/${id}`);
+        await shippingService.deleteAddress(id);
         setAddresses(addresses.filter(addr => addr.id !== id));
+        toast.success('Address deleted successfully.');
       } catch (error) {
         console.error('Error deleting address:', error);
-        alert('Failed to delete address. Please try again.');
+        toast.error('Failed to delete address. Please try again.');
       } finally {
         setIsSubmitting(false);
       }
@@ -69,20 +59,16 @@ export default function AddressPage() {
   const handleSetDefault = async (id: string) => {
     setIsSubmitting(true);
     try {
-      // Update the address with isDefault: true
-      await axios.put(`/api/addresses/${id}`, {
-        ...addresses.find(addr => addr.id === id),
-        isDefault: true
-      });
+      await shippingService.setDefaultAddress(id);
       
-      // Update local state
       setAddresses(addresses.map(addr => ({
         ...addr,
         isDefault: addr.id === id
       })));
+      toast.success('Default address set successfully.');
     } catch (error) {
       console.error('Error setting default address:', error);
-      alert('Failed to set default address. Please try again.');
+      toast.error('Failed to set default address. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

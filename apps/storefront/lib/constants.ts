@@ -1,20 +1,14 @@
 // API Gateway URL with multiple fallback options
-export const API_GATEWAY_URL = 
-  process.env.API_GATEWAY_URL || 
-  (typeof window !== 'undefined' 
-    ? '/api' // Client-side: Use relative URL
-    : process.env.NODE_ENV === 'development'
-      ? 'http://127.0.0.1:3004/api/v1' // Server-side development (using correct cart service path)
-      : 'http://api-gateway:3000/api/v1'); // Server-side in Docker/production
+export const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000/api/v1';
 
 // Product API URL specifically for product service
-export const PRODUCT_API_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1:3003/api/v1';
+export const PRODUCT_API_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL || 'http://127.0.0.1:3003/api/v1';
 
 // Order API URL specifically for order service
-export const ORDER_API_URL = process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:3005/api/v1';
+export const ORDER_API_URL = process.env.NEXT_PUBLIC_ORDER_SERVICE_URL || 'http://127.0.0.1:3006/api/v1';
 
 // Flag to use mock data when API is not available
-export const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true' || false;
+export const USE_MOCK_DATA = false;
 
 // Token names for cookies
 export const ACCESS_TOKEN_NAME = 'accessToken';

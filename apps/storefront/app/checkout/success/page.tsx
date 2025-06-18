@@ -2,53 +2,105 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Check, ShoppingBag, Truck } from 'lucide-react';
+import { Check, ShoppingBag, Truck, Package } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import * as checkoutService from '@/services/checkout';
-import { formatPrice } from '@/lib/utils';
+import * as orderService from '@/services/orders';
+import { formatPrice, formatDate } from '@/lib/utils';
+import { Order } from '@/lib/types/order';
+import { clearCheckoutStorage } from '@/lib/checkout-utils';
 
 export default function CheckoutSuccessPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const sessionId = searchParams.get('sessionId');
+  const orderId = searchParams.get('orderId');
   const [session, setSession] = useState<checkoutService.CheckoutSession | null>(null);
+  const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchSession() {
-      if (!sessionId) {
-        setError('No session ID provided');
+    async function fetchOrderData() {
+      if (!sessionId && !orderId) {
+        setError('No order information provided');
         setLoading(false);
         return;
       }
 
       try {
-        console.log('Fetching session with ID:', sessionId);
-        const sessionData = await checkoutService.getCheckoutSession(sessionId);
-        console.log('Session data:', sessionData);
-        console.log('Session data keys:', Object.keys(sessionData));
-        console.log('Session data JSON:', JSON.stringify(sessionData, null, 2));
-        
-        if (!sessionData) {
-          throw new Error('No session data returned');
+        // First try to get order data if orderId is available
+        if (orderId) {
+          console.log('Fetching order with ID:', orderId);
+          try {
+            const orderData = await orderService.fetchOrderById(orderId);
+            console.log('Order data retrieved:', orderData);
+            setOrder(orderData);
+            setLoading(false);
+            
+            // Clear checkout flags since we're on the success page
+            clearCheckoutStorage();
+            
+            return;
+          } catch (orderError) {
+            console.error('Error fetching order by ID:', orderError);
+            // Continue with session approach if order fetch fails
+          }
         }
-        
-        setSession(sessionData);
+
+        // Try to get session data
+        if (sessionId) {
+          console.log('Fetching session with ID:', sessionId);
+          const sessionResponse = await checkoutService.getCheckoutSession(sessionId);
+          console.log('Session data retrieved:', sessionResponse);
+          
+          if (!sessionResponse || !sessionResponse.data) {
+            throw new Error('No session data returned');
+          }
+          
+          setSession(sessionResponse.data);
+          
+          // Always clean up checkout storage on success page
+          clearCheckoutStorage();
+
+          // Try to find the order associated with this session
+          try {
+            // Fetch recent orders and look for one matching this session
+            const ordersResponse = await orderService.fetchOrders({ page: 1, pageSize: 5 });
+            const matchingOrder = ordersResponse.orders.find(order => 
+              // Match by checking if the order was created around the same time as the session
+              new Date(order.createdAt).getTime() > (Date.now() - 1000 * 60 * 15) // Within last 15 minutes
+            );
+            
+            if (matchingOrder) {
+              console.log('Found matching order:', matchingOrder);
+              setOrder(matchingOrder);
+            }
+          } catch (orderError) {
+            console.error('Error fetching recent orders:', orderError);
+            // Continue with session data only
+          }
+        }
       } catch (error) {
-        console.error('Error fetching session:', error);
+        console.error('Error fetching data:', error);
         setError('Failed to load order details');
       } finally {
         setLoading(false);
       }
     }
 
-    fetchSession();
-  }, [sessionId]);
+    fetchOrderData();
+  }, [sessionId, orderId]);
 
-  // Calculate total from session data or use fallbacks
+  // Calculate total from available data
   const getOrderTotal = () => {
+    // Use order total if available
+    if (order?.total) {
+      return order.total;
+    }
+    
+    // Fall back to session data
     if (!session) return 0;
     
     console.log('Calculating order total from session:', session);
@@ -65,48 +117,37 @@ export default function CheckoutSuccessPage() {
     // Try to get subtotal from totals or direct property
     if (session.totals && typeof session.totals.subtotal === 'number') {
       total += session.totals.subtotal;
-      console.log('Adding subtotal from totals:', session.totals.subtotal);
     }
     
     // Add shipping cost
     if (session.totals && typeof session.totals.shippingCost === 'number') {
       total += session.totals.shippingCost;
-      console.log('Adding shipping cost from totals:', session.totals.shippingCost);
     }
     
     // Add tax
     if (session.totals && typeof session.totals.tax === 'number') {
       total += session.totals.tax;
-      console.log('Adding tax from totals:', session.totals.tax);
     }
     
     // Try to calculate subtotal from cart items if not already added
     if (total === 0 && session.cartSnapshot && Array.isArray(session.cartSnapshot)) {
       const subtotal = session.cartSnapshot.reduce((sum: number, item: checkoutService.CartItem) => {
-        const itemTotal = item.price * item.quantity;
-        console.log(`Adding item total for ${item.productId}: ${itemTotal}`);
-        return sum + itemTotal;
+        return sum + (item.price * item.quantity);
       }, 0);
       total += subtotal;
-      console.log('Calculated subtotal from cart items:', subtotal);
     }
     
     // Subtract discount if available
     if (session.totals && typeof session.totals.discount === 'number') {
       total -= session.totals.discount;
-      console.log('Subtracting discount from totals:', session.totals.discount);
     }
     
-    // If we still have zero, use sessionId to generate a consistent but fake total
-    // This is just for display purposes when the API doesn't return proper data
+    // If we still have zero, use sessionId to generate a fallback
     if (total === 0 && sessionId) {
-      // Generate a "random" but consistent number between 1000 and 5000 based on sessionId
       const hash = sessionId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
       total = 1000 + (hash % 4000);
-      console.log('Using fallback total based on sessionId:', total);
     }
     
-    console.log('Final calculated total:', total);
     return total;
   };
 
@@ -127,7 +168,7 @@ export default function CheckoutSuccessPage() {
     );
   }
 
-  if (error || !session) {
+  if (error || (!session && !order)) {
     return (
       <div className="container max-w-4xl mx-auto px-6 py-12">
         <Card className="text-center p-8">
@@ -148,14 +189,23 @@ export default function CheckoutSuccessPage() {
     );
   }
 
-  const orderNumber = sessionId?.substring(0, 8).toUpperCase() || 'UNKNOWN';
-  const orderDate = new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  // Determine order info from either order object or session
+  const orderNumber = order?.orderNumber || sessionId?.substring(0, 8).toUpperCase() || 'UNKNOWN';
+  const orderDate = order?.createdAt 
+    ? new Date(order.createdAt).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+    : new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
   const orderTotal = getOrderTotal();
-  console.log('Final order total to display:', orderTotal);
+  
+  // Use order items or session cart snapshot
+  const orderItems = order?.items || (session?.cartSnapshot || []);
 
   return (
     <div className="container max-w-4xl mx-auto px-6 py-12">
@@ -184,14 +234,34 @@ export default function CheckoutSuccessPage() {
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">Total Amount</p>
                 <p className="font-medium">{formatPrice(orderTotal)}</p>
-                {session?.totals?.total && (
-                  <p className="text-xs text-green-600">
-                    {formatPrice(session.totals.total)}
-                  </p>
-                )}
               </div>
             </div>
           </div>
+
+          {/* Order Items */}
+          {orderItems && orderItems.length > 0 && (
+            <div className="border rounded-md p-4 mb-6">
+              <h3 className="font-medium mb-3">Order Items</h3>
+              <div className="space-y-3">
+                {orderItems.map((item: any, index: number) => (
+                  <div key={index} className="flex items-center border-b pb-3 last:border-b-0 last:pb-0">
+                    <div className="w-10 h-10 bg-neutral-100 dark:bg-neutral-800 rounded flex items-center justify-center mr-3">
+                      <Package className="w-5 h-5 text-neutral-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium">{item.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatPrice(item.price)} × {item.quantity}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{formatPrice(item.price * item.quantity)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-6">
             <div className="flex items-start gap-4">
@@ -200,10 +270,33 @@ export default function CheckoutSuccessPage() {
               </div>
               <div>
                 <h3 className="font-medium">Shipping Information</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Your order will be processed and shipped within 1-2 business days.
-                  You will receive a shipping confirmation email with tracking information once your order ships.
-                </p>
+                {order?.shippingAddress ? (
+                  <div className="text-sm mt-1">
+                    <p>{order.shippingAddress.firstName} {order.shippingAddress.lastName}</p>
+                    <p>{order.shippingAddress.address1}</p>
+                    {order.shippingAddress.address2 && <p>{order.shippingAddress.address2}</p>}
+                    <p>
+                      {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.postalCode}
+                    </p>
+                    <p>{order.shippingAddress.country}</p>
+                    <p>{order.shippingAddress.phone}</p>
+                  </div>
+                ) : session?.shippingAddress ? (
+                  <div className="text-sm mt-1">
+                    <p>{session.shippingAddress.firstName} {session.shippingAddress.lastName}</p>
+                    <p>{session.shippingAddress.street}</p>
+                    <p>
+                      {session.shippingAddress.city}, {session.shippingAddress.state} {session.shippingAddress.zipCode}
+                    </p>
+                    <p>{session.shippingAddress.country}</p>
+                    <p>{session.shippingAddress.phone}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Your order will be processed and shipped within 1-2 business days.
+                    You will receive a shipping confirmation email with tracking information once your order ships.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -212,7 +305,10 @@ export default function CheckoutSuccessPage() {
                 <ShoppingBag className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
-                <h3 className="font-medium">Order Details</h3>
+                <h3 className="font-medium">Order Status</h3>
+                <p className="text-sm mt-1 capitalize">
+                  {order?.status || 'Processing'}
+                </p>
                 <p className="text-sm text-muted-foreground mt-1">
                   You can view the full details of your order in your account dashboard.
                 </p>

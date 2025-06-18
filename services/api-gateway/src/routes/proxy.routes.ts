@@ -2234,6 +2234,25 @@ const proxyRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       });
     }
   });
+
+  // Register a generic proxy for all other /api/v1 routes
+  // This route will catch all requests that haven't been specifically handled above
+  // and forward them to the appropriate service based on the service registry.
+  // It handles all HTTP methods, including OPTIONS for CORS preflight requests.
+  fastify.all('/api/v1/*', forwardHandler);
+
+  // Expose OPTIONS method explicitly for /api/v1/orders/* to ensure CORS preflight requests are handled
+  fastify.options('/api/v1/orders/*', async (request, reply) => {
+    logger.info({
+      msg: 'Received OPTIONS request for orders',
+      path: request.url,
+      method: request.method,
+      headers: request.headers
+    });
+    // The fastify-cors plugin already handles the actual CORS headers,
+    // so we just need to ensure the request is routed and a 200 OK is sent.
+    reply.status(200).send();
+  });
 };
 
 export default proxyRoutes; 

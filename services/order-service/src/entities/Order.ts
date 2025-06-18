@@ -19,6 +19,15 @@ export enum OrderStatus {
   FAILED = 'FAILED',
 }
 
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
+  FAILED = 'FAILED',
+  REFUNDED = 'REFUNDED',
+  PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
+}
+
 interface Address {
   street: string;
   city: string;
@@ -31,6 +40,10 @@ interface Address {
 export class Order {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+  
+  @Column({ nullable: true, unique: true })
+  @Index()
+  orderNumber: string = '';
 
   @Column('uuid')
   @Index()
@@ -46,6 +59,20 @@ export class Order {
   })
   @Index()
   status!: OrderStatus;
+  
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    default: 'PENDING'
+  })
+  paymentStatus: string | null = null;
+  
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    default: null
+  })
+  paymentMethod: string | null = null;
 
   @Column('jsonb')
   shippingAddress!: Address;
@@ -55,6 +82,12 @@ export class Order {
 
   @Column({ nullable: true })
   trackingNumber?: string;
+  
+  @Column({ nullable: true })
+  shippingCarrier?: string;
+  
+  @Column('decimal', { precision: 10, scale: 2, nullable: true })
+  subtotal?: number;
 
   @Column('jsonb', { nullable: true, default: {} })
   metadata: { [key: string]: string | number | boolean | null } = {};
@@ -96,5 +129,22 @@ export class Order {
 
   updateTotalAmount(): void {
     this.totalAmount = this.calculateTotalAmount();
+  }
+  
+  calculateSubtotal(): number {
+    return this.items?.reduce((sum, item) => 
+      sum + (item.price * item.quantity), 0) ?? 0;
+  }
+  
+  updateSubtotal(): void {
+    this.subtotal = this.calculateSubtotal();
+  }
+  
+  // Generate a unique order number based on timestamp and random values
+  generateOrderNumber(): string {
+    const timestamp = Date.now().toString().slice(-8);
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    this.orderNumber = `ORD-${timestamp}-${random}`;
+    return this.orderNumber;
   }
 } 

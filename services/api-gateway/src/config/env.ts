@@ -52,7 +52,7 @@ const envSchema = z.object({
 
   // CORS configuration
   // Set to your frontend origin for credentialed requests (e.g., http://localhost:3000)
-  CORS_ORIGINS: z.string().default('http://localhost:3000'),
+  CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3100'),
 
   // Environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

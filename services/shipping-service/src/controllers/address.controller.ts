@@ -16,7 +16,7 @@ type FastifyReply = any;
 // Schemas for request validation
 const addressCreateSchema = z.object({
   type: z.enum([AddressType.SHIPPING, AddressType.BILLING, AddressType.BOTH]),
-  name: z.string().min(1, 'Name is required'),
+  fullName: z.string().min(1, 'Full name is required'),
   phone: z.string().min(5, 'Valid phone number is required'),
   pincode: z.string().min(5, 'Valid pincode is required'),
   addressLine1: z.string().min(1, 'Address line 1 is required'),
@@ -87,7 +87,7 @@ export class AddressController {
                 properties: {
                   id: { type: 'string' },
                   type: { type: 'string' },
-                  name: { type: 'string' },
+                  fullName: { type: 'string' },
                   phone: { type: 'string' },
                   pincode: { type: 'string' },
                   addressLine1: { type: 'string' },
@@ -120,13 +120,13 @@ export class AddressController {
           description: 'Create a new address for the authenticated user',
           body: {
             type: 'object',
-            required: ['type', 'name', 'phone', 'pincode', 'addressLine1', 'city', 'state', 'country'],
+            required: ['type', 'fullName', 'phone', 'pincode', 'addressLine1', 'city', 'state', 'country'],
             properties: {
               type: { 
                 type: 'string', 
                 enum: Object.values(AddressType) 
               },
-              name: { type: 'string' },
+              fullName: { type: 'string' },
               phone: { type: 'string' },
               pincode: { type: 'string' },
               addressLine1: { type: 'string' },
@@ -153,7 +153,7 @@ export class AddressController {
               properties: {
                 id: { type: 'string' },
                 type: { type: 'string' },
-                name: { type: 'string' },
+                fullName: { type: 'string' },
                 // Other address properties
                 createdAt: { type: 'string', format: 'date-time' }
               }
@@ -187,7 +187,7 @@ export class AddressController {
                 type: 'string', 
                 enum: Object.values(AddressType) 
               },
-              name: { type: 'string' },
+              fullName: { type: 'string' },
               phone: { type: 'string' },
               pincode: { type: 'string' },
               addressLine1: { type: 'string' },
@@ -214,7 +214,7 @@ export class AddressController {
               properties: {
                 id: { type: 'string' },
                 type: { type: 'string' },
-                name: { type: 'string' },
+                fullName: { type: 'string' },
                 // Other address properties
                 updatedAt: { type: 'string', format: 'date-time' }
               }
@@ -369,7 +369,7 @@ export class AddressController {
       return reply.code(201).send(address);
     } catch (error) {
       logger.error('Error creating address', error);
-      return reply.code(500).send({ error: 'Internal Server Error' });
+      return reply.code(500).send({ error: 'Internal Server Error', message: error instanceof Error ? error.message : String(error) });
     }
   }
 

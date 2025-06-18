@@ -3,6 +3,11 @@ import { NextRequest } from 'next/server';
 import axios from 'axios';
 import { PRODUCT_API_URL } from '@/lib/constants';
 
+// Convert any localhost URLs to use explicit IPv4 instead of IPv6
+function getIpv4Url(url: string): string {
+  return url.replace('localhost', '127.0.0.1');
+}
+
 /**
  * GET handler for /api/products
  * Proxies requests to the product service
@@ -68,7 +73,7 @@ export async function GET(request: NextRequest) {
     if (maxPrice && parseInt(maxPrice) < 10000) params.maxPrice = maxPrice;
     
     // Using the known working endpoint format
-    const apiUrl = `${PRODUCT_API_URL}/products`;
+    const apiUrl = getIpv4Url(`${PRODUCT_API_URL}/products`);
     console.log(`Forwarding request to: ${apiUrl}`, { params });
     
     // Make the request to the product service API

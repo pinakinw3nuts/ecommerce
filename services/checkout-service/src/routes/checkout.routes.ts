@@ -450,7 +450,27 @@ export default fp(async function checkoutRoutes(
                   type: 'string',
                   enum: Object.values(CheckoutStatus)
                 },
-                // Other session properties
+                userId: { type: 'string', format: 'uuid' },
+                totals: {
+                  type: 'object',
+                  properties: {
+                    subtotal: { type: 'number' },
+                    tax: { type: 'number' },
+                    shippingCost: { type: 'number' },
+                    discount: { type: 'number' },
+                    total: { type: 'number' }
+                  }
+                },
+                cartSnapshot: {
+                  type: 'array',
+                  items: { $ref: 'cartItem#' }
+                },
+                shippingAddress: { $ref: 'address#' },
+                billingAddress: { $ref: 'address#' },
+                shippingMethod: { type: 'string' },
+                paymentMethod: { type: 'string' },
+                expiresAt: { type: 'string', format: 'date-time' },
+                completedAt: { type: 'string', format: 'date-time' }
               }
             }
           }
@@ -478,6 +498,100 @@ export default fp(async function checkoutRoutes(
       }
       
       return { success: true, data: session };
+    }
+  });
+
+  // Update shipping address
+  fastify.put('/session/:id/shipping-address', {
+    schema: {
+      description: 'Update shipping address for a checkout session',
+      tags: ['checkout'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['address'],
+        properties: {
+          address: { $ref: 'address#' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                userId: { type: 'string', format: 'uuid' },
+                status: { 
+                  type: 'string',
+                  enum: Object.values(CheckoutStatus)
+                },
+                totals: {
+                  type: 'object',
+                  properties: {
+                    subtotal: { type: 'number' },
+                    tax: { type: 'number' },
+                    shippingCost: { type: 'number' },
+                    discount: { type: 'number' },
+                    total: { type: 'number' }
+                  }
+                },
+                cartSnapshot: {
+                  type: 'array',
+                  items: { $ref: 'cartItem#' }
+                },
+                shippingAddress: { $ref: 'address#' },
+                billingAddress: { $ref: 'address#' },
+                shippingMethod: { type: 'string' },
+                paymentMethod: { type: 'string' },
+                expiresAt: { type: 'string', format: 'date-time' },
+                completedAt: { type: 'string', format: 'date-time' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            message: { type: 'string' }
+          }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            message: { type: 'string' }
+          }
+        }
+      }
+    },
+    handler: async (request, reply) => {
+      try {
+        const { id } = request.params as { id: string };
+        const { address } = request.body as { address: any };
+        
+        const updatedSession = await checkoutService.updateShippingAddress(id, address);
+        
+        return { success: true, data: updatedSession };
+      } catch (error) {
+        logger.error('Error updating shipping address:', error);
+        return reply.status(400).send({
+          success: false,
+          error: 'Address Update Error',
+          message: error instanceof Error ? error.message : 'Failed to update shipping address'
+        });
+      }
     }
   });
 

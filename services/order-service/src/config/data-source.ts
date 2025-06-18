@@ -1,14 +1,15 @@
 import { DataSource } from 'typeorm';
-import { config } from './env';
+import { config, DATABASE_URL } from './env';
 import { OrderNote } from '../entities/OrderNote';
 import { Order } from '../entities/Order';
+import { OrderItem } from '../entities/OrderItem';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
-  url: config.database.url,
+  url: DATABASE_URL,
   synchronize: config.isDevelopment,
   logging: false,
-  entities: [Order, OrderNote],
+  entities: [Order, OrderNote, OrderItem],
   migrations: ['src/migrations/**/*.ts'],
   subscribers: [],
 });

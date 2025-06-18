@@ -61,6 +61,20 @@ const createAPI = () => {
       config.headers['Pragma'] = 'no-cache';
       config.headers['Expires'] = '0';
       
+      // Ensure localhost URLs use IPv4 instead of IPv6
+      if (config.url && config.url.includes('localhost')) {
+        config.url = config.url.replace('localhost', '127.0.0.1');
+      }
+      
+      // Log the request for debugging
+      if (typeof window !== 'undefined' && config.url && config.url.includes('orders')) {
+        console.log('API Request:', {
+          url: config.url,
+          method: config.method,
+          hasAuth: !!token
+        });
+      }
+      
       return config;
     }, 
     error => Promise.reject(error)

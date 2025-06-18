@@ -184,6 +184,18 @@ export class CheckoutService {
     return this.getCheckoutSession(sessionId);
   }
 
+  async updateShippingAddress(
+    sessionId: string,
+    address: any
+  ): Promise<CheckoutSession | null> {
+    logger.info({ sessionId, address }, 'Updating shipping address for checkout session');
+    const updatedSession = await this.updateCheckoutSession(sessionId, { shippingAddress: address });
+    if (!updatedSession) {
+      logger.warn({ sessionId }, 'Checkout session not found for shipping address update');
+    }
+    return updatedSession;
+  }
+
   async completeCheckoutSession(
     sessionId: string, 
     paymentIntentId: string
