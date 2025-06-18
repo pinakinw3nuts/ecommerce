@@ -84,7 +84,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching cart with deviceId:', deviceId);
       
       // Add refresh=false parameter to prevent auto-refresh of product data
       const response = await axios.get('/api/cart?refresh=false', {
@@ -93,7 +92,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }
       });
       
-      console.log('Cart data received:', response.data);
       setCartData(response.data);
       
       // If we have a cart ID but no items, check if there's a coupon to apply
@@ -102,15 +100,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         if (storedCoupon) {
           try {
             const couponData = JSON.parse(storedCoupon);
-            console.log('Applying stored coupon to new cart:', couponData);
             await applyCoupon(couponData.code);
           } catch (error) {
-            console.error('Failed to apply stored coupon to new cart:', error);
+            // Failed to apply stored coupon to new cart
           }
         }
       }
     } catch (error: any) {
-      console.error('Error fetching cart:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch cart';
       setError(errorMessage);
       // If the cart wasn't found, create an empty cart data structure
@@ -134,7 +130,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       setError(null);
-      console.log('Refreshing cart data');
       
       // Add refresh parameter based on the shouldRefreshProducts flag
       const refreshParam = shouldRefreshProducts ? 'true' : 'false';
@@ -146,7 +141,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       
       setCartData(response.data);
     } catch (error: any) {
-      console.error('Error refreshing cart:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to refresh cart';
       setError(errorMessage);
     } finally {
@@ -162,7 +156,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       try {
         setCoupon(JSON.parse(storedCoupon));
       } catch (error) {
-        console.error('Failed to parse coupon from localStorage:', error);
+        // Failed to parse coupon from localStorage
       }
     }
   }, []);
@@ -203,8 +197,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         inStock: true
       };
       
-      console.log('Adding item to cart:', requestData);
-      
       const response = await axios.post('/api/cart/items', requestData, {
         headers: {
           'x-device-id': deviceId
@@ -213,7 +205,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       
       setCartData(response.data);
     } catch (error: any) {
-      console.error('Error adding item to cart:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to add item to cart';
       setError(errorMessage);
     } finally {
@@ -228,15 +219,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       setError(null);
-      console.log(`Removing item ${id} from cart ${cartData.id}`);
       
       const response = await axios.delete(`/api/cart/items/${id}?cartId=${cartData.id}`, {
         headers: {
           'x-device-id': deviceId
         }
       });
-      
-      console.log('Remove item response:', response.data);
       
       // If the response contains updated cart data, use it
       if (response.data && (response.data.id || response.data.items)) {
@@ -248,18 +236,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           
           const updatedItems = prevData.items.filter(item => item.id !== id);
           const updatedItemCount = updatedItems.reduce((sum, item) => sum + item.quantity, 0);
-          const updatedTotal = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
           
           return {
             ...prevData,
             items: updatedItems,
             itemCount: updatedItemCount,
-            total: updatedTotal
+            total: calculateTotal(updatedItems, coupon)
           };
         });
       }
     } catch (error: any) {
-      console.error('Error removing item from cart:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to remove item from cart';
       setError(errorMessage);
     } finally {
@@ -269,33 +255,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   
   // Update item quantity
   const updateQuantity = async (id: string, quantity: number) => {
-    if (!deviceId || !cartData?.id) return;
+    if (!deviceId || !cartData?.id || quantity < 1) return;
     
     try {
       setLoading(true);
       setError(null);
       
-      await axios.put(`/api/cart/items/${id}?cartId=${cartData.id}`, {
-        quantity
-      }, {
-        headers: {
-          'x-device-id': deviceId
+      const response = await axios.patch(`/api/cart/items/${id}`, 
+        { quantity },
+        { 
+          headers: { 'x-device-id': deviceId },
+          params: { cartId: cartData.id }
         }
-      });
+      );
       
-      // After updating the item quantity, fetch the full cart to get the updated state
-      await refreshCart(false);
+      setCartData(response.data);
     } catch (error: any) {
-      console.error('Error updating cart item quantity:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to update item quantity';
       setError(errorMessage);
-      
-      // Even if there was an error, try to refresh the cart to ensure we have the latest state
-      try {
-        await refreshCart(false);
-      } catch (refreshError) {
-        console.error('Failed to refresh cart after quantity update error:', refreshError);
-      }
     } finally {
       setLoading(false);
     }
@@ -308,15 +285,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.delete(`/api/cart?cartId=${cartData.id}`, {
-        headers: {
-          'x-device-id': deviceId
-        }
+      
+      await axios.delete(`/api/cart?cartId=${cartData.id}`, {
+        headers: { 'x-device-id': deviceId }
       });
-      setCartData(response.data);
+      
+      setCartData(null);
       setCoupon(null);
     } catch (error: any) {
-      console.error('Error clearing cart:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to clear cart';
       setError(errorMessage);
     } finally {
@@ -324,78 +300,88 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   };
   
-  // Apply coupon code
+  // Apply coupon
   const applyCoupon = async (code: string): Promise<{ success: boolean; message: string }> => {
-    setCouponLoading(true);
-    setCouponError(null);
+    if (!deviceId || !cartData?.id) {
+      return { success: false, message: 'Cart not initialized' };
+    }
     
     try {
-      const response = await fetch('/api/coupons', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code, orderTotal: subtotal }),
-      });
+      setCouponLoading(true);
+      setCouponError(null);
       
-      const data = await response.json();
+      const response = await axios.post(
+        `/api/cart/coupon`, 
+        { code, cartId: cartData.id },
+        { headers: { 'x-device-id': deviceId } }
+      );
       
-      if (!response.ok) {
-        setCouponError(data.error);
-        setCouponLoading(false);
-        return { success: false, message: data.error };
+      if (response.data.coupon) {
+        setCoupon(response.data.coupon);
+        setCartData(response.data.cart || response.data);
+        return { success: true, message: 'Coupon applied successfully' };
+      } else {
+        return { success: false, message: 'Invalid coupon response' };
       }
-      
-      setCoupon(data.coupon);
-      setCouponLoading(false);
-      return { success: true, message: 'Coupon applied successfully!' };
-    } catch (error) {
-      console.error('Error applying coupon:', error);
-      const errorMessage = 'Failed to apply coupon. Please try again.';
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to apply coupon';
       setCouponError(errorMessage);
-      setCouponLoading(false);
       return { success: false, message: errorMessage };
+    } finally {
+      setCouponLoading(false);
     }
   };
   
-  // Remove coupon code
+  // Remove coupon
   const removeCoupon = async () => {
-    setCoupon(null);
-    setCouponError(null);
+    if (!deviceId || !cartData?.id || !coupon) return;
+    
+    try {
+      setCouponLoading(true);
+      setCouponError(null);
+      
+      const response = await axios.delete(
+        `/api/cart/coupon?cartId=${cartData.id}`,
+        { headers: { 'x-device-id': deviceId } }
+      );
+      
+      setCoupon(null);
+      setCartData(response.data);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to remove coupon';
+      setCouponError(errorMessage);
+    } finally {
+      setCouponLoading(false);
+    }
   };
   
-  // Derived values
-  const items = cartData?.items || [];
-  const subtotal = cartData?.total || 0;
-  
-  // Calculate discount based on coupon type
-  let discount = 0;
-  if (coupon) {
+  // Calculate total (subtotal - discount)
+  const calculateTotal = (items: CartItem[], coupon: Coupon | null): number => {
+    const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    if (!coupon) return subtotal;
+    
+    let discount = 0;
     if (coupon.type === 'percentage') {
       discount = (subtotal * coupon.value) / 100;
     } else if (coupon.type === 'fixed') {
       discount = coupon.value;
     }
-    // Ensure discount doesn't exceed subtotal
-    discount = Math.min(discount, subtotal);
-  }
+    
+    return subtotal - discount;
+  };
   
-  // Shipping calculation (free if coupon type is 'shipping' or order is over $100)
-  const baseShipping = subtotal > 100 ? 0 : 10;
-  const shippingDiscount = coupon && coupon.type === 'shipping' ? baseShipping : 0;
-  const shipping = Math.max(0, baseShipping - shippingDiscount);
-  
-  // Calculate tax after discount
-  const taxableAmount = subtotal - discount;
-  const tax = taxableAmount * 0.07; // 7% tax
-  
-  const total = taxableAmount + shipping + tax;
-  const isEmpty = items.length === 0;
+  // Calculate values
+  const subtotal = cartData?.items.reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0;
+  const shipping = 0; // Calculate based on your business logic
+  const tax = 0; // Calculate based on your business logic
+  const discount = coupon ? (coupon.type === 'percentage' ? (subtotal * coupon.value) / 100 : coupon.value) : 0;
+  const total = subtotal - discount + shipping + tax;
+  const isEmpty = !cartData?.items || cartData.items.length === 0;
   const itemCount = cartData?.itemCount || 0;
   
-  const value = {
+  const value: CartContextType = {
     cartId: cartData?.id || null,
-    items,
+    items: cartData?.items || [],
     addItem,
     removeItem,
     updateQuantity,
@@ -417,13 +403,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     refreshCart
   };
   
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  return (
+    <CartContext.Provider value={value}>
+      {children}
+    </CartContext.Provider>
+  );
 }
 
 export function useCart() {
   const context = useContext(CartContext);
+  
   if (context === undefined) {
     throw new Error('useCart must be used within a CartProvider');
   }
+  
   return context;
 } 
