@@ -6,7 +6,6 @@ import { CartProvider } from '@/contexts/CartContext';
 import { WishlistProvider } from '@/contexts/WishlistContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ToastProvider } from '@/components/ui/Toast';
-import AuthDebug from '@/components/layout/AuthDebug';
 
 export const metadata: Metadata = {
   title: 'AutoParts – Premium Auto Parts Store',
@@ -27,7 +26,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Header />
                 <main className="min-h-[calc(100vh-160px)]">{children}</main>
                 <SiteFooter />
-                <AuthDebug />
               </WishlistProvider>
             </CartProvider>
           </AuthProvider>

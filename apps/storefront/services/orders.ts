@@ -1,18 +1,17 @@
 import { Order, OrdersResponse } from '@/lib/types/order';
-import { createApiClient } from '../lib/apiClient';
+import axios from '../lib/api';
 
-const orderServiceApi = createApiClient(process.env.NEXT_PUBLIC_ORDER_SERVICE_URL || 'http://127.0.0.1:3006/api/v1');
 
 // Helper function to handle API response status codes
 async function handleApiResponse<T>(url: string, method: 'GET' | 'POST' | 'PUT', body?: any): Promise<T> {
   try {
     let result;
     if (method === 'GET') {
-      result = await orderServiceApi.get<T>(url);
+      result = await axios.get<T>(url);
     } else if (method === 'POST') {
-      result = await orderServiceApi.post<T>(url, body || {});
+      result = await axios.post<T>(url, body || {});
     } else if (method === 'PUT') {
-      result = await orderServiceApi.put<T>(url, body || {});
+      result = await axios.put<T>(url, body || {});
     }
     return result as T;
   } catch (error: any) {

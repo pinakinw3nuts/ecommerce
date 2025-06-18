@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { API_GATEWAY_URL } from '@/lib/constants';
+
+const SHIPPING_SERVICE_URL = process.env.NEXT_PUBLIC_SHIPPING_SERVICE_URL || 'http://localhost:3008/api/v1';
+
+// Convert any localhost URLs to use explicit IPv4 instead of IPv6
+function getIpv4Url(url: string): string {
+  return url.replace('localhost', '127.0.0.1');
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,7 +14,7 @@ export async function GET(req: NextRequest) {
     const token = req.cookies.get('accessToken')?.value;
     
     // Call the user service API through the API gateway
-    const response = await axios.get(`${API_GATEWAY_URL}/v1/addresses`, {
+    const response = await axios.get(`${getIpv4Url(SHIPPING_SERVICE_URL)}/addresses`, {
       headers: {
         'Authorization': token ? `Bearer ${token}` : '',
         'Accept': 'application/json',
@@ -35,7 +41,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     
     // Call the user service API through the API gateway
-    const response = await axios.post(`${API_GATEWAY_URL}/v1/addresses`, body, {
+    const response = await axios.post(`${getIpv4Url(SHIPPING_SERVICE_URL)}/addresses`, body, {
       headers: {
         'Authorization': token ? `Bearer ${token}` : '',
         'Accept': 'application/json',

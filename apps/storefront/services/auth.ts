@@ -1,27 +1,27 @@
-import { createApiClient } from '../lib/apiClient';
+import axios from '../lib/api';
 
-const authServiceApi = createApiClient(process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:3001/api/v1');
+const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:3001/api/v1';
 
 export const login = async (credentials: any) => {
-  return authServiceApi.post('/login', credentials);
+  return axios.post(`${AUTH_SERVICE_URL}/login`, credentials);
 };
 
 export const register = async (userData: any) => {
-  return authServiceApi.post('/register', userData);
+  return axios.post(`${AUTH_SERVICE_URL}/register`, userData);
 };
 
 export const logout = async () => {
-  return authServiceApi.post('/logout', {});
+  return axios.post(`${AUTH_SERVICE_URL}/logout`, {});
 };
 
 export const forgotPassword = async (email: string) => {
-  return authServiceApi.post('/forgot-password', { email });
+  return axios.post(`${AUTH_SERVICE_URL}/forgot-password`, { email });
 };
 
 export const resetPassword = async (token: string, newPassword: string) => {
-  return authServiceApi.post('/reset-password', { token, newPassword });
+  return axios.post(`${AUTH_SERVICE_URL}/reset-password`, { token, newPassword });
 };
 
 export const verifyEmail = async (token: string) => {
-  return authServiceApi.get(`/verify-email/${token}`);
+  return axios.get(`${AUTH_SERVICE_URL}/verify-email/${token}`);
 }; 

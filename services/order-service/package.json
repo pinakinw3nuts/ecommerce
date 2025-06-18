@@ -11,10 +11,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .ts",
-    "typecheck": "tsc --noEmit",
-    "setup-jwt": "node setup-jwt.js",
-    "test-auth": "node test-auth-middleware.js",
-    "create-test-order": "node create-test-order.js"
+    "typecheck": "tsc --noEmit"
+    
   },
   "dependencies": {
     "@fastify/cors": "^8.3.0",

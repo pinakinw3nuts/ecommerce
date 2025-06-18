@@ -64,7 +64,6 @@ export async function middleware(request: NextRequest) {
   // If there's no access token but there is a refresh token, try to refresh
   if (!accessToken && refreshToken) {
     try {
-      console.log('Middleware: Attempting to refresh token');
       // Call refresh token endpoint
       const response = await fetch(`${request.nextUrl.origin}/api/auth/refresh-token`, {
         method: 'POST',
@@ -75,7 +74,6 @@ export async function middleware(request: NextRequest) {
       });
 
       if (response.ok) {
-        console.log('Middleware: Token refresh successful');
         const data = await response.json();
         
         // Create response with redirected request
@@ -99,17 +97,14 @@ export async function middleware(request: NextRequest) {
         });
         
         return res;
-      } else {
-        console.log('Middleware: Token refresh failed');
       }
     } catch (error) {
-      console.error('Error refreshing token in middleware:', error);
+      // Error refreshing token in middleware
     }
   }
 
   // If no access token and no refresh token or refresh failed, redirect to login for protected routes
   if (!accessToken && pathname.startsWith('/account')) {
-    console.log('Middleware: No valid tokens, redirecting to login');
     // Create the redirect URL with the current path as the redirect parameter
     const url = new URL('/login', request.url);
     url.searchParams.set('redirect', pathname);

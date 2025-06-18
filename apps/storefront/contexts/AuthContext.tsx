@@ -2,7 +2,15 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import Cookies from 'js-cookie';
+import {
+  getAccessToken,
+  setAccessToken,
+  removeAccessToken,
+  getRefreshToken,
+  setRefreshToken,
+  removeRefreshToken,
+  clearAuthTokens,
+} from '@/lib/authTokens';
 import { ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from '@/lib/constants';
 import api from '@/lib/api';
 import { v4 as uuidv4 } from 'uuid';
@@ -92,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshAuth = useCallback(async (): Promise<boolean> => {
     try {
       // Check for both HTTP-only and client-accessible cookies
-      const refreshToken = Cookies.get(REFRESH_TOKEN_NAME) || Cookies.get(`${REFRESH_TOKEN_NAME}_client`);
+      const refreshToken = getRefreshToken() || getAccessToken();
       
       if (!refreshToken) {
         return false;
@@ -111,10 +119,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (!refreshResponse.ok) {
         // Clear cookies if refresh failed
-        Cookies.remove(ACCESS_TOKEN_NAME, { path: '/' });
-        Cookies.remove(REFRESH_TOKEN_NAME, { path: '/' });
-        Cookies.remove(`${ACCESS_TOKEN_NAME}_client`, { path: '/' });
-        Cookies.remove(`${REFRESH_TOKEN_NAME}_client`, { path: '/' });
+        removeAccessToken();
+        removeRefreshToken();
         return false;
       }
       
@@ -122,19 +128,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Ensure client-side cookies are set as backup
       if (refreshData.accessToken) {
-        Cookies.set(`${ACCESS_TOKEN_NAME}_client`, refreshData.accessToken, {
-          path: '/',
-          expires: 1/48, // 30 minutes
-          sameSite: 'lax'
-        });
+        setAccessToken(refreshData.accessToken);
       }
       
       if (refreshData.refreshToken) {
-        Cookies.set(`${REFRESH_TOKEN_NAME}_client`, refreshData.refreshToken, {
-          path: '/',
-          expires: 7, // 7 days
-          sameSite: 'lax'
-        });
+        setRefreshToken(refreshData.refreshToken);
       }
       
       // Get user data
@@ -168,11 +166,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       
       // Check for access token - try both httpOnly and client cookies
-      const accessToken = Cookies.get(ACCESS_TOKEN_NAME) || 
-                         Cookies.get(`${ACCESS_TOKEN_NAME}_client`);
-                          
-      const refreshToken = Cookies.get(REFRESH_TOKEN_NAME) || 
-                         Cookies.get(`${REFRESH_TOKEN_NAME}_client`);
+      const accessToken = getAccessToken();
+      const refreshToken = getRefreshToken();
       
       // If no tokens, user is not authenticated
       if (!accessToken && !refreshToken) {
@@ -237,19 +232,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Set client-side cookies as backup
       if (data.accessToken) {
-        Cookies.set(`${ACCESS_TOKEN_NAME}_client`, data.accessToken, {
-          path: '/',
-          expires: 1/48, // 30 minutes
-          sameSite: 'lax'
-        });
+        setAccessToken(data.accessToken);
       }
       
       if (data.refreshToken) {
-        Cookies.set(`${REFRESH_TOKEN_NAME}_client`, data.refreshToken, {
-          path: '/',
-          expires: 7, // 7 days
-          sameSite: 'lax'
-        });
+        setRefreshToken(data.refreshToken);
       }
       
       // Get user data
@@ -281,10 +268,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       
       // Clear cookies
-      Cookies.remove(ACCESS_TOKEN_NAME, { path: '/' });
-      Cookies.remove(REFRESH_TOKEN_NAME, { path: '/' });
-      Cookies.remove(`${ACCESS_TOKEN_NAME}_client`, { path: '/' });
-      Cookies.remove(`${REFRESH_TOKEN_NAME}_client`, { path: '/' });
+      removeAccessToken();
+      removeRefreshToken();
       
       // Clear user state
       setUser(null);

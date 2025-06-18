@@ -5,29 +5,26 @@
  * Run this with Node.js before starting the Next.js app.
  */
 
-// Set to true to use real API data, false to use mock data
-const USE_REAL_API_DATA = true;
+// This is a configuration file for API endpoints used in the storefront
+// It gets loaded before starting the Next.js app
 
-if (USE_REAL_API_DATA) {
-  // Disable mock data to use real API
-  process.env.DISABLE_MOCK_DATA = 'true';
+// Set environment variables based on runtime configuration
+process.env.ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://localhost:3006';
+process.env.NEXT_PUBLIC_ORDER_SERVICE_URL = process.env.NEXT_PUBLIC_ORDER_SERVICE_URL || 'http://localhost:3006';
+
+// API configuration for disabling/enabling mock data
+const DISABLE_MOCK_DATA = process.env.DISABLE_MOCK_DATA === 'true';
+const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
+
+// Set default behavior for using mock data
+if (DISABLE_MOCK_DATA) {
   process.env.USE_MOCK_DATA = 'false';
-  console.log('Mock data disabled, using real API data');
-} else {
-  // Enable mock data (fallback)
+} else if (USE_MOCK_DATA) {
   process.env.USE_MOCK_DATA = 'true';
-  console.log('Mock data enabled, using fallback data');
+} else {
+  // Default behavior: use mock data in development, real data in production
+  process.env.USE_MOCK_DATA = process.env.NODE_ENV === 'development' ? 'true' : 'false';
 }
 
-// Define the API endpoints - explicitly using IPv4 addresses
-process.env.NEXT_PUBLIC_ORDER_SERVICE_URL = 'http://127.0.0.1:3006/api/v1';
-process.env.ORDER_SERVICE_URL = 'http://127.0.0.1:3006/api/v1';
-
-console.log('API Configuration:');
-console.log('- ORDER_SERVICE_URL:', process.env.ORDER_SERVICE_URL);
-console.log('- NEXT_PUBLIC_ORDER_SERVICE_URL:', process.env.NEXT_PUBLIC_ORDER_SERVICE_URL);
-console.log('- DISABLE_MOCK_DATA:', process.env.DISABLE_MOCK_DATA);
-console.log('- USE_MOCK_DATA:', process.env.USE_MOCK_DATA);
-
-console.log('\nStart your Next.js app with:');
-console.log('node -r ./api-config.js node_modules/next/dist/bin/next dev'); 
+// Apply the configuration
+process.env.NEXT_PUBLIC_USE_MOCK_DATA = process.env.USE_MOCK_DATA; 

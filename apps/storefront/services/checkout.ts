@@ -1,11 +1,8 @@
-import { createApiClient } from '../lib/apiClient';
+import axios from '../lib/api';
 import { AddressInput } from '../services/shipping';
 import * as shippingService from '../services/shipping';
-import { ApiResponse } from '../lib/apiClient';
 
-const checkoutServiceApi = createApiClient(process.env.NEXT_PUBLIC_CHECKOUT_API_URL || 'http://localhost:3005/api/v1');
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const CHECKOUT_API_ROUTE = '/checkout';
 
 export interface CartItem {
   productId: string;
@@ -72,6 +69,12 @@ export interface CheckoutSession {
   updatedAt?: string;
 }
 
+export type ApiResponse<T> = {
+  data: T;
+  message?: string;
+  [key: string]: any;
+};
+
 // Calculate order preview with shipping and discount
 export async function calculateOrderPreview(
   userId: string,
@@ -79,13 +82,13 @@ export async function calculateOrderPreview(
   couponCode?: string,
   shippingAddress?: Address
 ): Promise<ApiResponse<OrderPreview>> {
-  const response = await checkoutServiceApi.post<ApiResponse<OrderPreview>>('/preview', {
+  const response = await axios.post<ApiResponse<OrderPreview>>(`${CHECKOUT_API_ROUTE}/preview`, {
     userId,
     cartItems,
     couponCode,
     shippingAddress
   });
-  return response;
+  return response.data;
 }
 
 // Get available shipping options - now delegates to shippingService
@@ -103,10 +106,11 @@ export async function validatePincode(
   pincode: string,
   country: string
 ): Promise<boolean> {
-  return checkoutServiceApi.post<boolean>('/validate-pincode', {
+  const response = await axios.post<boolean>(`${CHECKOUT_API_ROUTE}/validate-pincode`, {
     pincode,
     country
   });
+  return response.data;
 }
 
 // Create checkout session
@@ -117,97 +121,87 @@ export async function createCheckoutSession(
   shippingAddress?: Address,
   billingAddress?: Address
 ): Promise<ApiResponse<CheckoutSession>> {
-  return checkoutServiceApi.post<ApiResponse<CheckoutSession>>('/session', {
+  const response = await axios.post<ApiResponse<CheckoutSession>>(`${CHECKOUT_API_ROUTE}/session`, {
     userId,
     cartItems,
     couponCode,
     shippingAddress,
     billingAddress
   });
+  return response.data;
 }
 
 // Get checkout session
-export async function getCheckoutSession(sessionId: string): Promise<ApiResponse<CheckoutSession>> {
-  console.log(`Fetching checkout session with ID: ${sessionId}`);
-  const sessionData = await checkoutServiceApi.get<ApiResponse<CheckoutSession>>(`/session/${sessionId}`);
-  
-  console.log('Extracted session data:', sessionData);
-  console.log('Session data structure:', JSON.stringify(sessionData, null, 2));
-  
-  if (!sessionData.data.totals) {
-    console.log('Session data is missing totals, adding default values');
-    // This part of the code should ideally not be reached if the API always returns totals.
-    // If it does, the default values should be applied to sessionData.data
-    return {
-      ...sessionData,
-      data: {
-        ...sessionData.data,
-        totals: {
-          subtotal: 2500,
-          tax: 250,
-          shippingCost: 0,
-          discount: 0,
-          total: 2750
-        }
-      }
-    };
-  }
-  return sessionData;
+export async function getCheckoutSession(id: string): Promise<ApiResponse<CheckoutSession>> {
+  const response = await axios.get<ApiResponse<CheckoutSession>>(`${CHECKOUT_API_ROUTE}/session/${id}`);
+  return response.data;
 }
 
 // Complete checkout session (after payment)
 export async function completeCheckoutSession(
-  sessionId: string,
+  id: string,
   paymentIntentId: string
 ): Promise<CheckoutSession> {
-  return checkoutServiceApi.post<CheckoutSession>(`/session/${sessionId}/complete`, {
+  const response = await axios.post<CheckoutSession>(`${CHECKOUT_API_ROUTE}/session/${id}/complete`, {
     paymentIntentId
   });
+  return response.data;
 }
 
 export async function updateShippingMethod(
-  sessionId: string,
+  id: string,
   shippingMethod: string
 ): Promise<CheckoutSession> {
-  return checkoutServiceApi.put<CheckoutSession>(`/session/${sessionId}/shipping-method`, {
+  const response = await axios.put<CheckoutSession>(`${CHECKOUT_API_ROUTE}/session/${id}/shipping-method`, {
     shippingMethod
   });
+  return response.data;
 }
 
 export async function applyDiscountCode(
-  sessionId: string,
+  id: string,
   discountCode: string
 ): Promise<CheckoutSession> {
-  return checkoutServiceApi.post<CheckoutSession>(`/session/${sessionId}/apply-discount`, {
+  const response = await axios.post<CheckoutSession>(`${CHECKOUT_API_ROUTE}/session/${id}/apply-discount`, {
     discountCode
   });
+  return response.data;
 }
 
-export async function removeDiscountCode(sessionId: string): Promise<CheckoutSession> {
-  return checkoutServiceApi.post<CheckoutSession>(`/session/${sessionId}/remove-discount`, {});
+export async function removeDiscountCode(id: string): Promise<CheckoutSession> {
+  const response = await axios.post<CheckoutSession>(`${CHECKOUT_API_ROUTE}/session/${id}/remove-discount`, {});
+  return response.data;
 }
 
 export async function updateShippingAddress(
-  sessionId: string,
+  id: string,
   address: Address
 ): Promise<CheckoutSession> {
-  return checkoutServiceApi.put<CheckoutSession>(`/session/${sessionId}/shipping-address`, {
+    const response = await axios.put<CheckoutSession>(`${CHECKOUT_API_ROUTE}/session/${id}/shipping-address`, {
     address
   });
+  return response.data;
 }
 
 export async function updateBillingAddress(
-  sessionId: string,
+  id: string,
   address: Address
 ): Promise<CheckoutSession> {
-  return checkoutServiceApi.put<CheckoutSession>(`/session/${sessionId}/billing-address`, {
+  const response = await axios.put<CheckoutSession>(`${CHECKOUT_API_ROUTE}/session/${id}/billing-address`, {
     address
   });
+  return response.data;
 }
 
 export async function createPaymentIntent(
-  sessionId: string,
+  id: string,
   amount: number
 ): Promise<{ clientSecret: string }> {
-  return checkoutServiceApi.post<{ clientSecret: string }>(`/session/${sessionId}/create-payment-intent`, { amount });
-} 
+  const response = await axios.post<{ clientSecret: string }>(`${CHECKOUT_API_ROUTE}/session/${id}/create-payment-intent`, { amount });
+  return response.data;
+}
+
+export const placeOrder = async (id: string, address: AddressInput) => {
+  const response = await axios.post(`${CHECKOUT_API_ROUTE}/checkout/session/${id}/order`, { address });
+  return response.data;
+}; 

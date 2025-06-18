@@ -27,7 +27,7 @@ export const AppDataSource = new DataSource({
   entities: [Order, OrderNote, OrderItem],
   migrations: [path.join(__dirname, 'migrations', '*.{ts,js}')],
   migrationsRun: true,
-  synchronize: false,
+  synchronize: true,
   logging: NODE_ENV === 'development',
   ssl: NODE_ENV === 'production' ? {
     rejectUnauthorized: false

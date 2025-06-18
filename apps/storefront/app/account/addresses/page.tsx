@@ -6,12 +6,26 @@ import * as shippingService from '@/services/shipping';
 import { SavedAddress, AddressInput } from '@/services/shipping';
 import toast from 'react-hot-toast';
 
+export type UISavedAddress = {
+  id: string;
+  name: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+  phone: string;
+  isDefault?: boolean;
+  type?: string;
+};
+
 export default function AddressPage() {
-  const [addresses, setAddresses] = useState<SavedAddress[]>([]);
+  const [addresses, setAddresses] = useState<UISavedAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  console.log("addresses page ==>", addresses);
   useEffect(() => {
     const fetchAddresses = async () => {
       try {
@@ -19,7 +33,15 @@ export default function AddressPage() {
         const response = await shippingService.fetchUserAddresses();
         
         if (response && Array.isArray(response)) {
-          setAddresses(response);
+          setAddresses(
+            response.map(addr => ({
+              ...addr,
+              name: addr.fullName,
+              line1: addr.addressLine1,
+              line2: addr.addressLine2,
+              type: (addr as any).type || 'shipping',
+            }))
+          );
         } else {
           setAddresses([]);
         }
@@ -36,7 +58,7 @@ export default function AddressPage() {
     fetchAddresses();
   }, []);
 
-  const handleEdit = (addr: SavedAddress) => {
+  const handleEdit = (addr: UISavedAddress) => {
     window.location.href = `/account/address/edit/${addr.id}`;
   };
 

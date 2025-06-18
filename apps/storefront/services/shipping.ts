@@ -1,8 +1,5 @@
-import { createApiClient } from '@/lib/apiClient';
+import axios from '../lib/api';
 import { ShippingMethod, DEFAULT_SHIPPING_METHODS } from '@/types/shipping';
-
-const SHIPPING_SERVICE_URL = process.env.NEXT_PUBLIC_SHIPPING_SERVICE_URL || 'http://localhost:3008/api/v1';
-const shippingServiceApi = createApiClient(SHIPPING_SERVICE_URL);
 
 // Adjusted Address type to match what might be returned by the shipping service
 export type SavedAddress = {
@@ -44,37 +41,39 @@ export const calculateShippingCost = async (shippingDetails: {
   address: AddressInput;
   items: Array<{ productId: string; quantity: number; price: number; }>;
 }) => {
-  return shippingServiceApi.post('/calculate-cost', shippingDetails);
+  return axios.post('/calculate-cost', shippingDetails);
 };
 
 export const trackShipment = async (trackingId: string) => {
-  return shippingServiceApi.get(`/track/${trackingId}`);
+  return axios.get(`/track/${trackingId}`);
 };
 
 export const addShippingAddress = async (addressData: AddressInput) => {
-  return shippingServiceApi.post('/addresses', addressData);
+  return axios.post('/addresses', addressData);
 };
 
 export const updateAddress = async (id: string, addressData: AddressInput) => {
-  return shippingServiceApi.put(`/addresses/${id}`, addressData);
+  return axios.put(`/addresses/${id}`, addressData);
 };
 
 export const deleteAddress = async (id: string) => {
-  return shippingServiceApi.delete(`/addresses/${id}`);
+  return axios.delete(`/addresses/${id}`);
 };
 
 export const setDefaultAddress = async (id: string) => {
-  return shippingServiceApi.patch(`/addresses/${id}/default`, {});
+  return axios.patch(`/addresses/${id}/default`, {});
 };
 
 export const getAvailableShippingMethods = async (address: { pincode: string; country: string }): Promise<ShippingOption[]> => {
   const query = new URLSearchParams(address as Record<string, string>).toString();
-  return shippingServiceApi.get<ShippingOption[]>(`/shipping/methods/available?${query}`);
+  const response = await axios.get<ShippingOption[]>(`/shipping/methods/available?${query}`);
+  return response.data;
 };
 
 export const fetchUserAddresses = async (): Promise<SavedAddress[]> => {
   try {
-    return await shippingServiceApi.get<SavedAddress[]>(`/addresses/`);
+    const response = await axios.get<SavedAddress[]>(`/addresses/`);
+    return response.data;
   } catch (error) {
     console.error('Error fetching user addresses:', error);
     // Return empty array instead of throwing error

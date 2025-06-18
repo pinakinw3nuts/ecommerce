@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
+  poweredByHeader: false,
+  compress: true,
+  swcMinify: true,
   images: {
     remotePatterns: [
       {
@@ -56,13 +60,12 @@ const nextConfig = {
     NEXT_PUBLIC_INVENTORY_SERVICE_URL: process.env.NEXT_PUBLIC_INVENTORY_SERVICE_URL || 'http://localhost:3014/api/v1',
     NEXT_PUBLIC_PAYMENT_SERVICE_URL: process.env.NEXT_PUBLIC_PAYMENT_SERVICE_URL || 'http://localhost:3007/api/v1',
   },
-  // Temporarily disable TypeScript checking during build
+  // Re-enable TypeScript and ESLint checking for proper development
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
-  // Temporarily disable ESLint during build
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
 };
 
