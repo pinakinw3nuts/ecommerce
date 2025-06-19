@@ -24,6 +24,9 @@ interface ProductCardProps {
     description?: string;
     sku?: string;
     inStock?: boolean;
+    defaultVariantId?: string;
+    categories?: string[];
+    brand?: string;
   };
   priority?: boolean;
   className?: string;
@@ -76,10 +79,20 @@ export function ProductCard({ product, priority = false, className, viewMode = '
     } else {
       addToWishlist({
         id: product.id,
+        productId: product.id,
         name: product.name,
         price: product.discountedPrice || product.price,
         imageUrl: product.image,
-        slug: product.slug,
+        productImage: product.image,
+        variantId: product.defaultVariantId || null,
+        metadata: {
+          slug: product.slug,
+          sku: product.sku,
+          description: product.description,
+          categories: product.categories,
+          brand: product.brand
+        },
+        slug: product.slug
       });
       showToast({
         message: `${product.name} added to wishlist!`,

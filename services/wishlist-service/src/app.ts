@@ -39,7 +39,11 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     // Register CORS plugin
     await app.register(fastifyCors, {
-      origin: config.corsOrigins
+      origin: true,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      exposedHeaders: ['Content-Range', 'X-Content-Range']
     });
 
     // Register Swagger documentation plugins
@@ -65,8 +69,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
 
     // Register routes
-    await app.register(wishlistRoutes, { prefix: '/api/wishlist' });
-    
+    await app.register(wishlistRoutes, { prefix: '/api/v1/wishlist' });
+
     // Register health routes
     await app.register(healthRoutes);
 

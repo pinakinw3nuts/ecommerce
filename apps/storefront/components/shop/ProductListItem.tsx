@@ -23,6 +23,7 @@ interface Product {
   brand?: string;
   rating?: number;
   reviewCount?: number;
+  category?: string;
 }
 
 interface ProductListItemProps {
@@ -76,10 +77,22 @@ export default function ProductListItem({ product }: ProductListItemProps) {
     } else {
       addToWishlist({
         id: product.id,
+        productId: product.id,
         name: product.name,
-        price: product.price,
+        price: hasDiscount && product.salePrice ? product.salePrice : product.price,
         imageUrl: product.imageUrl,
-        slug: product.slug,
+        productImage: product.imageUrl,
+        variantId: null,
+        metadata: {
+          slug: product.slug,
+          sku: product.sku,
+          description: product.description,
+          category: product.category,
+          brand: product.brand,
+          hasDiscount,
+          originalPrice: product.price
+        },
+        slug: product.slug
       });
       showToast({
         message: `${product.name} added to wishlist`,

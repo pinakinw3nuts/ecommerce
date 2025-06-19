@@ -149,6 +149,7 @@ export class WishlistController {
   ) {
     try {
       const userId = request.user.id;
+      logger.info('Getting wishlist for user', { userId });
       const { page = '1', limit = '20', sortBy, order } = request.query;
 
       const paginationOptions: PaginationOptions = {

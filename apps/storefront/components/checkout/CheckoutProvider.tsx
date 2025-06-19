@@ -64,8 +64,20 @@ export const CheckoutProvider = ({ children }: { children: ReactNode }) => {
           console.error('Failed to parse saved checkout session:', e);
         }
       }
+      // Restore currentStep from localStorage
+      const savedStep = localStorage.getItem('checkout_current_step');
+      if (savedStep !== null) {
+        setCurrentStep(Number(savedStep));
+      }
     }
   }, []);
+
+  // Persist currentStep to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('checkout_current_step', String(currentStep));
+    }
+  }, [currentStep]);
 
   // Update session in localStorage when it changes
   useEffect(() => {

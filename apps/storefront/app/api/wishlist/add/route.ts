@@ -1,34 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
+import axios from 'axios';
 
-// Mock wishlist data store
-const wishlistItems: string[] = [];
+const WISHLIST_API_URL = process.env.NEXT_PUBLIC_WISHLIST_SERVICE_URL || 'http://127.0.0.1:3013/api/v1';
+
+function getIpv4Url(url: string): string {
+  return url.replace('localhost', '127.0.0.1');
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.formData();
-    const productId = body.get('productId')?.toString();
+    const token = req.cookies.get('accessToken')?.value;
+    const data = await req.json();
 
-    if (!productId) {
-      return new NextResponse('Product ID is required', { status: 400 });
+    if (!data.productId) {
+      return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
     }
 
-    // For demo purposes, we'll just add the product ID to our mock wishlist
-    // In a real implementation, we would store this in a database
-    if (!wishlistItems.includes(productId)) {
-      wishlistItems.push(productId);
-    }
-    
-    console.log('Added to wishlist:', productId);
-    console.log('Current wishlist:', wishlistItems);
+    // Match the exact schema expected by the wishlist service
+    const wishlistData = {
+      productId: data.productId,
+      variantId: data.variantId || undefined, // Optional field should be undefined if not provided
+      productName: data.name,
+      productImage: data.imageUrl || data.productImage,
+      price: Number(data.price), // Ensure price is a number
+      metadata: {
+        slug: data.slug,
+        ...(data.sku && { sku: data.sku }),
+        ...(data.description && { description: data.description }),
+        ...(data.category && { category: data.category }),
+        ...(data.brand && { brand: data.brand }),
+        ...(data.metadata && { ...data.metadata })
+      }
+    };
 
-    // Get the referer or use the base URL as fallback
-    const referer = req.headers.get('referer');
-    
-    // Use an absolute URL for redirect
-    const url = referer ? new URL(referer) : new URL('/', req.url);
-    return NextResponse.redirect(url, 303);
-  } catch (err) {
-    console.error('Error adding to wishlist:', err);
-    return new NextResponse('Failed to add to wishlist', { status: 500 });
+    const response = await axios.post(
+      `${getIpv4Url(WISHLIST_API_URL)}/wishlist`,
+      wishlistData,
+      {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    return NextResponse.json(response.data);
+  } catch (err: any) {
+    console.error('Error adding to wishlist:', err.response?.data || err.message);
+    return NextResponse.json(
+      { 
+        error: 'Failed to add to wishlist', 
+        message: err.response?.data?.message || err.message 
+      }, 
+      { status: err.response?.status || 500 }
+    );
   }
 }

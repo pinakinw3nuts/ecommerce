@@ -14,6 +14,8 @@ import { ShippingZone } from '../entities/ShippingZone';
 import { ShippingRate } from '../entities/ShippingRate';
 import { calculateETA } from '../utils/eta';
 import { FastifyRequest as FastifyRequestBase } from 'fastify';
+import { authenticate, authorize } from '../middlewares/auth';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // Type definitions to work with Fastify
 type FastifyInstance = any;
@@ -59,6 +61,21 @@ interface AvailableMethodsQuery {
   productCategories?: string[];
   customerGroup?: string;
 }
+
+// Zod schemas for admin shipping method management
+const shippingMethodSchema = z.object({
+  name: z.string().min(1),
+  code: z.string().min(1),
+  description: z.string().optional(),
+  baseRate: z.number().nonnegative(),
+  estimatedDays: z.number().int().nonnegative(),
+  icon: z.string().optional(),
+  isActive: z.boolean().optional(),
+  settings: z.record(z.any()).optional(),
+  displayOrder: z.number().int().optional(),
+});
+
+const shippingMethodUpdateSchema = shippingMethodSchema.partial();
 
 export class ShippingController {
   private shippingService: ShippingService;
@@ -213,6 +230,70 @@ export class ShippingController {
         preHandler: validateRequest(etaCalculationSchema)
       },
       this.calculateETA.bind(this)
+    );
+  }
+
+  /**
+   * Register admin shipping method routes
+   * @param fastify - Fastify instance
+   */
+  async registerAdminRoutes(fastify: FastifyInstance): Promise<void> {
+    // Create shipping method
+    fastify.post(
+      '/admin/shipping-methods',
+      {
+        preHandler: [authenticate, authorize(['admin']), validateRequest(shippingMethodSchema, 'body')],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Create shipping method',
+          body: zodToJsonSchema(shippingMethodSchema),
+          response: { 201: { type: 'object' } }
+        }
+      },
+      this.createShippingMethod.bind(this)
+    );
+    // Update shipping method
+    fastify.put(
+      '/admin/shipping-methods/:id',
+      {
+        preHandler: [authenticate, authorize(['admin']), validateRequest(shippingMethodUpdateSchema, 'body')],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Update shipping method',
+          params: zodToJsonSchema(z.object({ id: z.string() })),
+          body: zodToJsonSchema(shippingMethodUpdateSchema),
+          response: { 200: { type: 'object' } }
+        }
+      },
+      this.updateShippingMethod.bind(this)
+    );
+    // Delete shipping method
+    fastify.delete(
+      '/admin/shipping-methods/:id',
+      {
+        preHandler: [authenticate, authorize(['admin'])],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Delete shipping method',
+          params: zodToJsonSchema(z.object({ id: z.string() })),
+          response: { 204: { type: 'null' } }
+        }
+      },
+      this.deleteShippingMethod.bind(this)
+    );
+    // Get shipping method by ID
+    fastify.get(
+      '/admin/shipping-methods/:id',
+      {
+        preHandler: [authenticate, authorize(['admin'])],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Get shipping method by ID',
+          params: zodToJsonSchema(z.object({ id: z.string() })),
+          response: { 200: { type: 'object' } }
+        }
+      },
+      this.getShippingMethodById.bind(this)
     );
   }
 
@@ -472,5 +553,61 @@ export class ShippingController {
 
     // Return the cheapest applicable rate
     return applicableRates.sort((a: ShippingRate, b: ShippingRate) => a.rate - b.rate)[0] || null;
+  }
+
+  // Admin: Create shipping method
+  async createShippingMethod(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const data = request.body;
+      const method = this.shippingMethodRepository.create(data);
+      await this.shippingMethodRepository.save(method);
+      return reply.code(201).send(method);
+    } catch (error) {
+      logger.error({ method: 'createShippingMethod', error });
+      return reply.code(500).send({ error: 'Failed to create shipping method' });
+    }
+  }
+
+  // Admin: Update shipping method
+  async updateShippingMethod(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const { id } = request.params;
+      const data = request.body;
+      const method = await this.shippingMethodRepository.findOne({ where: { id } });
+      if (!method) return reply.code(404).send({ error: 'Shipping method not found' });
+      Object.assign(method, data);
+      await this.shippingMethodRepository.save(method);
+      return reply.code(200).send(method);
+    } catch (error) {
+      logger.error({ method: 'updateShippingMethod', error });
+      return reply.code(500).send({ error: 'Failed to update shipping method' });
+    }
+  }
+
+  // Admin: Delete shipping method
+  async deleteShippingMethod(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const { id } = request.params;
+      const method = await this.shippingMethodRepository.findOne({ where: { id } });
+      if (!method) return reply.code(404).send({ error: 'Shipping method not found' });
+      await this.shippingMethodRepository.remove(method);
+      return reply.code(204).send();
+    } catch (error) {
+      logger.error({ method: 'deleteShippingMethod', error });
+      return reply.code(500).send({ error: 'Failed to delete shipping method' });
+    }
+  }
+
+  // Admin: Get shipping method by ID
+  async getShippingMethodById(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const { id } = request.params;
+      const method = await this.shippingMethodRepository.findOne({ where: { id } });
+      if (!method) return reply.code(404).send({ error: 'Shipping method not found' });
+      return reply.code(200).send(method);
+    } catch (error) {
+      logger.error({ method: 'getShippingMethodById', error });
+      return reply.code(500).send({ error: 'Failed to get shipping method' });
+    }
   }
 } 

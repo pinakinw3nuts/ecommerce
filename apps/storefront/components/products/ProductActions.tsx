@@ -290,11 +290,28 @@ export default function ProductActions({
         duration: 3000
       });
     } else {
+      const variantId = hasVariants ? 
+        (selectedSize && selectedColor ? `${selectedColor}-${selectedSize}` : selectedSize || selectedColor || null) : 
+        null;
+
       addToWishlist({
         id: product.id,
+        productId: product.id,
         name: product.name,
         price: product.discountedPrice || product.price,
         imageUrl: product.images[0],
+        productImage: product.images[0],
+        variantId: variantId,
+        metadata: {
+          slug: product.slug,
+          sku: product.sku,
+          description: product.description,
+          category: product.category,
+          brand: product.brand,
+          selectedColor,
+          selectedSize,
+          hasVariants
+        },
         slug: product.slug
       });
       showToast({

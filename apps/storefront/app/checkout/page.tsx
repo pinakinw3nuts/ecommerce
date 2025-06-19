@@ -26,7 +26,7 @@ function CheckoutPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const { items, refreshCart } = useCart();
+  const { items, refreshCart, isCartLoading } = useCart();
   const {
     checkoutSession,
     setCheckoutSession,
@@ -46,30 +46,26 @@ function CheckoutPageContent() {
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
-    const initializeCheckout = async () => {
-      setIsLoadingSession(true);
-      setHasError(false);
+    // Only run when cart is done loading
+    if (isCartLoading) return;
+    if (!user?.id) {
+      toast.error('Please log in to access checkout.');
+      router.push('/login?redirect=/checkout');
+      return;
+    }
 
-      // Ensure user is logged in and cart is not empty
-      await refreshCart(true); // Ensure cart is fresh
+    if (items.length === 0) {
+      toast.error('Your cart is empty. Add items before checking out.');
+      router.push('/cart');
+      return;
+    }
 
-      if (!user?.id) {
-        toast.error('Please log in to access checkout.');
-        router.push('/login?redirect=/checkout');
-        return;
-      }
+    let sessionToLoad: checkoutService.CheckoutSession | null = null;
 
-      if (items.length === 0) {
-        toast.error('Your cart is empty. Add items before checking out.');
-        router.push('/cart');
-        return;
-      }
-
-      let sessionToLoad: checkoutService.CheckoutSession | null = null;
-
-      // Try to load session from URL parameter
-      const sessionIdFromUrl = searchParams.get('sessionId');
-      if (sessionIdFromUrl && isValidUuid(sessionIdFromUrl)) {
+    // Try to load session from URL parameter
+    const sessionIdFromUrl = searchParams.get('sessionId');
+    if (sessionIdFromUrl && isValidUuid(sessionIdFromUrl)) {
+      (async () => {
         try {
           const sessionResponse = await checkoutService.getCheckoutSession(sessionIdFromUrl);
           if (sessionResponse.data.status === 'COMPLETED' || sessionResponse.data.status === 'EXPIRED') {
@@ -83,78 +79,91 @@ function CheckoutPageContent() {
           toast.error('Failed to load checkout session. Starting a new one.');
           sessionToLoad = null;
         }
-      }
+        continueCheckout(sessionToLoad);
+      })();
+      return;
+    }
 
-      // If no session from URL, try localStorage
-      if (!sessionToLoad) {
-        const storedSessionId = localStorage.getItem('checkout_session_id');
-        if (storedSessionId && isValidUuid(storedSessionId)) {
-          try {
-            const sessionResponse = await checkoutService.getCheckoutSession(storedSessionId);
-            if (sessionResponse.data.status === 'COMPLETED' || sessionResponse.data.status === 'EXPIRED') {
-              toast.error('Your previous checkout session has expired or completed. Starting a new one.');
-              sessionToLoad = null;
-              localStorage.removeItem('checkout_session_id');
-            } else {
-              sessionToLoad = sessionResponse.data;
-            }
-          } catch (error) {
-            console.error('Error fetching session from localStorage:', error);
-            toast.error('Failed to load previous checkout session. Starting a new one.');
+    // If no session from URL, try localStorage
+    const storedSessionId = localStorage.getItem('checkout_session_id');
+    if (storedSessionId && isValidUuid(storedSessionId)) {
+      (async () => {
+        try {
+          const sessionResponse = await checkoutService.getCheckoutSession(storedSessionId);
+          if (sessionResponse.data.status === 'COMPLETED' || sessionResponse.data.status === 'EXPIRED') {
+            toast.error('Your previous checkout session has expired or completed. Starting a new one.');
             sessionToLoad = null;
             localStorage.removeItem('checkout_session_id');
-          }
-        }
-      }
-
-      // If no valid session, create a new one
-      if (!sessionToLoad) {
-        try {
-          const newSession = await createCheckoutSession(
-            user.id,
-            items.map(item => ({ productId: item.productId, quantity: item.quantity, price: item.price, name: item.name }))
-          );
-          if (newSession) {
-            sessionToLoad = newSession;
-            localStorage.setItem('checkout_session_id', newSession.id);
-            toast.success('New checkout session created.');
           } else {
-            throw new Error('Failed to create a new checkout session.');
+            sessionToLoad = sessionResponse.data;
           }
         } catch (error) {
-          console.error('Error creating new session:', error);
-          toast.error('Could not start checkout. Please try again.');
-          setHasError(true);
-          setIsLoadingSession(false);
-          return;
+          console.error('Error fetching session from localStorage:', error);
+          toast.error('Failed to load previous checkout session. Starting a new one.');
+          sessionToLoad = null;
+          localStorage.removeItem('checkout_session_id');
         }
-      }
+        continueCheckout(sessionToLoad);
+      })();
+      return;
+    }
 
-      // Initialize context state from the loaded/created session
+    // If no valid session, create a new one
+    (async () => {
+      try {
+        const newSession = await createCheckoutSession(
+          user.id!,
+          items.map(item => ({ productId: item.productId, quantity: item.quantity, price: item.price, name: item.name }))
+        );
+        if (newSession) {
+          sessionToLoad = newSession;
+          localStorage.setItem('checkout_session_id', newSession.id);
+          toast.success('New checkout session created.');
+        } else {
+          throw new Error('Failed to create a new checkout session.');
+        }
+      } catch (error) {
+        console.error('Error creating new session:', error);
+        toast.error('Could not start checkout. Please try again.');
+        setHasError(true);
+        setIsLoadingSession(false);
+        return;
+      }
+      continueCheckout(sessionToLoad);
+    })();
+
+    function continueCheckout(sessionToLoad: checkoutService.CheckoutSession | null) {
       if (sessionToLoad) {
         setCheckoutSession(sessionToLoad);
         if (sessionToLoad.shippingAddress) {
           setShippingAddress(sessionToLoad.shippingAddress);
-          setCurrentStep(1); // Advance to shipping method if address is set
         }
         if (sessionToLoad.shippingMethod) {
           setShippingMethod(sessionToLoad.shippingMethod);
-          setCurrentStep(2); // Advance to payment if shipping method is set
         }
         if (sessionToLoad.paymentMethod) {
           setPaymentMethod(sessionToLoad.paymentMethod);
-          setCurrentStep(3); // Advance to review if payment method is set
+        }
+        // Restore step from localStorage if available, otherwise infer
+        const savedStep = localStorage.getItem('checkout_current_step');
+        if (savedStep !== null) {
+          setCurrentStep(Number(savedStep));
+        } else if (sessionToLoad.paymentMethod) {
+          setCurrentStep(3);
+        } else if (sessionToLoad.shippingMethod) {
+          setCurrentStep(2);
+        } else if (sessionToLoad.shippingAddress) {
+          setCurrentStep(1);
+        } else {
+          setCurrentStep(0);
         }
         // Recalculate preview only after setting all initial data
-        await calculateOrderPreview(user.id, items.map(item => ({ productId: item.productId, quantity: item.quantity, price: item.price, name: item.name })));
+        calculateOrderPreview(user?.id as string, items.map(item => ({ productId: item.productId, quantity: item.quantity, price: item.price, name: item.name })));
       }
-
       setIsReady(true);
       setIsLoadingSession(false);
-    };
-
-    initializeCheckout();
-  }, [user?.id, items.length]); // Depend on user.id and items.length to re-initialize if they change
+    }
+  }, [user?.id, items.length, isCartLoading]);
 
   if (isLoadingSession || !isReady) {
     return (

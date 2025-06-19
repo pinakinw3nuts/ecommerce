@@ -98,9 +98,13 @@ export interface CartItem {
 
 export interface WishlistItem {
   id: string;
+  productId: string;
+  variantId?: string | null;
   name: string;
   price: number;
   imageUrl?: string;
+  productImage?: string;
+  metadata?: Record<string, any>;
   slug: string;
 }
 

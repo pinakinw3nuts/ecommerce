@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 
-const CART_SERVICE_URL = process.env.CART_SERVICE_URL || 'http://127.0.0.1:3004/api/v1';
+const CART_SERVICE_URL = process.env.NEXT_PUBLIC_CART_SERVICE_URL || 'http://127.0.0.1:3004/api/v1';
 
 // Get cart or create if it doesn't exist
 export async function GET(req: NextRequest) {

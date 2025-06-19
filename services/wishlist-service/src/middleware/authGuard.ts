@@ -10,8 +10,11 @@ export async function authGuard(request: FastifyRequest, reply: FastifyReply) {
     // Verify JWT token - this will throw if token is invalid
     await request.jwtVerify();
     
-    // TypeScript type assertion for the user object
-    const user = request.user as { id: string; roles?: string[] };
+    // Patch: map userId to id if id is missing
+    const user = request.user as any;
+    if (!user.id && user.userId) {
+      user.id = user.userId;
+    }
     
     // Ensure user ID exists
     if (!user?.id) {
@@ -38,7 +41,9 @@ export async function authGuard(request: FastifyRequest, reply: FastifyReply) {
     logger.warn('Authentication failed', {
       url: request.url,
       method: request.method,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined, // Add stack trace
+      token: request.headers['authorization'] // Log the token for debugging (remove in production)
     });
     
     // Return authentication error

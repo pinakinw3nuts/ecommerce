@@ -26,7 +26,8 @@
     "reflect-metadata": "^0.1.13",
     "tsconfig-paths": "^4.2.0",
     "typeorm": "^0.3.17",
-    "zod": "^3.21.4"
+    "zod": "^3.21.4",
+    "zod-to-json-schema": "^3.24.5"
   },
   "devDependencies": {
     "@types/jest": "^29.5.4",
@@ -54,4 +55,4 @@
   ],
   "author": "",
   "license": "ISC"
-} 
+}

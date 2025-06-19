@@ -1,20 +1,20 @@
 // lib/cart.ts
-import { createApiClient } from '../lib/apiClient';
+import axios from '@/lib/api';  
 
-const cartServiceApi = createApiClient(process.env.NEXT_PUBLIC_CART_SERVICE_URL || 'http://localhost:3004/api/v1');
+const CART_SERVICE_URL = process.env.NEXT_PUBLIC_CART_SERVICE_URL || 'http://127.0.0.1:3004/api/v1';
 
 export const fetchCart = async (userId: string) => {
-    return cartServiceApi.get(`/cart/${userId}`);
+    return axios.get(`${CART_SERVICE_URL}/cart/${userId}`);
 };
 
 export const updateCart = async (userId: string, payload: any) => {
-    return cartServiceApi.put(`/cart/${userId}`, payload);
+    return axios.put(`${CART_SERVICE_URL}/cart/${userId}`, payload);
 };
 
 export const addToCart = async (userId: string, item: any) => {
-    return cartServiceApi.post(`/cart/${userId}/add`, item);
+    return axios.post(`${CART_SERVICE_URL}/cart/${userId}/add`, item);
 };
 
 export const removeFromCart = async (userId: string, itemId: string) => {
-    return cartServiceApi.delete(`/cart/${userId}/remove/${itemId}`);
+    return axios.delete(`${CART_SERVICE_URL}/cart/${userId}/remove/${itemId}`);
 };

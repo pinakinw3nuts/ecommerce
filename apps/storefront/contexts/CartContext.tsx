@@ -57,6 +57,7 @@ interface CartContextType {
   isEmpty: boolean;
   itemCount: number;
   loading: boolean;
+  isCartLoading: boolean;
   error: string | null;
   coupon: Coupon | null;
   applyCoupon: (code: string) => Promise<{ success: boolean; message: string }>;
@@ -261,13 +262,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
       
-      const response = await axios.patch(`/api/cart/items/${id}`, 
-        { quantity },
-        { 
-          headers: { 'x-device-id': deviceId },
-          params: { cartId: cartData.id }
-        }
-      );
+      const response = await axios.put(`/api/cart/items/${id}?cartId=${cartData.id}`, { quantity }, { headers: { 'x-device-id': deviceId } });
       
       setCartData(response.data);
     } catch (error: any) {
@@ -394,6 +389,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     isEmpty,
     itemCount,
     loading,
+    isCartLoading: loading,
     error,
     coupon,
     applyCoupon,

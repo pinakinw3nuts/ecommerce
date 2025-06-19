@@ -35,4 +35,5 @@ const availableMethodsQuerySchema = z.object({
 export async function shippingRoutes(fastify: FastifyInstance) {
   const shippingController = new ShippingController();
   await shippingController.registerRoutes(fastify);
+  await shippingController.registerAdminRoutes(fastify);
 } 

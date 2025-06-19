@@ -89,7 +89,7 @@ export default function WishlistPage() {
                 <div className="relative aspect-square w-full sm:w-32 h-32 flex-shrink-0">
                   <Link href={`/products/${item.slug}`}>
                     <Image
-                      src={item.imageUrl}
+                      src={item.imageUrl || '/placeholder.jpg'}
                       alt={item.name}
                       fill
                       className="object-cover rounded-md"

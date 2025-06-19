@@ -54,7 +54,7 @@ const nextConfig = {
     NEXT_PUBLIC_CMS_SERVICE_URL: process.env.NEXT_PUBLIC_CMS_SERVICE_URL || 'http://localhost:3015/api/v1',
     NEXT_PUBLIC_NOTIFICATION_SERVICE_URL: process.env.NEXT_PUBLIC_NOTIFICATION_SERVICE_URL || 'http://localhost:3009/api/v1',
     NEXT_PUBLIC_REVIEW_SERVICE_URL: process.env.NEXT_PUBLIC_REVIEW_SERVICE_URL || 'http://localhost:3010/api/v1',
-    NEXT_PUBLIC_WISHLIST_SERVICE_URL: process.env.NEXT_PUBLIC_WISHLIST_SERVICE_URL || 'http://localhost:3011/api/v1',
+    NEXT_PUBLIC_WISHLIST_SERVICE_URL: process.env.NEXT_PUBLIC_WISHLIST_SERVICE_URL || 'http://localhost:3013/api/v1',
     NEXT_PUBLIC_COMPANY_SERVICE_URL: process.env.NEXT_PUBLIC_COMPANY_SERVICE_URL || 'http://localhost:3012/api/v1',
     NEXT_PUBLIC_PRICING_SERVICE_URL: process.env.NEXT_PUBLIC_PRICING_SERVICE_URL || 'http://localhost:3013/api/v1',
     NEXT_PUBLIC_INVENTORY_SERVICE_URL: process.env.NEXT_PUBLIC_INVENTORY_SERVICE_URL || 'http://localhost:3014/api/v1',
