@@ -1,5 +1,17 @@
+// API URLs
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+// Cookie names
+export const ACCESS_TOKEN_NAME = 'accessToken';
+export const REFRESH_TOKEN_NAME = 'refreshToken';
+
+// Other constants
+export const DEFAULT_PAGE_SIZE = 10;
+
 // API Gateway URL with multiple fallback options
 export const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000/api/v1';
+
+export const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:3001/api/v1';
 
 // Product API URL specifically for product service
 export const PRODUCT_API_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL || 'http://127.0.0.1:3003/api/v1';
@@ -7,15 +19,13 @@ export const PRODUCT_API_URL = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL || 'h
 // Order API URL specifically for order service
 export const ORDER_API_URL = process.env.NEXT_PUBLIC_ORDER_SERVICE_URL || 'http://127.0.0.1:3006/api/v1';
 
+// Shipping API URL specifically for shipping service - Use IPv4 explicitly
+export const SHIPPING_API_URL = process.env.NEXT_PUBLIC_SHIPPING_SERVICE_URL || 'http://127.0.0.1:3008/api/v1';
+
 // Flag to use mock data when API is not available
 export const USE_MOCK_DATA = false;
 
-// Token names for cookies
-export const ACCESS_TOKEN_NAME = 'accessToken';
-export const REFRESH_TOKEN_NAME = 'refreshToken';
-
 // Default pagination values
-export const DEFAULT_PAGE_SIZE = 12;
 export const DEFAULT_PAGE = 1;
 
 // Category display limits

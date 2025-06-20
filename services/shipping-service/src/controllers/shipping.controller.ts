@@ -77,6 +77,52 @@ const shippingMethodSchema = z.object({
 
 const shippingMethodUpdateSchema = shippingMethodSchema.partial();
 
+// Zod schemas for admin shipping zone management
+const shippingZoneSchema = z.object({
+  name: z.string().min(1),
+  code: z.string().min(1),
+  description: z.string().optional(),
+  countries: z.array(z.string()),
+  regions: z.array(z.object({
+    country: z.string(),
+    state: z.string().optional(),
+    city: z.string().optional(),
+    pincode: z.string().optional()
+  })).optional(),
+  pincodePatterns: z.array(z.string()).optional(),
+  pincodeRanges: z.array(z.string()).optional(),
+  excludedPincodes: z.array(z.string()).optional(),
+  isActive: z.boolean().optional(),
+  priority: z.number().int().optional()
+});
+
+const shippingZoneUpdateSchema = shippingZoneSchema.partial();
+
+// Zod schemas for admin shipping rate management
+const shippingRateSchema = z.object({
+  name: z.string().min(1),
+  rate: z.number().nonnegative(),
+  shippingMethodId: z.string().uuid(),
+  shippingZoneId: z.string().uuid(),
+  minWeight: z.number().optional(),
+  maxWeight: z.number().optional(),
+  minOrderValue: z.number().optional(),
+  maxOrderValue: z.number().optional(),
+  estimatedDays: z.number().int().optional(),
+  conditions: z.object({
+    productCategories: z.array(z.string()).optional(),
+    customerGroups: z.array(z.string()).optional(),
+    weekdays: z.array(z.number().min(0).max(6)).optional(),
+    timeRanges: z.array(z.object({
+      start: z.string(),
+      end: z.string()
+    })).optional()
+  }).optional(),
+  isActive: z.boolean().optional()
+});
+
+const shippingRateUpdateSchema = shippingRateSchema.partial();
+
 export class ShippingController {
   private shippingService: ShippingService;
   private shippingMethodRepository: Repository<ShippingMethod>;
@@ -294,6 +340,148 @@ export class ShippingController {
         }
       },
       this.getShippingMethodById.bind(this)
+    );
+
+    // Shipping Zone Routes
+    fastify.post(
+      '/admin/shipping-zones',
+      {
+        preHandler: [authenticate, authorize(['admin']), validateRequest(shippingZoneSchema)],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Create shipping zone',
+          body: zodToJsonSchema(shippingZoneSchema),
+          response: { 201: { type: 'object' } }
+        }
+      },
+      this.createShippingZone.bind(this)
+    );
+
+    fastify.put(
+      '/admin/shipping-zones/:id',
+      {
+        preHandler: [authenticate, authorize(['admin']), validateRequest(shippingZoneUpdateSchema)],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Update shipping zone',
+          params: zodToJsonSchema(z.object({ id: z.string() })),
+          body: zodToJsonSchema(shippingZoneUpdateSchema),
+          response: { 200: { type: 'object' } }
+        }
+      },
+      this.updateShippingZone.bind(this)
+    );
+
+    fastify.delete(
+      '/admin/shipping-zones/:id',
+      {
+        preHandler: [authenticate, authorize(['admin'])],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Delete shipping zone',
+          params: zodToJsonSchema(z.object({ id: z.string() })),
+          response: { 204: { type: 'null' } }
+        }
+      },
+      this.deleteShippingZone.bind(this)
+    );
+
+    fastify.get(
+      '/admin/shipping-zones',
+      {
+        preHandler: [authenticate, authorize(['admin'])],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'List shipping zones',
+          response: { 200: { type: 'array' } }
+        }
+      },
+      this.listShippingZones.bind(this)
+    );
+
+    fastify.get(
+      '/admin/shipping-zones/:id',
+      {
+        preHandler: [authenticate, authorize(['admin'])],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Get shipping zone by ID',
+          params: zodToJsonSchema(z.object({ id: z.string() })),
+          response: { 200: { type: 'object' } }
+        }
+      },
+      this.getShippingZoneById.bind(this)
+    );
+
+    // Shipping Rate Routes
+    fastify.post(
+      '/admin/shipping-rates',
+      {
+        preHandler: [authenticate, authorize(['admin']), validateRequest(shippingRateSchema)],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Create shipping rate',
+          body: zodToJsonSchema(shippingRateSchema),
+          response: { 201: { type: 'object' } }
+        }
+      },
+      this.createShippingRate.bind(this)
+    );
+
+    fastify.put(
+      '/admin/shipping-rates/:id',
+      {
+        preHandler: [authenticate, authorize(['admin']), validateRequest(shippingRateUpdateSchema)],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Update shipping rate',
+          params: zodToJsonSchema(z.object({ id: z.string() })),
+          body: zodToJsonSchema(shippingRateUpdateSchema),
+          response: { 200: { type: 'object' } }
+        }
+      },
+      this.updateShippingRate.bind(this)
+    );
+
+    fastify.delete(
+      '/admin/shipping-rates/:id',
+      {
+        preHandler: [authenticate, authorize(['admin'])],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Delete shipping rate',
+          params: zodToJsonSchema(z.object({ id: z.string() })),
+          response: { 204: { type: 'null' } }
+        }
+      },
+      this.deleteShippingRate.bind(this)
+    );
+
+    fastify.get(
+      '/admin/shipping-rates',
+      {
+        preHandler: [authenticate, authorize(['admin'])],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'List shipping rates',
+          response: { 200: { type: 'array' } }
+        }
+      },
+      this.listShippingRates.bind(this)
+    );
+
+    fastify.get(
+      '/admin/shipping-rates/:id',
+      {
+        preHandler: [authenticate, authorize(['admin'])],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'Get shipping rate by ID',
+          params: zodToJsonSchema(z.object({ id: z.string() })),
+          response: { 200: { type: 'object' } }
+        }
+      },
+      this.getShippingRateById.bind(this)
     );
   }
 
@@ -560,11 +748,53 @@ export class ShippingController {
     try {
       const data = request.body;
       const method = this.shippingMethodRepository.create(data);
-      await this.shippingMethodRepository.save(method);
-      return reply.code(201).send(method);
-    } catch (error) {
-      logger.error({ method: 'createShippingMethod', error });
-      return reply.code(500).send({ error: 'Failed to create shipping method' });
+      const savedMethod = await this.shippingMethodRepository.save(method);
+      
+      // Ensure we have a single entity, not an array
+      const shippingMethod = Array.isArray(savedMethod) ? savedMethod[0] : savedMethod;
+      
+      // Explicitly select the fields we want to return
+      const response = {
+        statusCode: 201,
+        message: 'Shipping method created successfully',
+        data: {
+          id: shippingMethod.id,
+          name: shippingMethod.name,
+          code: shippingMethod.code,
+          description: shippingMethod.description,
+          baseRate: shippingMethod.baseRate,
+          estimatedDays: shippingMethod.estimatedDays,
+          icon: shippingMethod.icon,
+          isActive: shippingMethod.isActive,
+          settings: shippingMethod.settings,
+          displayOrder: shippingMethod.displayOrder,
+          createdAt: shippingMethod.createdAt,
+          updatedAt: shippingMethod.updatedAt
+        }
+      };
+      
+      return reply.code(201).send(response);
+    } catch (error: any) {
+      logger.error({
+        method: 'createShippingMethod',
+        error: error instanceof Error ? error.message : String(error),
+        data: request.body
+      });
+      
+      // Check for unique constraint violation
+      if (error.code === '23505') {
+        return reply.code(409).send({
+          statusCode: 409,
+          error: 'Conflict',
+          message: 'A shipping method with this code already exists'
+        });
+      }
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to create shipping method'
+      });
     }
   }
 
@@ -608,6 +838,421 @@ export class ShippingController {
     } catch (error) {
       logger.error({ method: 'getShippingMethodById', error });
       return reply.code(500).send({ error: 'Failed to get shipping method' });
+    }
+  }
+
+  // Admin: Create shipping zone
+  async createShippingZone(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const data = request.body;
+      const zone = this.shippingZoneRepository.create(data);
+      const savedZone = await this.shippingZoneRepository.save(zone);
+      
+      return reply.code(201).send({
+        statusCode: 201,
+        message: 'Shipping zone created successfully',
+        data: savedZone
+      });
+    } catch (error: any) {
+      logger.error({
+        method: 'createShippingZone',
+        error: error instanceof Error ? error.message : String(error),
+        data: request.body
+      });
+      
+      if (error.code === '23505') {
+        return reply.code(409).send({
+          statusCode: 409,
+          error: 'Conflict',
+          message: 'A shipping zone with this code already exists'
+        });
+      }
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to create shipping zone'
+      });
+    }
+  }
+
+  // Admin: Update shipping zone
+  async updateShippingZone(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const { id } = request.params;
+      const data = request.body;
+      
+      const zone = await this.shippingZoneRepository.findOne({ where: { id } });
+      if (!zone) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Shipping zone not found'
+        });
+      }
+      
+      Object.assign(zone, data);
+      const updatedZone = await this.shippingZoneRepository.save(zone);
+      
+      return reply.code(200).send({
+        statusCode: 200,
+        message: 'Shipping zone updated successfully',
+        data: updatedZone
+      });
+    } catch (error: any) {
+      logger.error({
+        method: 'updateShippingZone',
+        error: error instanceof Error ? error.message : String(error),
+        params: request.params,
+        data: request.body
+      });
+      
+      if (error.code === '23505') {
+        return reply.code(409).send({
+          statusCode: 409,
+          error: 'Conflict',
+          message: 'A shipping zone with this code already exists'
+        });
+      }
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to update shipping zone'
+      });
+    }
+  }
+
+  // Admin: Delete shipping zone
+  async deleteShippingZone(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const { id } = request.params;
+      
+      const zone = await this.shippingZoneRepository.findOne({ 
+        where: { id },
+        relations: ['rates']
+      });
+      
+      if (!zone) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Shipping zone not found'
+        });
+      }
+      
+      // Check if zone has associated rates
+      if (zone.rates && zone.rates.length > 0) {
+        return reply.code(409).send({
+          statusCode: 409,
+          error: 'Conflict',
+          message: 'Cannot delete shipping zone with associated rates'
+        });
+      }
+      
+      await this.shippingZoneRepository.remove(zone);
+      
+      return reply.code(204).send();
+    } catch (error) {
+      logger.error({
+        method: 'deleteShippingZone',
+        error: error instanceof Error ? error.message : String(error),
+        params: request.params
+      });
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to delete shipping zone'
+      });
+    }
+  }
+
+  // Admin: List shipping zones
+  async listShippingZones(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const zones = await this.shippingZoneRepository.find({
+        relations: ['rates', 'methods']
+      });
+      
+      return reply.code(200).send({
+        statusCode: 200,
+        message: 'Shipping zones retrieved successfully',
+        data: zones
+      });
+    } catch (error) {
+      logger.error({
+        method: 'listShippingZones',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to list shipping zones'
+      });
+    }
+  }
+
+  // Admin: Get shipping zone by ID
+  async getShippingZoneById(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const { id } = request.params;
+      
+      const zone = await this.shippingZoneRepository.findOne({
+        where: { id },
+        relations: ['rates', 'methods']
+      });
+      
+      if (!zone) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Shipping zone not found'
+        });
+      }
+      
+      return reply.code(200).send({
+        statusCode: 200,
+        message: 'Shipping zone retrieved successfully',
+        data: zone
+      });
+    } catch (error) {
+      logger.error({
+        method: 'getShippingZoneById',
+        error: error instanceof Error ? error.message : String(error),
+        params: request.params
+      });
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to get shipping zone'
+      });
+    }
+  }
+
+  // Admin: Create shipping rate
+  async createShippingRate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const data = request.body;
+      
+      // Verify shipping method exists
+      const method = await this.shippingMethodRepository.findOne({
+        where: { id: data.shippingMethodId }
+      });
+      
+      if (!method) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Shipping method not found'
+        });
+      }
+      
+      // Verify shipping zone exists
+      const zone = await this.shippingZoneRepository.findOne({
+        where: { id: data.shippingZoneId }
+      });
+      
+      if (!zone) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Shipping zone not found'
+        });
+      }
+      
+      const rate = this.shippingRateRepository.create(data);
+      const savedRate = await this.shippingRateRepository.save(rate);
+      
+      return reply.code(201).send({
+        statusCode: 201,
+        message: 'Shipping rate created successfully',
+        data: savedRate
+      });
+    } catch (error: any) {
+      logger.error({
+        method: 'createShippingRate',
+        error: error instanceof Error ? error.message : String(error),
+        data: request.body
+      });
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to create shipping rate'
+      });
+    }
+  }
+
+  // Admin: Update shipping rate
+  async updateShippingRate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const { id } = request.params;
+      const data = request.body;
+      
+      const rate = await this.shippingRateRepository.findOne({
+        where: { id },
+        relations: ['shippingMethod', 'shippingZone']
+      });
+      
+      if (!rate) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Shipping rate not found'
+        });
+      }
+      
+      // If shipping method ID is being updated, verify it exists
+      if (data.shippingMethodId && data.shippingMethodId !== rate.shippingMethodId) {
+        const method = await this.shippingMethodRepository.findOne({
+          where: { id: data.shippingMethodId }
+        });
+        
+        if (!method) {
+          return reply.code(404).send({
+            statusCode: 404,
+            error: 'Not Found',
+            message: 'Shipping method not found'
+          });
+        }
+      }
+      
+      // If shipping zone ID is being updated, verify it exists
+      if (data.shippingZoneId && data.shippingZoneId !== rate.shippingZoneId) {
+        const zone = await this.shippingZoneRepository.findOne({
+          where: { id: data.shippingZoneId }
+        });
+        
+        if (!zone) {
+          return reply.code(404).send({
+            statusCode: 404,
+            error: 'Not Found',
+            message: 'Shipping zone not found'
+          });
+        }
+      }
+      
+      Object.assign(rate, data);
+      const updatedRate = await this.shippingRateRepository.save(rate);
+      
+      return reply.code(200).send({
+        statusCode: 200,
+        message: 'Shipping rate updated successfully',
+        data: updatedRate
+      });
+    } catch (error) {
+      logger.error({
+        method: 'updateShippingRate',
+        error: error instanceof Error ? error.message : String(error),
+        params: request.params,
+        data: request.body
+      });
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to update shipping rate'
+      });
+    }
+  }
+
+  // Admin: Delete shipping rate
+  async deleteShippingRate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const { id } = request.params;
+      
+      const rate = await this.shippingRateRepository.findOne({ where: { id } });
+      
+      if (!rate) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Shipping rate not found'
+        });
+      }
+      
+      await this.shippingRateRepository.remove(rate);
+      
+      return reply.code(204).send();
+    } catch (error) {
+      logger.error({
+        method: 'deleteShippingRate',
+        error: error instanceof Error ? error.message : String(error),
+        params: request.params
+      });
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to delete shipping rate'
+      });
+    }
+  }
+
+  // Admin: List shipping rates
+  async listShippingRates(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const rates = await this.shippingRateRepository.find({
+        relations: ['shippingMethod', 'shippingZone']
+      });
+      
+      return reply.code(200).send({
+        statusCode: 200,
+        message: 'Shipping rates retrieved successfully',
+        data: rates
+      });
+    } catch (error) {
+      logger.error({
+        method: 'listShippingRates',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to list shipping rates'
+      });
+    }
+  }
+
+  // Admin: Get shipping rate by ID
+  async getShippingRateById(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const { id } = request.params;
+      
+      const rate = await this.shippingRateRepository.findOne({
+        where: { id },
+        relations: ['shippingMethod', 'shippingZone']
+      });
+      
+      if (!rate) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Shipping rate not found'
+        });
+      }
+      
+      return reply.code(200).send({
+        statusCode: 200,
+        message: 'Shipping rate retrieved successfully',
+        data: rate
+      });
+    } catch (error) {
+      logger.error({
+        method: 'getShippingRateById',
+        error: error instanceof Error ? error.message : String(error),
+        params: request.params
+      });
+      
+      return reply.code(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Failed to get shipping rate'
+      });
     }
   }
 } 

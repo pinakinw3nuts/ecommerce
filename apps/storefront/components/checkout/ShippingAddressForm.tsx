@@ -92,6 +92,12 @@ export const ShippingAddressForm: React.FC<ShippingAddressFormProps> = ({ }) => 
         const addresses: SavedAddress[] = await shippingService.fetchUserAddresses();
         console.log('Fetched addresses:', addresses);
         setSavedAddresses(addresses);
+
+        // Find and pre-select the default address
+        const defaultAddress = addresses.find(addr => addr.isDefault);
+        if (defaultAddress) {
+          selectAddress(defaultAddress);
+        }
       } catch (error) {
         console.error('Error fetching saved addresses:', error);
         // Don't show error toast here since it's handled in the service

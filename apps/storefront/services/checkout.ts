@@ -1,6 +1,7 @@
 import axios from '../lib/api';
 import { AddressInput } from '../services/shipping';
 import * as shippingService from '../services/shipping';
+import { ShippingMethod } from '@/types/shipping';
 
 const CHECKOUT_API_ROUTE = '/checkout';
 
@@ -80,22 +81,61 @@ export async function calculateOrderPreview(
   userId: string,
   cartItems: CartItem[],
   couponCode?: string,
-  shippingAddress?: Address
+  shippingAddress?: Address,
+  shippingMethod?: string
 ): Promise<ApiResponse<OrderPreview>> {
-  const response = await axios.post<ApiResponse<OrderPreview>>(`${CHECKOUT_API_ROUTE}/preview`, {
-    userId,
-    cartItems,
-    couponCode,
-    shippingAddress
-  });
-  return response.data;
+  try {
+    // First get order preview from backend
+    const response = await axios.post<ApiResponse<OrderPreview>>(`${CHECKOUT_API_ROUTE}/preview`, {
+      userId,
+      cartItems: cartItems,
+      couponCode,
+      shippingAddress,
+      shippingMethod,
+    });
+    
+    const orderPreview = response.data.data;
+    
+    // If we have a shipping address and method, try to get real shipping cost
+    if (shippingAddress && shippingMethod) {
+      try {
+        // Get shipping methods for this address
+        const shippingMethods = await shippingService.getAvailableShippingMethods({
+          pincode: shippingAddress.zipCode,
+          country: shippingAddress.country
+        });
+        
+        // Find the selected method in the available methods
+        const selectedMethod = shippingMethods.find(method => method.method === shippingMethod);
+        
+        // If found, update the shipping cost in the order preview
+        if (selectedMethod) {
+          orderPreview.shippingCost = selectedMethod.price;
+          // Recalculate total
+          orderPreview.total = orderPreview.subtotal + orderPreview.shippingCost + 
+                              orderPreview.tax - orderPreview.discount;
+        }
+      } catch (error) {
+        console.error('Error fetching shipping cost:', error);
+        // Continue with default shipping cost from backend
+      }
+    }
+    
+    return {
+      ...response.data,
+      data: orderPreview
+    };
+  } catch (error) {
+    console.error('Error calculating order preview:', error);
+    throw error;
+  }
 }
 
 // Get available shipping options - now delegates to shippingService
 export async function fetchShippingOptions(
   address: AddressInput,
   orderWeight?: number
-): Promise<shippingService.ShippingOption[]> {
+): Promise<ShippingMethod[]> {
   // Pass only required fields (pincode, country) from address to getAvailableShippingMethods
   const { pincode, country } = address;
   return shippingService.getAvailableShippingMethods({ pincode, country });

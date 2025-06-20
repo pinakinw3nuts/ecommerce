@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 import { ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME } from './constants';
+import { NextAuthOptions } from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
 
 // JWT secret key - should match the one used in auth-service
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -75,4 +77,74 @@ export function isTokenExpired(token: string): boolean {
     // If we can't decode the token, consider it expired
     return true;
   }
-} 
+}
+
+export const authOptions: NextAuthOptions = {
+  providers: [
+    CredentialsProvider({
+      name: 'Credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error('Missing credentials');
+        }
+
+        try {
+          const response = await fetch(`${process.env.AUTH_SERVICE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: credentials.email,
+              password: credentials.password,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Invalid credentials');
+          }
+
+          const data = await response.json();
+          
+          return {
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.name,
+            accessToken: data.accessToken,
+          };
+        } catch (error) {
+          console.error('Auth error:', error);
+          return null;
+        }
+      },
+    }),
+  ],
+  session: {
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.accessToken = user.accessToken;
+        token.id = user.id;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.accessToken = token.accessToken;
+        if (session.user) {
+          session.user.id = token.id as string;
+        }
+      }
+      return session;
+    },
+  },
+  pages: {
+    signIn: '/auth/login',
+    error: '/auth/error',
+  },
+}; 

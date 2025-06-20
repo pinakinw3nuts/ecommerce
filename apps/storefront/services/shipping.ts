@@ -41,38 +41,53 @@ export const calculateShippingCost = async (shippingDetails: {
   address: AddressInput;
   items: Array<{ productId: string; quantity: number; price: number; }>;
 }) => {
-  return axios.post('/calculate-cost', shippingDetails);
+  return axios.post('/shipping/calculate-cost', shippingDetails);
 };
 
 export const trackShipment = async (trackingId: string) => {
-  return axios.get(`/track/${trackingId}`);
+  return axios.get(`/shipping/track/${trackingId}`);
 };
 
 export const addShippingAddress = async (addressData: AddressInput) => {
-  return axios.post('/addresses', addressData);
+  return axios.post('/shipping/addresses', addressData);
 };
 
 export const updateAddress = async (id: string, addressData: AddressInput) => {
-  return axios.put(`/addresses/${id}`, addressData);
+  return axios.put(`/shipping/addresses/${id}`, addressData);
 };
 
 export const deleteAddress = async (id: string) => {
-  return axios.delete(`/addresses/${id}`);
+  return axios.delete(`/shipping/addresses/${id}`);
 };
 
 export const setDefaultAddress = async (id: string) => {
-  return axios.patch(`/addresses/${id}/default`, {});
+  return axios.patch(`/shipping/addresses/${id}/default`, {});
 };
 
-export const getAvailableShippingMethods = async (address: { pincode: string; country: string }): Promise<ShippingOption[]> => {
-  const query = new URLSearchParams(address as Record<string, string>).toString();
-  const response = await axios.get<ShippingOption[]>(`/shipping/methods/available?${query}`);
-  return response.data;
+export const getAvailableShippingMethods = async (address: { pincode: string; country: string }): Promise<ShippingMethod[]> => {
+  try {
+    // Use consistent pattern with central axios instance through Next.js API route
+    const response = await axios.get(`/shipping/methods/available?pincode=${address.pincode}`);
+    
+    // Map the shipping API response to our ShippingMethod interface
+    return response.data.map((method: ShippingOption) => ({
+      method: method.code,
+      label: method.name,
+      description: `${method.description || `Delivery in ${method.estimatedDays} days`}`,
+      price: method.baseRate || 0,
+      estimatedDays: method.estimatedDays || 0,
+    }));
+  } catch (error) {
+    console.error('Error fetching shipping methods:', error);
+    // Return default methods if API call fails
+    return DEFAULT_SHIPPING_METHODS;
+  }
 };
 
 export const fetchUserAddresses = async (): Promise<SavedAddress[]> => {
   try {
-    const response = await axios.get<SavedAddress[]>(`/addresses/`);
+    // Use consistent pattern with central axios instance
+    const response = await axios.get<SavedAddress[]>(`/shipping/addresses`);
     return response.data;
   } catch (error) {
     console.error('Error fetching user addresses:', error);
@@ -81,13 +96,17 @@ export const fetchUserAddresses = async (): Promise<SavedAddress[]> => {
   }
 };
 
+// Updated to match the shipping service API response
 export interface ShippingOption {
-  method: 'STANDARD' | 'EXPRESS' | 'OVERNIGHT' | 'INTERNATIONAL';
-  carrier: string;
-  cost: number;
-  estimatedDays: string;
-  estimatedDelivery: {
-    earliest: string;
-    latest: string;
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  baseRate: number;
+  estimatedDays: number;
+  icon: string;
+  eta?: {
+    days: number;
+    estimatedDeliveryDate: string;
   };
 } 

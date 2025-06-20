@@ -104,13 +104,14 @@ export function authorize(roles: string[]) {
         throw new Error('User not authenticated');
       }
       
-      // Check if user has required role
-      const userRole = request.user.role || 'user';
+      // Check if user has required role (case-insensitive)
+      const userRole = (request.user.role || 'user').toLowerCase();
+      const normalizedRoles = roles.map(role => role.toLowerCase());
       
-      if (!roles.includes(userRole)) {
+      if (!normalizedRoles.includes(userRole)) {
         logger.warn({
           userId: request.user.userId,
-          userRole,
+          userRole: request.user.role,
           requiredRoles: roles,
           url: request.url
         }, 'Authorization failed - insufficient permissions');

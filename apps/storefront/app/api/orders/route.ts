@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import axios from 'axios';
-// import { ORDER_API_URL } from '@/lib/constants';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { ORDER_API_URL } from '@/lib/constants';
 import { Order } from '@/lib/types/order';
-
-const ORDER_API_URL = process.env.NEXT_PUBLIC_ORDER_SERVICE_URL || 'http://localhost:3006/api/v1';
 
 // Convert any localhost URLs to use explicit IPv4 instead of IPv6
 function getIpv4Url(url: string): string {
@@ -32,188 +31,129 @@ function ensureValidNumber(value: any): number {
   return 0;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    // Get the user token from the request cookies
-    const token = req.cookies.get('accessToken')?.value ||
-      req.cookies.get('accessToken_client')?.value ||
-      req.cookies.get('auth_backup_token')?.value;
-
-    // Check if user is authenticated
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    // Get the authenticated session
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get query parameters for pagination and filtering
-    const searchParams = req.nextUrl.searchParams;
+    // Get query parameters
+    const searchParams = request.nextUrl.searchParams;
     const page = searchParams.get('page') || '1';
-    const pageSize = searchParams.get('pageSize') || '10';
-    const status = searchParams.get('status');
-    const dateFrom = searchParams.get('dateFrom');
-    const dateTo = searchParams.get('dateTo');
+    const limit = searchParams.get('limit') || '10';
 
-    try {
-      // Force IPv4 by replacing localhost with 127.0.0.1 in the API URL
-      const apiUrl = getIpv4Url(ORDER_API_URL);
-      let response = null;
-      let successEndpoint = '';
-      let lastError = null;
-
-      // Try each endpoint until one succeeds
-      const endpoint = `${apiUrl}/public/orders`;
-      try {
-        console.log(`Attempting to call endpoint: ${endpoint}`);
-
-        // Call the order service API
-        const result = await axios.get(endpoint, {
-          params: {
-            page,
-            limit: pageSize,
-            status,
-            dateFrom,
-            dateTo
-          },
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          // Set timeout to avoid long waiting times
-          timeout: 5000
-        });
-
-        // If successful, store the response and break the loop
-        response = result;
-        successEndpoint = endpoint;
-
-      } catch (e: any) {
-        // Store last error and continue to next endpoint
-        lastError = e;
-        console.error(`Endpoint ${endpoint} failed:`, e.message);
-      }
-     
-      // If no endpoint succeeded, throw the last error
-      if (!response) {
-        throw lastError || new Error('All endpoints failed');
-      }
-
-      console.log(`Successfully connected to endpoint: ${successEndpoint}`);
-      console.log('Order API response:', {
-        status: response.status,
-        hasData: !!response.data,
-        dataCount: response.data?.data?.length || 0
-      });
-
-      // Validate that we have a proper response with data
-      if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        // Map the response to match our frontend expected format
-        const orders = response.data.data.map((order: any) => mapOrderFromApi(order));
-
-        return NextResponse.json({
-          orders,
-          pagination: {
-            total: response.data.meta.total || orders.length,
-            totalPages: response.data.meta.totalPages || 1,
-            currentPage: Number(page),
-            pageSize: Number(pageSize),
-            hasMore: Number(page) < (response.data.meta.totalPages || 1),
-            hasPrevious: Number(page) > 1
-          }
-        });
-      }
-
-      throw new Error('Invalid response format from order service');
-    } catch (apiError: any) {
-      console.error('Error calling order service:', apiError);     
-
-      // Otherwise, propagate the error
-      throw apiError;
-    }
-  } catch (error: any) {
-    console.error('Error in orders API route:', error);
-    return NextResponse.json(
+    // Forward the request to the order service
+    const response = await fetch(
+      `${ORDER_API_URL}/orders?page=${page}&limit=${limit}`,
       {
-        error: 'Failed to fetch orders',
-        message: error.message,
-        // Add additional debug info for development
-        details: process.env.NODE_ENV === 'development' ? {
-          orderApiUrl: ORDER_API_URL,
-          status: error.response?.status,
-          data: error.response?.data
-        } : undefined
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      return NextResponse.json(error, { status: response.status });
+    }
+
+    const data = await response.json();
+
+    // Map the response to match our frontend types
+    return NextResponse.json({
+      data: data.orders.map((order: any) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status.toLowerCase(),
+        items: order.items.map((item: any) => ({
+          id: item.id,
+          productId: item.productId,
+          name: item.name,
+          price: Number(item.price),
+          quantity: Number(item.quantity),
+          image: item.image,
+          variantId: item.variantId,
+          variantName: item.variantName,
+          sku: item.sku,
+        })),
+        subtotal: Number(order.subtotal),
+        total: Number(order.total),
+        shippingAmount: Number(order.shippingAmount),
+        taxAmount: Number(order.taxAmount),
+        discountAmount: Number(order.discountAmount),
+        shippingAddress: {
+          firstName: order.shippingAddress.firstName,
+          lastName: order.shippingAddress.lastName,
+          street: order.shippingAddress.street,
+          city: order.shippingAddress.city,
+          state: order.shippingAddress.state,
+          postalCode: order.shippingAddress.postalCode,
+          country: order.shippingAddress.country,
+          phone: order.shippingAddress.phone,
+        },
+        billingAddress: order.billingAddress ? {
+          firstName: order.billingAddress.firstName,
+          lastName: order.billingAddress.lastName,
+          street: order.billingAddress.street,
+          city: order.billingAddress.city,
+          state: order.billingAddress.state,
+          postalCode: order.billingAddress.postalCode,
+          country: order.billingAddress.country,
+          phone: order.billingAddress.phone,
+        } : undefined,
+        trackingNumber: order.trackingNumber,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      })),
+      meta: {
+        total: data.total,
+        totalPages: data.totalPages,
+        page: Number(page),
+        limit: Number(limit),
       },
-      { status: error.response?.status || 500 }
+    });
+  } catch (error: any) {
+    console.error('Error fetching orders:', error);
+    return NextResponse.json(
+      { message: 'Internal server error' },
+      { status: 500 }
     );
   }
 }
 
-export async function POST(req: NextRequest) {
+// Handle single order operations
+export async function POST(request: NextRequest) {
   try {
-    // Get the user token from the request cookies
-    const token = req.cookies.get('accessToken')?.value;
-
-    // Check if user is authenticated
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse the request body
-    const body = await req.json();
-
-    if (!body.shippingAddress || !body.items || !body.items.length) {
-      return NextResponse.json(
-        { error: 'Missing required parameters' },
-        { status: 400 }
-      );
-    }
-
-    // Extract user ID from token or use from request if available
-    let userId;
-    try {
-      // This assumes the token is a JWT and you can extract the user ID
-      // You might need to adjust this based on your token structure
-      const tokenPayload = JSON.parse(atob(token.split('.')[1]));
-      userId = tokenPayload.sub || tokenPayload.id;
-    } catch (e) {
-      console.error('Error extracting user ID from token:', e);
-      return NextResponse.json(
-        { error: 'Invalid token' },
-        { status: 401 }
-      );
-    }
-
-    // Prepare the order data for the order service
-    const orderData = {
-      userId,
-      items: body.items,
-      shippingAddress: body.shippingAddress,
-      billingAddress: body.billingAddress || body.shippingAddress
-    };
-
-    // Call the order service API through the API gateway
-    const response = await axios.post(`${ORDER_API_URL}/orders`, orderData, {
+    const body = await request.json();
+    const response = await fetch(`${ORDER_API_URL}/orders`, {
+      method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.accessToken}`,
       },
+      body: JSON.stringify(body),
     });
 
-    // Map the response to match our frontend expected format
-    const order = mapOrderFromApi(response.data);
+    if (!response.ok) {
+      const error = await response.json();
+      return NextResponse.json(error, { status: response.status });
+    }
 
-    return NextResponse.json(order);
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error: any) {
     console.error('Error creating order:', error);
     return NextResponse.json(
-      { error: 'Failed to create order', message: error.message },
-      { status: error.response?.status || 500 }
+      { message: 'Internal server error' },
+      { status: 500 }
     );
   }
 }
@@ -227,12 +167,9 @@ export function mapOrderFromApi(apiOrder: any): Order {
     orderNumber: apiOrder.orderNumber || `ORD-${apiOrder.id.substring(0, 8)}`,
     userId: apiOrder.userId || 'anonymous',
     status: apiOrder.status?.toLowerCase() || 'pending',
-    paymentStatus: apiOrder.paymentStatus?.toLowerCase() || 'pending',
-    paymentMethod: apiOrder.paymentMethod || 'Unknown',
     createdAt: apiOrder.createdAt,
     updatedAt: apiOrder.updatedAt,
     trackingNumber: apiOrder.trackingNumber || null,
-    shippingCarrier: apiOrder.shippingCarrier || null,
     items: Array.isArray(apiOrder.items) ? apiOrder.items.map((item: any) => ({
       id: item.id,
       productId: item.productId,
@@ -246,7 +183,7 @@ export function mapOrderFromApi(apiOrder: any): Order {
     shippingAddress: apiOrder.shippingAddress || {
       firstName: '',
       lastName: '',
-      address1: '',
+      street: '',
       city: '',
       state: '',
       postalCode: '',
@@ -256,7 +193,7 @@ export function mapOrderFromApi(apiOrder: any): Order {
     billingAddress: apiOrder.billingAddress || apiOrder.shippingAddress || {
       firstName: '',
       lastName: '',
-      address1: '',
+      street: '',
       city: '',
       state: '',
       postalCode: '',
@@ -264,9 +201,9 @@ export function mapOrderFromApi(apiOrder: any): Order {
       phone: ''
     },
     subtotal: ensureValidNumber(apiOrder.subtotal),
-    shippingCost: ensureValidNumber(apiOrder.shippingAmount || apiOrder.shippingCost),
-    tax: ensureValidNumber(apiOrder.taxAmount || apiOrder.tax),
-    discount: ensureValidNumber(apiOrder.discountAmount || apiOrder.discount),
+    shippingAmount: ensureValidNumber(apiOrder.shippingAmount || apiOrder.shippingCost),
+    taxAmount: ensureValidNumber(apiOrder.taxAmount || apiOrder.tax),
+    discountAmount: ensureValidNumber(apiOrder.discountAmount || apiOrder.discount),
     total: ensureValidNumber(apiOrder.totalAmount || apiOrder.total)
   };
 } 

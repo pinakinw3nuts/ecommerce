@@ -86,13 +86,35 @@ export const CheckoutProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [checkoutSession]);
 
+  // Recalculate order preview when shipping method changes
+  useEffect(() => {
+    if (checkoutSession?.userId && shippingAddress && shippingMethod && checkoutSession?.cartSnapshot) {
+      const cartItems = (checkoutSession.cartSnapshot as CartItem[]).map(item => ({
+        ...item,
+        productId: item.productId || (item as any).id,
+      }));
+      calculateOrderPreview(
+        checkoutSession.userId,
+        cartItems,
+        checkoutSession.discountCode
+      );
+    }
+  }, [shippingMethod]);
+
   const nextStep = useCallback(() => setCurrentStep((s) => s + 1), []);
   const prevStep = useCallback(() => setCurrentStep((s) => Math.max(0, s - 1)), []);
 
   const calculateOrderPreview = async (userId: string, cartItems: CartItem[], couponCode?: string) => {
     setIsLoadingOrderPreview(true);
     try {
-      const previewResponse = await checkoutService.calculateOrderPreview(userId, cartItems, couponCode, shippingAddress || undefined);
+      // Pass both shipping address and shipping method to get accurate shipping cost
+      const previewResponse = await checkoutService.calculateOrderPreview(
+        userId, 
+        cartItems, 
+        couponCode, 
+        shippingAddress || undefined,
+        shippingMethod || undefined
+      );
       setOrderPreview(previewResponse.data);
     } catch (error) {
       console.error('Error calculating order preview:', error);

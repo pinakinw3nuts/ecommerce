@@ -11,10 +11,11 @@ export async function startServer(): Promise<void> {
     // Build and start the app
     const app = await buildApp();
     
-    // Start server
-    await app.listen({ port: env.PORT, host: '0.0.0.0' });
-    app.log.info(`🚀 Shipping service running on port ${env.PORT}`);
-    app.log.info(`📚 Swagger documentation available at http://localhost:${env.PORT}/docs`);
+    // Start server - explicitly use IPv4 address
+    const HOST = '127.0.0.1'; // Use IPv4 loopback explicitly
+    await app.listen({ port: env.PORT, host: HOST });
+    app.log.info(`🚀 Shipping service running on ${HOST}:${env.PORT}`);
+    app.log.info(`📚 Swagger documentation available at http://${HOST}:${env.PORT}/docs`);
 
     // Handle graceful shutdown
     const signals = ['SIGINT', 'SIGTERM'];

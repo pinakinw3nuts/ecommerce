@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-export class AddRajkotGujarat30005ShippingZone1718600000000 implements MigrationInterface {
+export class AddAhmedabadGujarat380002ShippingZone1718610000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Create the shipping zone
     const zoneId = uuidv4();
@@ -13,12 +13,12 @@ export class AddRajkotGujarat30005ShippingZone1718600000000 implements Migration
       )
     `, [
       zoneId,
-      'Rajkot Gujarat 30005',
-      'RAJKOT_GJ_30005',
-      'Zone for Rajkot, Gujarat, India, pincode 30005',
+      'Ahmedabad Gujarat 380002',
+      'AHMEDABAD_GJ_380002',
+      'Zone for Ahmedabad, Gujarat, India, pincode 380002',
       '{IN}',
-      JSON.stringify([{ country: 'IN', state: 'Gujarat', city: 'Rajkot', pincode: '30005' }]),
-      '{30005}',
+      JSON.stringify([{ country: 'IN', state: 'Gujarat', city: 'Ahmedabad', pincode: '380002' }]),
+      '{380002}',
       true,
       10
     ]);
@@ -45,14 +45,14 @@ export class AddRajkotGujarat30005ShippingZone1718600000000 implements Migration
       ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()),
       ($8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
     `, [
-      uuidv4(), 'Standard Shipping (Rajkot 30005)', 50, standardMethodId, zoneId, true, 5,
-      uuidv4(), 'Express Shipping (Rajkot 30005)', 100, expressMethodId, zoneId, true, 2
+      uuidv4(), 'Standard Shipping (Ahmedabad 380002)', 60, standardMethodId, zoneId, true, 3,
+      uuidv4(), 'Express Shipping (Ahmedabad 380002)', 120, expressMethodId, zoneId, true, 1
     ]);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Remove rates, associations, and zone
-    const zone = await queryRunner.query(`SELECT id FROM "shipping_zones" WHERE code = 'RAJKOT_GJ_30005' LIMIT 1`);
+    const zone = await queryRunner.query(`SELECT id FROM "shipping_zones" WHERE code = 'AHMEDABAD_GJ_380002' LIMIT 1`);
     if (!zone[0]) return;
     const zoneId = zone[0].id;
     await queryRunner.query(`DELETE FROM "shipping_rates" WHERE "shipping_zone_id" = $1`, [zoneId]);

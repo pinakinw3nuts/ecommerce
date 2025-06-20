@@ -10,20 +10,20 @@ import { ShippingMethod, DEFAULT_SHIPPING_METHODS } from '@/types/shipping';
 import toast from 'react-hot-toast';
 
 export const ShippingMethodForm: React.FC = () => {
-  const { shippingAddress, shippingMethod, setShippingMethod, nextStep, prevStep } = useCheckout();
-  const [shippingMethods, setShippingMethods] = useState<Array<{
-    method: string;
-    label: string;
-    description: string;
-    price: number;
-    estimatedDays: number;
-  }>>(DEFAULT_SHIPPING_METHODS); // Initialize with default methods
-  const [selectedMethod, setSelectedMethod] = useState<string>(shippingMethod || (DEFAULT_SHIPPING_METHODS.length > 0 ? DEFAULT_SHIPPING_METHODS[0].method : ''));
-  const [isLoading, setIsLoading] = useState(false);
+  const { 
+    shippingAddress, 
+    shippingMethod, 
+    setShippingMethod, 
+    nextStep, 
+    prevStep,
+    orderPreview
+  } = useCheckout();
+  const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
+  const [selectedMethod, setSelectedMethod] = useState<string>(shippingMethod || '');
+  const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Remove useEffect for fetching shipping methods for now, use mock data directly
-  /*
+  // Fetch shipping methods from the API when shipping address changes
   useEffect(() => {
     const fetchShippingMethods = async () => {
       if (!shippingAddress) {
@@ -39,51 +39,44 @@ export const ShippingMethodForm: React.FC = () => {
           country: shippingAddress.country
         };
         
-        let availableMethods = DEFAULT_SHIPPING_METHODS;
-
-        try {
-          // Try to get shipping methods from the service
-          const serviceMethods = await shippingService.getAvailableShippingMethods(address);
-          if (serviceMethods && serviceMethods.length > 0) {
-            const mappedMethods = serviceMethods.map(m => ({
-              method: m.method || '',
-              label: `${m.carrier || ''} ${m.method || ''}`.trim(),
-              description: `Delivery in ${m.estimatedDays || 'N/A'} days`,
-              price: typeof m.cost === 'number' ? m.cost : 0,
-              estimatedDays: parseInt(m.estimatedDays || '0')
-            }));
-            // Filter out methods with empty 'method' field to ensure proper selection
-            availableMethods = mappedMethods.filter(m => m.method.length > 0);
-          } else {
-            console.warn('Shipping service returned no methods. Using default methods.');
-            availableMethods = DEFAULT_SHIPPING_METHODS;
-          }
-        } catch (serviceError) {
-          console.warn('Error fetching shipping methods from service. Using default methods:', serviceError);
-          availableMethods = DEFAULT_SHIPPING_METHODS;
-        }
-
-        setShippingMethods(availableMethods);
+        // Call the shipping service to get available methods for this pincode
+        const availableMethods = await shippingService.getAvailableShippingMethods(address);
         
-        // Pre-select the method if already chosen or default to first available
-        if (shippingMethod && availableMethods.some(m => m.method === shippingMethod)) {
-          setSelectedMethod(shippingMethod);
-        } else if (availableMethods.length > 0) {
-          setSelectedMethod(availableMethods[0].method);
+        if (availableMethods && availableMethods.length > 0) {
+          setShippingMethods(availableMethods);
+          
+          // Pre-select the method if already chosen or default to first available
+          if (shippingMethod && availableMethods.some(m => m.method === shippingMethod)) {
+            setSelectedMethod(shippingMethod);
+          } else {
+            setSelectedMethod(availableMethods[0].method);
+          }
+        } else {
+          // If no shipping methods available, use defaults as fallback
+          console.warn('No shipping methods available for this location. Using default methods.');
+          setShippingMethods(DEFAULT_SHIPPING_METHODS);
+          setSelectedMethod(DEFAULT_SHIPPING_METHODS[0].method);
         }
       } catch (error) {
         console.error('Error in shipping methods setup:', error);
-        toast.error('Failed to load shipping options. Please try again.');
+        toast.error('Failed to load shipping options. Using default options.');
+        setShippingMethods(DEFAULT_SHIPPING_METHODS);
+        setSelectedMethod(DEFAULT_SHIPPING_METHODS[0].method);
       } finally {
         setIsLoading(false);
       }
     };
     
     fetchShippingMethods();
-  }, [shippingAddress]);
-  */
+  }, [shippingAddress, shippingMethod]);
 
-  // No longer need a separate useEffect for setting selected method, as it's done during initialization
+  useEffect(() => {
+    if (isUpdating && orderPreview) {
+      setIsUpdating(false);
+      toast.success('Shipping method selected');
+      nextStep();
+    }
+  }, [orderPreview, isUpdating, nextStep]);
 
   const handleSelectShippingMethod = (methodId: string) => {
     setSelectedMethod(methodId);
@@ -94,18 +87,8 @@ export const ShippingMethodForm: React.FC = () => {
       toast.error('Please select a shipping method');
       return;
     }
-
-    try {
-      setIsUpdating(true);
-      setShippingMethod(selectedMethod);
-      toast.success('Shipping method selected');
-      nextStep();
-    } catch (error) {
-      console.error('Error updating shipping method:', error);
-      toast.error('Failed to update shipping method. Please try again.');
-    } finally {
-      setIsUpdating(false);
-    }
+    setIsUpdating(true);
+    setShippingMethod(selectedMethod);
   };
 
   // Format price for display
