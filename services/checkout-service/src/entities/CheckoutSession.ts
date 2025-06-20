@@ -18,6 +18,8 @@ export interface CartItem {
   quantity: number;
   price: number;
   name: string;
+  image?: string;
+  sku?: string;
   metadata?: Record<string, any>;
 }
 

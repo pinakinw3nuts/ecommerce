@@ -80,6 +80,7 @@ export const ShippingMethodForm: React.FC = () => {
 
   const handleSelectShippingMethod = (methodId: string) => {
     setSelectedMethod(methodId);
+    setShippingMethod(methodId);
   };
 
   const handleSubmit = async () => {
@@ -88,7 +89,6 @@ export const ShippingMethodForm: React.FC = () => {
       return;
     }
     setIsUpdating(true);
-    setShippingMethod(selectedMethod);
   };
 
   // Format price for display

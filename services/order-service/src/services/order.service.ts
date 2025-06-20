@@ -11,6 +11,9 @@ export interface CreateOrderItemDto {
   quantity: number;
   price: number;
   variantId?: string;
+  name: string;
+  image: string;
+  sku: string;
   metadata?: {
     name?: string;
     sku?: string;
@@ -38,6 +41,11 @@ export interface CreateOrderDto {
     postalCode: string;
   };
   metadata?: Record<string, any>;
+  subtotal?: number;
+  taxAmount?: number;
+  shippingAmount?: number;
+  discountAmount?: number;
+  totalAmount?: number;
 }
 
 export interface UpdateOrderDto {
@@ -104,23 +112,27 @@ export class OrderService {
       item.quantity = itemDto.quantity;
       item.price = itemDto.price;
       item.variantId = itemDto.variantId ?? null;
-      
+      item.name = itemDto.metadata?.name || itemDto.name;
+      item.sku = itemDto.metadata?.sku || itemDto.sku;
+      item.image = itemDto.metadata?.image || itemDto.image;
+
       // Set properties from metadata if available
       if (itemDto.metadata) {
-        item.metadata = itemDto.metadata;
-        item.name = itemDto.metadata.name;
-        item.sku = itemDto.metadata.sku;
-        item.image = itemDto.metadata.image;
+        item.metadata = itemDto.metadata;        
       }
-      
+
       return item;
     });
 
-    // Calculate total and subtotal
-    order.updateTotalAmount();
-    order.updateSubtotal();
+    // Set totals from DTO if provided
+    order.subtotal = dto.subtotal ?? 0;
+    order.taxAmount = dto.taxAmount ?? 0;
+    order.shippingAmount = dto.shippingAmount ?? 0;
+    order.discountAmount = dto.discountAmount ?? 0;
+    order.totalAmount = dto.totalAmount ?? 0;
 
     try {
+
       const savedOrder = await this.orderRepository.save(order);
       logger.info(`Created order ${savedOrder.id} for user ${dto.userId}`);
       return savedOrder;
@@ -155,27 +167,27 @@ export class OrderService {
   ): Promise<[Order[], number]> {
     try {
       const where: FindOptionsWhere<Order> = {};
-      
+
       // Apply filters
       if (filters.userId) {
         where.userId = filters.userId;
       }
-      
+
       if (filters.status) {
         where.status = filters.status;
       }
-      
+
       if (filters.startDate || filters.endDate) {
         where.createdAt = Between(
           filters.startDate || new Date(0),
           filters.endDate || new Date()
         );
       }
-      
+
       if (filters.minAmount) {
         where.totalAmount = MoreThanOrEqual(filters.minAmount);
       }
-      
+
       if (filters.maxAmount) {
         where.totalAmount = LessThanOrEqual(filters.maxAmount);
       }
@@ -208,23 +220,23 @@ export class OrderService {
   ): Promise<[Order[], number]> {
     try {
       const where: FindOptionsWhere<Order> = { userId };
-      
+
       // Apply filters
       if (filters.status) {
         where.status = filters.status;
       }
-      
+
       if (filters.startDate || filters.endDate) {
         where.createdAt = Between(
           filters.startDate || new Date(0),
           filters.endDate || new Date()
         );
       }
-      
+
       if (filters.minAmount) {
         where.totalAmount = MoreThanOrEqual(filters.minAmount);
       }
-      
+
       if (filters.maxAmount) {
         where.totalAmount = LessThanOrEqual(filters.maxAmount);
       }

@@ -153,7 +153,7 @@ export default function CheckoutSuccessPage() {
               )}
               <div className="flex justify-between font-medium text-lg pt-2 border-t">
                 <span>Total</span>
-                <span>{formatPrice(order.total)}</span>
+                <span>{formatPrice(order.totalAmount)}</span>
               </div>
             </div>
           </div>

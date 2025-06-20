@@ -36,7 +36,7 @@ export interface Order {
   items: OrderItem[];
   shippingAddress: Address;
   billingAddress?: Address;
-  total: number;
+  totalAmount: number;
   subtotal: number;
   taxAmount: number;
   shippingAmount: number;

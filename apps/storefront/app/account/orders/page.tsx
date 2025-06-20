@@ -191,7 +191,7 @@ export default function OrderListPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-bold">{formatPrice(order.total || 0)}</div>
+                      <div className="text-lg font-bold">{formatPrice(order.totalAmount || 0)}</div>
                       <span className={`text-sm px-2 py-1 rounded ${getStatusColor(order.status)}`}>
                         {order.status}
                       </span>

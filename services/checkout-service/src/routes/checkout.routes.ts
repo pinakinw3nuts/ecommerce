@@ -14,6 +14,8 @@ const cartItemSchema = {
     quantity: { type: 'number', minimum: 1 },
     price: { type: 'number', minimum: 0 },
     name: { type: 'string' },
+    image: { type: 'string' },
+    sku: { type: 'string' },
     metadata: { 
       type: 'object',
       additionalProperties: true

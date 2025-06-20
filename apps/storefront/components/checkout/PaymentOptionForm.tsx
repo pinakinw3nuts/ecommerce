@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/Label';
 import { useCheckout } from './CheckoutProvider';
 import * as checkoutService from '@/services/checkout';
 import toast from 'react-hot-toast';
+import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Payment method icons - import or use inline SVGs
 const PaymentMethodIcons = {
@@ -47,7 +49,9 @@ interface PaymentMethod {
 }
 
 export const PaymentOptionForm: React.FC = () => {
-  const { paymentMethod, setPaymentMethod, shippingMethod, nextStep, prevStep } = useCheckout();
+  const { paymentMethod, setPaymentMethod, shippingMethod, nextStep, prevStep, checkoutSession, createCheckoutSession, shippingAddress } = useCheckout();
+  const { items } = useCart();
+  const { user } = useAuth();
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>(paymentMethod || 'credit_card');
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -92,6 +96,18 @@ export const PaymentOptionForm: React.FC = () => {
     try {
       setIsUpdating(true);
       setPaymentMethod(selectedPaymentMethod);
+      // Ensure checkout session is created/updated before moving to review step
+      if (!checkoutSession?.id && user?.id && shippingAddress) {
+        const cartItems = items.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+          name: item.name,
+          image: item.imageUrl,
+          sku: item.sku,
+        }));
+        await createCheckoutSession(user.id, cartItems);
+      }
       toast.success('Payment method selected');
       nextStep();
     } catch (error) {
