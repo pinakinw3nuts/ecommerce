@@ -37,13 +37,61 @@ function CheckoutPageContent() {
     setShippingAddress,
     setShippingMethod,
     setPaymentMethod,
+    currentStep,
     setCurrentStep,
-    clearCheckout,
-    orderPreview,
+    orderPreview
   } = useCheckout();
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // Check if we're on mobile view
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkIfMobile();
+    window.addEventListener('resize', checkIfMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkIfMobile);
+    };
+  }, []);
 
   const [isReady, setIsReady] = useState(false);
   const [hasError, setHasError] = useState(false);
+
+  // Define continueCheckout before using it
+  const continueCheckout = async (sessionToLoad: checkoutService.CheckoutSession | null) => {
+    if (sessionToLoad) {
+      setCheckoutSession(sessionToLoad);
+      if (sessionToLoad.shippingAddress) {
+        setShippingAddress(sessionToLoad.shippingAddress);
+      }
+      if (sessionToLoad.shippingMethod) {
+        setShippingMethod(sessionToLoad.shippingMethod);
+      }
+      if (sessionToLoad.paymentMethod) {
+        setPaymentMethod(sessionToLoad.paymentMethod);
+      }
+      // Restore step from localStorage if available, otherwise infer
+      const savedStep = localStorage.getItem('checkout_current_step');
+      if (savedStep !== null) {
+        setCurrentStep(Number(savedStep));
+      } else if (sessionToLoad.paymentMethod) {
+        setCurrentStep(3);
+      } else if (sessionToLoad.shippingMethod) {
+        setCurrentStep(2);
+      } else if (sessionToLoad.shippingAddress) {
+        setCurrentStep(1);
+      } else {
+        setCurrentStep(0);
+      }
+      // Recalculate preview only after setting all initial data
+      calculateOrderPreview(user?.id as string, items.map(item => ({ productId: item.productId, quantity: item.quantity, price: item.price, name: item.name })));
+    }
+    setIsReady(true);
+    setIsLoadingSession(false);
+  };
 
   useEffect(() => {
     // Only run when cart is done loading
@@ -129,40 +177,9 @@ function CheckoutPageContent() {
         setIsLoadingSession(false);
         return;
       }
-      continueCheckout(sessionToLoad);
+      await continueCheckout(sessionToLoad);
     })();
 
-    function continueCheckout(sessionToLoad: checkoutService.CheckoutSession | null) {
-      if (sessionToLoad) {
-        setCheckoutSession(sessionToLoad);
-        if (sessionToLoad.shippingAddress) {
-          setShippingAddress(sessionToLoad.shippingAddress);
-        }
-        if (sessionToLoad.shippingMethod) {
-          setShippingMethod(sessionToLoad.shippingMethod);
-        }
-        if (sessionToLoad.paymentMethod) {
-          setPaymentMethod(sessionToLoad.paymentMethod);
-        }
-        // Restore step from localStorage if available, otherwise infer
-        const savedStep = localStorage.getItem('checkout_current_step');
-        if (savedStep !== null) {
-          setCurrentStep(Number(savedStep));
-        } else if (sessionToLoad.paymentMethod) {
-          setCurrentStep(3);
-        } else if (sessionToLoad.shippingMethod) {
-          setCurrentStep(2);
-        } else if (sessionToLoad.shippingAddress) {
-          setCurrentStep(1);
-        } else {
-          setCurrentStep(0);
-        }
-        // Recalculate preview only after setting all initial data
-        calculateOrderPreview(user?.id as string, items.map(item => ({ productId: item.productId, quantity: item.quantity, price: item.price, name: item.name })));
-      }
-      setIsReady(true);
-      setIsLoadingSession(false);
-    }
   }, [user?.id, items.length, isCartLoading]);
 
   if (isLoadingSession || !isReady) {
@@ -187,22 +204,24 @@ function CheckoutPageContent() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto py-8 px-4">
       <h1 className="text-3xl font-bold mb-6 text-center">Checkout</h1>
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        <div className="lg:w-2/3">
-          <Card className="shadow-lg border border-gray-200">
-            <CheckoutStepper>
-              <ShippingAddressForm />
-              <ShippingMethodForm />
-              <PaymentOptionForm />
-              <OrderReviewForm />
-            </CheckoutStepper>
-          </Card>
-        </div>
-        <div className="lg:w-1/3">
-          <OrderSummaryCard orderPreview={orderPreview} />
+      <div className="max-w-6xl mx-auto">
+        <div className="flex flex-col lg:flex-row gap-8">
+          <div className="lg:w-2/3">
+            <Card className="shadow-lg border border-gray-200">
+              <CheckoutStepper>
+                <ShippingAddressForm />
+                <ShippingMethodForm />
+                <PaymentOptionForm />
+                <OrderReviewForm />
+              </CheckoutStepper>
+            </Card>
+          </div>
+          <div className="lg:w-1/3">
+            <OrderSummaryCard orderPreview={orderPreview} showCouponInput={currentStep !== 3} />
+          </div>
         </div>
       </div>
     </div>
@@ -215,4 +234,4 @@ export default function CheckoutPage() {
       <CheckoutPageContent />
     </CheckoutProvider>
   );
-} 
+}
