@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { OrderStatusBadge } from '@/components/orders/StatusBadges';
 import { useToast } from '@/hooks/useToast';
 import { Order } from '@/lib/types/order';
+import { OrderStatus } from '@/lib/types/order';
 
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -180,7 +181,8 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         </div>
 
         {/* Order Actions */}
-        {order.status === 'pending' && (
+        {(order.status.toUpperCase() === OrderStatus.PENDING || 
+          order.status.toUpperCase() === OrderStatus.CONFIRMED) && (
           <div className="p-6">
             <Button
               onClick={handleCancelOrder}

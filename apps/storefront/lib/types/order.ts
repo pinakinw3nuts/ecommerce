@@ -8,11 +8,14 @@ export enum OrderStatus {
 }
 
 export interface Address {
+  firstName: string;
+  lastName: string;
   street: string;
   city: string;
   state: string;
   country: string;
   postalCode: string;
+  phone?: string;
 }
 
 export interface OrderItem {
@@ -22,6 +25,7 @@ export interface OrderItem {
   quantity: number;
   price: number;
   image?: string;
+  variantName?: string;
 }
 
 export interface Order {
