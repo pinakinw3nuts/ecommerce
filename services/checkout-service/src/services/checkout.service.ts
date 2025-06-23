@@ -131,18 +131,54 @@ export class CheckoutService {
 
   async createCheckoutSession(
     userId: string,
-    cartItems: CartItem[],
+    cartItems: any[], // Accepts cart items with productSnapshot
     couponCode?: string,
     shippingAddress?: any,
     billingAddress?: any
   ): Promise<CheckoutSession> {
+    // Map cartItems to ensure all product details are present
+    const mappedCartItems = cartItems.map(item => {
+      // Initialize with basic properties
+      const mappedItem: any = {
+        productId: item.productId,
+        quantity: item.quantity,
+        price: item.price,
+        name: item.name || 'Unknown Product'
+      };
+      
+      // Extract data from productSnapshot if available
+      if (item.productSnapshot) {
+        // Basic product details
+        mappedItem.name = item.productSnapshot.name || mappedItem.name;
+        mappedItem.description = item.productSnapshot.description;
+        mappedItem.image = item.productSnapshot.imageUrl;
+        mappedItem.additionalImages = item.productSnapshot.additionalImages;
+        mappedItem.sku = item.productSnapshot.sku;
+        mappedItem.variantId = item.variantId;
+        mappedItem.variantName = item.productSnapshot.variantName;
+        
+        // E-commerce specific details
+        mappedItem.brand = item.productSnapshot.brand;
+        mappedItem.category = item.productSnapshot.category;
+        mappedItem.attributes = item.productSnapshot.attributes;
+        mappedItem.dimensions = item.productSnapshot.dimensions;
+        mappedItem.originalPrice = item.productSnapshot.originalPrice;
+        mappedItem.salePrice = item.productSnapshot.salePrice;
+        mappedItem.slug = item.productSnapshot.slug;
+        
+        // Preserve all metadata
+        mappedItem.metadata = item.productSnapshot.metadata || {};
+      }
+      
+      return mappedItem;
+    });
+    
     const orderPreview = await this.calculateOrderPreview(
       userId, 
-      cartItems, 
+      mappedCartItems, 
       couponCode,
       shippingAddress
     );
-
     const sessionData = {
       userId,
       cartSnapshot: orderPreview.items,
@@ -161,7 +197,6 @@ export class CheckoutService {
       shippingAddress,
       billingAddress
     } as Partial<CheckoutSession>;
-
     const session = this.checkoutSessionRepository.create(sessionData);
     return this.checkoutSessionRepository.save(session);
   }

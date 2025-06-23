@@ -183,3 +183,33 @@ export async function addOrderNote(orderId: string, note: string): Promise<void>
 export async function getOrderNotes(orderId: string): Promise<{ id: string; note: string; createdAt: string }[]> {
   return handleApiResponse<{ id: string; note: string; createdAt: string }[]>(`/orders/${orderId}/notes`, 'GET');
 }
+
+// Function to fetch orders with pagination and filtering that matches the interface used in orders/page.tsx
+export async function fetchOrders({ 
+  page = 1, 
+  pageSize = 10, 
+  status = [] 
+}: { 
+  page: number; 
+  pageSize: number; 
+  status?: string[] 
+}) {
+  const filters: OrderFilters = {};
+  
+  // Convert status array to single status if needed
+  if (status && status.length > 0) {
+    filters.status = status[0] as OrderStatus;
+  }
+  
+  const response = await getOrders(page, pageSize, filters);
+  
+  return {
+    orders: response.data,
+    pagination: {
+      totalPages: response.meta.totalPages,
+      currentPage: response.meta.page,
+      hasPrevious: response.meta.page > 1,
+      hasMore: response.meta.page < response.meta.totalPages
+    }
+  };
+}

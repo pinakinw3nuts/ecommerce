@@ -194,10 +194,24 @@ export async function orderCheckoutRoutes(fastify: FastifyInstance, options: { o
             variantId: item.variantId || undefined, // Convert null to undefined for type compatibility
             quantity: item.quantity,
             price: item.price,
+            name: item.name || 'Unknown Product',
+            image: item.image || item.productSnapshot?.imageUrl,
+            sku: item.sku || '',
+            additionalImages: item.additionalImages || item.productSnapshot?.additionalImages,
+            variantName: item.variantName || item.productSnapshot?.variantName,
+            description: item.description || item.productSnapshot?.description,
+            originalPrice: item.originalPrice || item.productSnapshot?.originalPrice,
+            salePrice: item.salePrice || item.productSnapshot?.salePrice,
+            brand: item.brand || item.productSnapshot?.brand,
+            category: item.category || item.productSnapshot?.category,
+            attributes: item.attributes || item.productSnapshot?.attributes,
+            dimensions: item.dimensions || item.productSnapshot?.dimensions,
+            slug: item.slug || item.productSnapshot?.slug,
             metadata: {
               name: item.productSnapshot?.name || item.name || 'Unknown Product',
-              image: item.productSnapshot?.image || item.image,
-              sku: item.productSnapshot?.sku || item.sku
+              image: item.productSnapshot?.imageUrl || item.image,
+              sku: item.productSnapshot?.sku || item.sku,
+              variantName: item.productSnapshot?.variantName || item.variantName
             }
           }));
 

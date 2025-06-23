@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useCheckout } from './CheckoutProvider';
@@ -57,7 +57,7 @@ interface ExtendedCartItem {
   };
 }
 
-export const OrderReviewForm: React.FC = () => {
+export const OrderReviewNew: React.FC = () => {
   const router = useRouter();
   const { items, clearCart } = useCart();
   const { user } = useAuth();

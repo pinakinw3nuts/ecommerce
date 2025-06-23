@@ -5,12 +5,53 @@ import { ShippingMethod } from '@/types/shipping';
 
 const CHECKOUT_API_ROUTE = '/checkout';
 
+// Keys for localStorage
+export const ORDER_SUBMISSION_KEY = 'order_submission_status';
+export const CHECKOUT_SESSION_KEY = 'checkout_session';
+export const CHECKOUT_FALLBACK_KEY = 'checkout_fallback_data';
+
 export interface CartItem {
   productId: string;
   quantity: number;
   price: number;
   name: string;
+  imageUrl?: string;
+  additionalImages?: string[];
+  variant?: string;
+  variantId?: string;
+  variantName?: string;
+  description?: string;
+  sku?: string;
+  inStock?: boolean;
+  brand?: {
+    id?: string;
+    name?: string;
+    logoUrl?: string;
+  };
+  category?: {
+    id?: string;
+    name?: string;
+  };
+  attributes?: {
+    [key: string]: string | number | boolean;
+  };
+  dimensions?: {
+    width?: number;
+    height?: number;
+    depth?: number;
+    weight?: number;
+    unit?: string;
+  };
+  originalPrice?: number;
+  salePrice?: number;
+  slug?: string;
   metadata?: Record<string, any>;
+  productSnapshot?: {
+    name?: string;
+    imageUrl?: string;
+    variantName?: string;
+    [key: string]: any;
+  };
 }
 
 export interface Address {
@@ -48,13 +89,7 @@ export interface CheckoutSession {
   // Direct properties that might exist in some API responses
   total?: number;
   subtotal?: number;
-  cartSnapshot?: Array<{
-    productId: string;
-    quantity: number;
-    price: number;
-    name: string;
-    metadata?: Record<string, any>;
-  }>;
+  cartSnapshot?: CartItem[];
   shippingCost?: number;
   tax?: number;
   discount?: number;
@@ -244,4 +279,13 @@ export async function createPaymentIntent(
 export const placeOrder = async (id: string, address: AddressInput) => {
   const response = await axios.post(`${CHECKOUT_API_ROUTE}/checkout/session/${id}/order`, { address });
   return response.data;
-}; 
+};
+
+// Generic method to update any checkout session field
+export async function updateCheckoutSession(
+  id: string,
+  data: Partial<CheckoutSession>
+): Promise<ApiResponse<CheckoutSession>> {
+  const response = await axios.patch<ApiResponse<CheckoutSession>>(`${CHECKOUT_API_ROUTE}/session/${id}`, data);
+  return response.data;
+} 

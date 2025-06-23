@@ -12,11 +12,41 @@ export interface CartItem {
   price: number;
   quantity: number;
   imageUrl: string;
+  additionalImages?: string[];
   variant?: string;
   variantId?: string;
+  variantName?: string;
   description?: string;
   sku?: string;
   inStock?: boolean;
+  brand?: {
+    id?: string;
+    name?: string;
+    logoUrl?: string;
+  };
+  category?: {
+    id?: string;
+    name?: string;
+  };
+  attributes?: {
+    [key: string]: string | number | boolean;
+  };
+  dimensions?: {
+    width?: number;
+    height?: number;
+    depth?: number;
+    weight?: number;
+    unit?: string;
+  };
+  originalPrice?: number;
+  salePrice?: number;
+  slug?: string;
+  productSnapshot?: {
+    name?: string;
+    imageUrl?: string;
+    variantName?: string;
+    [key: string]: any;
+  };
 }
 
 export interface Coupon {
@@ -193,9 +223,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         price: item.price || 0,
         imageUrl: item.imageUrl || '/api/placeholder',
         variant: item.variant,
+        variantName: item.variantName,
         description: item.description || `Product ${item.name || ''}`,
         sku: item.sku || `SKU-${(item.productId || item.id || '').substring(0, 8)}`,
-        inStock: true
+        inStock: true,
+        brand: item.brand,
+        category: item.category,
+        attributes: item.attributes,
+        dimensions: item.dimensions,
+        additionalImages: item.additionalImages,
+        originalPrice: item.originalPrice,
+        salePrice: item.salePrice,
+        slug: item.slug
       };
       
       const response = await axios.post('/api/cart/items', requestData, {

@@ -9,6 +9,34 @@ export interface CreateOrderItemDto {
   quantity: number;
   price: number;
   variantId?: string | null;
+  name?: string;
+  image?: string;
+  sku?: string;
+  additionalImages?: string[];
+  variantName?: string;
+  description?: string;
+  originalPrice?: number;
+  salePrice?: number;
+  brand?: {
+    id?: string;
+    name?: string;
+    logoUrl?: string;
+  };
+  category?: {
+    id?: string;
+    name?: string;
+  };
+  attributes?: {
+    [key: string]: string | number | boolean;
+  };
+  dimensions?: {
+    width?: number;
+    height?: number;
+    depth?: number;
+    weight?: number;
+    unit?: string;
+  };
+  slug?: string;
   metadata?: {
     name?: string;
     sku?: string;
@@ -50,6 +78,25 @@ export class OrderItemService {
         item.quantity = itemDto.quantity;
         item.price = itemDto.price;
         item.variantId = itemDto.variantId ?? null;
+        
+        // Add basic product details
+        item.name = itemDto.name || itemDto.metadata?.name;
+        item.sku = itemDto.sku || itemDto.metadata?.sku;
+        item.image = itemDto.image || itemDto.metadata?.image;
+        item.additionalImages = itemDto.additionalImages;
+        item.variantName = itemDto.variantName || itemDto.metadata?.variantName;
+        item.description = itemDto.description;
+        
+        // Add enhanced product details
+        item.originalPrice = itemDto.originalPrice;
+        item.salePrice = itemDto.salePrice;
+        item.brand = itemDto.brand;
+        item.category = itemDto.category;
+        item.attributes = itemDto.attributes;
+        item.dimensions = itemDto.dimensions;
+        item.slug = itemDto.slug;
+        
+        // Set metadata
         item.metadata = itemDto.metadata || {};
         item.discountAmount = 0;
         return item;

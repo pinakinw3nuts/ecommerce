@@ -1,5 +1,3 @@
-'use client';
-
 import { Metadata } from 'next';
 import PasswordResetForm from '@/components/auth/PasswordResetForm';
 

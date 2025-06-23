@@ -19,7 +19,33 @@ export interface CartItem {
   price: number;
   name: string;
   image?: string;
+  additionalImages?: string[];
   sku?: string;
+  variantId?: string;
+  variantName?: string;
+  description?: string;
+  brand?: {
+    id?: string;
+    name?: string;
+    logoUrl?: string;
+  };
+  category?: {
+    id?: string;
+    name?: string;
+  };
+  attributes?: {
+    [key: string]: string | number | boolean;
+  };
+  dimensions?: {
+    width?: number;
+    height?: number;
+    depth?: number;
+    weight?: number;
+    unit?: string;
+  };
+  originalPrice?: number;
+  salePrice?: number;
+  slug?: string;
   metadata?: Record<string, any>;
 }
 

@@ -99,16 +99,33 @@ export async function POST(req: NextRequest) {
       quantity: body.quantity || 1,
       variantId: variantId,
       price: body.price || 0,
+      name: body.name,
       productSnapshot: {
         name: body.name || 'Product',
         description: body.description || 'Product description',
         imageUrl: body.imageUrl || '/api/placeholder',
-        variantName: body.variant || null,
+        additionalImages: body.additionalImages || [],
+        variantName: body.variant || body.variantName || null,
+        sku: body.sku || `SKU-${body.productId.substring(0, 8)}`,
+        brand: body.brand || null,
+        category: body.category || null,
+        attributes: body.attributes || null,
+        dimensions: body.dimensions || { 
+          width: 0, 
+          height: 0, 
+          depth: 0, 
+          weight: 0,
+          unit: 'cm'
+        },
+        originalPrice: body.originalPrice || body.price || 0,
+        salePrice: body.salePrice || null,
+        slug: body.slug || null,
         metadata: {
           sku: body.sku || `SKU-${body.productId.substring(0, 8)}`,
-          weight: body.weight || 0,
+          weight: body.dimensions?.weight || 0,
           dimensions: body.dimensions || { length: 0, width: 0, height: 0 },
-          inStock: body.inStock !== undefined ? body.inStock : true
+          inStock: body.inStock !== undefined ? body.inStock : true,
+          addedAt: new Date().toISOString()
         }
       }
     };

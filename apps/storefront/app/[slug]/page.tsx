@@ -12,9 +12,9 @@ type CMSPage = {
 };
 
 // Helper function to extract slug safely
-async function extractSlug(params: any): Promise<string> {
-  // In Next.js 14, params might be a Promise
-  const resolvedParams = params && typeof params.then === 'function' ? await params : params;
+async function extractSlug(params: { slug: string }): Promise<string> {
+  // In case params is a Promise (though it shouldn't be in Next.js App Router)
+  const resolvedParams = params;
   return resolvedParams?.slug || '';
 }
 

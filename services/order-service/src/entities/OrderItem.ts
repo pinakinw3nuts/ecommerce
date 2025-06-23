@@ -36,6 +36,15 @@ export class OrderItem {
   @Column({ nullable: true })
   image?: string;
   
+  @Column('simple-array', { nullable: true })
+  additionalImages?: string[];
+  
+  @Column({ nullable: true })
+  variantName?: string;
+  
+  @Column('text', { nullable: true })
+  description?: string;
+  
   @Column({
     type: 'varchar',
     nullable: true
@@ -44,12 +53,48 @@ export class OrderItem {
 
   @Column('decimal', { precision: 10, scale: 2 })
   price!: number;
+  
+  @Column('decimal', { precision: 10, scale: 2, nullable: true })
+  originalPrice?: number;
+  
+  @Column('decimal', { precision: 10, scale: 2, nullable: true })
+  salePrice?: number;
 
   @Column('int')
   quantity!: number;
 
   @Column('decimal', { precision: 10, scale: 2, default: 0 })
   discountAmount: number = 0;
+  
+  @Column('jsonb', { nullable: true })
+  brand?: {
+    id?: string;
+    name?: string;
+    logoUrl?: string;
+  };
+  
+  @Column('jsonb', { nullable: true })
+  category?: {
+    id?: string;
+    name?: string;
+  };
+  
+  @Column('jsonb', { nullable: true })
+  attributes?: {
+    [key: string]: string | number | boolean;
+  };
+  
+  @Column('jsonb', { nullable: true })
+  dimensions?: {
+    width?: number;
+    height?: number;
+    depth?: number;
+    weight?: number;
+    unit?: string;
+  };
+  
+  @Column({ nullable: true })
+  slug?: string;
 
   @Column('jsonb', { nullable: true })
   metadata: {
@@ -91,5 +136,15 @@ export class OrderItem {
   // Get item image from metadata or fallback
   getImage(): string | undefined {
     return this.image || this.metadata?.image;
+  }
+  
+  // Get additional images or fallback
+  getAdditionalImages(): string[] {
+    return this.additionalImages || [];
+  }
+  
+  // Get variant name from metadata or fallback
+  getVariantName(): string | undefined {
+    return this.variantName || this.metadata?.variantName;
   }
 } 

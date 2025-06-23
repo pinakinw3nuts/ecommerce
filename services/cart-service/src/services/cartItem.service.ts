@@ -16,10 +16,21 @@ interface ProductData {
   isFeatured?: boolean;
   isPublished?: boolean;
   salePrice?: number;
-  saleStartDate?: string;
   saleEndDate?: string;
+  saleStartDate?: string;
   stockQuantity?: number;
   isInStock?: boolean;
+  images?: Array<string | { url?: string }>;
+  dimensions?: {
+    width?: number;
+    height?: number;
+    depth?: number;
+    weight?: number;
+    unit?: string;
+  };
+  attributes?: {
+    [key: string]: string | number | boolean;
+  };
   category?: {
     id: string;
     name: string;
@@ -35,6 +46,10 @@ interface ProductData {
     sku?: string;
     price: number;
     stock?: number;
+    image?: string;
+    attributes?: {
+      [key: string]: string | number | boolean;
+    };
   }>;
   tags?: Array<{
     id: string;
@@ -42,10 +57,19 @@ interface ProductData {
   }>;
 }
 
-interface AddItemRequest {
+// Replacing the unused interface with a more comprehensive type
+interface CartItemRequest {
   productId: string;
   variantId?: string | undefined;
   quantity: number;
+  price?: number;
+  productSnapshot?: {
+    name: string;
+    description?: string;
+    imageUrl?: string;
+    mediaUrl?: string;
+    [key: string]: any;
+  };
 }
 
 export class CartItemService {
@@ -68,35 +92,8 @@ export class CartItemService {
                 stock: 10
               }
             ]
-    },
-    // Product without variants for testing
-    'd2a749ff-85c9-47ef-8e81-15124e96fc9d': {
-      id: 'd2a749ff-85c9-47ef-8e81-15124e96fc9d',
-      name: 'Basic Product Without Variants',
-      description: 'This is a test product without variants',
-      price: 1999,
-      mediaUrl: 'https://via.placeholder.com/150'
-    },
-    // iPhone 13 with correct price
-    '66c70c61-4d97-4355-af5f-24817ea51b59': {
-      id: '66c70c61-4d97-4355-af5f-24817ea51b59',
-      name: 'iPhone 13',
-      description: 'Latest iPhone model with advanced features',
-      price: 150,
-      mediaUrl: 'https://example.com/iphone13-2.jpg',
-      isFeatured: true,
-      isPublished: true,
-      variants: [
-        {
-          id: 'e0553b09-ee26-4597-8bfb-ba66d233529b',
-          name: '',
-          sku: '',
-          price: 0,
-          stock: 0
-        }
-      ]
-    }
-  };
+    }    
+};
 
   constructor(
     private readonly cartItemRepository: Repository<CartItem>,
@@ -109,49 +106,37 @@ export class CartItemService {
   async addItem(
     cartId: string,
     userId: string | null,
-    data: AddItemRequest,
+    data: CartItemRequest,
     deviceId?: string | null
   ): Promise<CartItem> {
     try {
-      console.log('CartItemService addItem ==>', cartId, userId, data);
-      // Validate the data
-      if (!data.productId) {
-        throw new Error('Product ID is required');
-      }
+      this.logger.info({
+        cartId,
+        productId: data.productId,
+        variantId: data.variantId,
+        quantity: data.quantity
+      }, 'Adding item to cart');
 
-      if (!data.quantity || data.quantity <= 0) {
-        throw new Error('Quantity must be greater than 0');
-      }
-
-      // Special handling for iPhone 13
-      if (data.productId === '66c70c61-4d97-4355-af5f-24817ea51b59') {
+      // Check if we already have a product snapshot in the request
+      if (data.productSnapshot) {
         this.logger.info({
           cartId,
           productId: data.productId,
-          forcedPrice: 150
-        }, 'Special handling for iPhone 13 in addItem');
+          hasSnapshot: true
+        }, 'Using provided product snapshot');
         
-        // Create product snapshot with fixed price
-        const productSnapshot: ProductSnapshot = {
-          name: 'iPhone 13',
-          description: 'Latest iPhone model with advanced features',
-          imageUrl: 'https://example.com/iphone13-2.jpg',
-          metadata: {
-            addedAt: new Date().toISOString(),
-            originalPrice: 150,
-            needsValidation: false,
-            fallbackMode: false,
-            productId: data.productId
-          },
-        };
-
-              // Add item to cart with fixed price and userId to ensure it's stored
-      const cart = await this.cartService.addItem(cartId, userId, {
-              productId: data.productId,
-              variantId: data.variantId,
+        // Make sure the snapshot has a valid imageUrl - check both fields
+        if (!data.productSnapshot.imageUrl && data.productSnapshot.mediaUrl) {
+          data.productSnapshot.imageUrl = data.productSnapshot.mediaUrl;
+        }
+        
+        // Add item to cart with userId to ensure it's stored
+        const cart = await this.cartService.addItem(cartId, userId, {
+          productId: data.productId,
+          variantId: data.variantId,
           quantity: data.quantity,
-          price: 150,
-          productSnapshot,
+          price: data.price || 0,
+          productSnapshot: data.productSnapshot
         }, deviceId);
 
         // Return the newly added item
@@ -168,8 +153,64 @@ export class CartItemService {
         return newItem;
       }
 
+      // Validate the data
+      if (!data.productId) {
+        throw new Error('Product ID is required');
+      }
+
+      if (!data.quantity || data.quantity <= 0) {
+        throw new Error('Quantity must be greater than 0');
+      }
+
+      // // Special handling for iPhone 13
+      // if (data.productId === '66c70c61-4d97-4355-af5f-24817ea51b59') {
+      //   this.logger.info({
+      //     cartId,
+      //     productId: data.productId,
+      //     forcedPrice: 150
+      //   }, 'Special handling for iPhone 13 in addItem');
+        
+      //   // Create product snapshot with fixed price
+      //   const productSnapshot: ProductSnapshot = {
+      //     name: 'iPhone 13',
+      //     description: 'Latest iPhone model with advanced features',
+      //     imageUrl: 'https://example.com/iphone13-2.jpg',
+      //     metadata: {
+      //       addedAt: new Date().toISOString(),
+      //       originalPrice: 150,
+      //       needsValidation: false,
+      //       fallbackMode: false,
+      //       productId: data.productId
+      //     },
+      //   };
+
+      //         // Add item to cart with fixed price and userId to ensure it's stored
+      // const cart = await this.cartService.addItem(cartId, userId, {
+      //         productId: data.productId,
+      //         variantId: data.variantId,
+      //     quantity: data.quantity,
+      //     price: 150,
+      //     productSnapshot,
+      //   }, deviceId);
+
+      //   // Return the newly added item
+      //   const newItem = cart.items.find(
+      //     item =>
+      //       item.productId === data.productId &&
+      //       (item.variantId === data.variantId || (!item.variantId && !data.variantId))
+      //   );
+
+      //   if (!newItem) {
+      //     throw new Error('Failed to add item to cart');
+      //   }
+
+      //   return newItem;
+      // }
+
       // Fetch product data from product service
       const { productData, fallbackMode } = await this.fetchProductData(data.productId);
+
+      console.log(productData, 'Adding item to cart fetched product data......');
 
       // Extract product details
       const {
@@ -177,34 +218,43 @@ export class CartItemService {
         variantName,
         productName,
         productDescription,
-        productImageUrl
+        productImageUrl,
+        additionalImages,
+        sku,
+        brand,
+        category,
+        attributes,
+        dimensions,
+        originalPrice,
+        salePrice,
+        slug
       } = this.extractProductDetails(productData, data.variantId ?? undefined, fallbackMode);
-      
       
       // Create product snapshot
       const productSnapshot: ProductSnapshot = {
         name: productName,
         description: productDescription,
         imageUrl: productImageUrl,
+        additionalImages: additionalImages,
         variantName,
+        sku,
+        brand: brand,
+        category: category,
+        attributes: attributes,
+        dimensions: dimensions,
+        originalPrice: originalPrice,
+        salePrice: salePrice,
+        slug: slug,
         metadata: {
           addedAt: new Date().toISOString(),
-          originalPrice: price,
+          originalPrice: originalPrice,
           needsValidation: fallbackMode,
           fallbackMode: fallbackMode,
           productId: data.productId
         },
       };
 
-      this.logger.debug({
-        cartId,
-        productId: data.productId,
-        price,
-        quantity: data.quantity,
-        fallbackMode
-      }, 'Adding item to cart');
-
-      // Add item to cart with userId to ensure it's stored
+       // Add item to cart with userId to ensure it's stored
       const cart = await this.cartService.addItem(cartId, userId, {
         productId: data.productId,
         variantId: data.variantId,
@@ -367,7 +417,16 @@ export class CartItemService {
                 variantName,
                 productName,
                 productDescription,
-                productImageUrl
+                productImageUrl,
+                additionalImages,
+                sku,
+                brand,
+                category,
+                attributes,
+                dimensions,
+                originalPrice,
+                salePrice,
+                slug
               } = this.extractProductDetails(productData, item.variantId ?? undefined, fallbackMode);
 
               // Update the item with new data
@@ -376,11 +435,20 @@ export class CartItemService {
                 name: productName,
                 description: productDescription,
                 imageUrl: productImageUrl,
+                additionalImages,
                 variantName,
+                sku,
+                brand,
+                category,
+                attributes,
+                dimensions,
+                originalPrice,
+                salePrice,
+                slug,
                 metadata: {
                   ...item.productSnapshot?.metadata,
                   updatedAt: new Date().toISOString(),
-                  originalPrice: price
+                  originalPrice: originalPrice
                 }
               };
               
@@ -438,10 +506,10 @@ export class CartItemService {
     try {
       // Check for known product IDs first
       if (this.knownProducts[productId]) {
-        this.logger.info({
-          productId,
-          productName: this.knownProducts[productId].name
-        }, 'Using hardcoded data for known product');
+        // this.logger.info({
+        //   productId,
+        //   productName: this.knownProducts[productId].name
+        // }, 'Using hardcoded data for known product');
         
         return {
           productData: this.knownProducts[productId],
@@ -450,36 +518,39 @@ export class CartItemService {
       }
       
       // Special handling for iPhone 13 product
-      if (productId === '66c70c61-4d97-4355-af5f-24817ea51b59') {
-        this.logger.info({
-          productId,
-          productName: 'iPhone 13',
-          price: 150
-        }, 'Using special handling for iPhone 13');
+      // if (productId === '66c70c61-4d97-4355-af5f-24817ea51b59') {
+      //   this.logger.info({
+      //     productId,
+      //     productName: 'iPhone 13',
+      //     price: 150
+      //   }, 'Using special handling for iPhone 13');
         
-        return {
-          productData: {
-            id: '66c70c61-4d97-4355-af5f-24817ea51b59',
-            name: 'iPhone 13',
-            description: 'Latest iPhone model with advanced features',
-            price: 150,
-            mediaUrl: 'https://example.com/iphone13-2.jpg',
-            variants: []
-          },
-          fallbackMode: false
-        };
-      }
+      //   return {
+      //     productData: {
+      //       id: '66c70c61-4d97-4355-af5f-24817ea51b59',
+      //       name: 'iPhone 13',
+      //       description: 'Latest iPhone model with advanced features',
+      //       price: 150,
+      //       mediaUrl: 'https://example.com/iphone13-2.jpg',
+      //       variants: []
+      //     },
+      //     fallbackMode: false
+      //   };
+      // }
       
       // Fetch from product service
       productData = await this.getProductData(productId);
       
       if (productData) {
-        this.logger.info({ 
+        this.logger.info({
           productId,
           productName: productData.name,
           productPrice: productData.price,
-          hasVariants: productData.variants && productData.variants.length > 0
-        }, 'Successfully fetched product data');
+          hasVariants: productData.variants && productData.variants.length > 0,
+          mediaUrl: productData.mediaUrl || 'missing',
+          imageUrl: (productData as any).imageUrl || 'missing',
+          hasImages: !!productData.images && productData.images.length > 0
+        }, 'Successfully fetched product data from API');
       } else {
         fallbackMode = true;
         this.logger.warn({ productId }, 'Product not found in product service - using fallback mode');
@@ -508,103 +579,154 @@ export class CartItemService {
     productName: string;
     productDescription?: string;
     productImageUrl?: string;
+    additionalImages?: string[];
+    sku?: string;
+    brand?: {
+      id?: string;
+      name?: string;
+      logoUrl?: string;
+    };
+    category?: {
+      id?: string;
+      name?: string;
+    };
+    attributes?: {
+      [key: string]: string | number | boolean;
+    };
+    dimensions?: {
+      width?: number;
+      height?: number;
+      depth?: number;
+      weight?: number;
+      unit?: string;
+    };
+    originalPrice?: number;
+    salePrice?: number;
+    slug?: string;
   } {
+    // Default values
     let price = 0;
-    let variantName: string | undefined;
+    let variantName: string | undefined = undefined;
     let productName = 'Unknown Product';
-    let productDescription: string | undefined;
-    let productImageUrl: string | undefined;
-    
+    let productDescription: string | undefined = undefined;
+    let productImageUrl: string | undefined = undefined;
+    let additionalImages: string[] | undefined = undefined;
+    let sku: string | undefined = undefined;
+    let brand: { id?: string; name?: string; logoUrl?: string; } | undefined = undefined;
+    let category: { id?: string; name?: string; } | undefined = undefined;
+    let attributes: { [key: string]: string | number | boolean; } | undefined = undefined;
+    let dimensions: { width?: number; height?: number; depth?: number; weight?: number; unit?: string; } | undefined = undefined;
+    let originalPrice: number | undefined = undefined;
+    let salePrice: number | undefined = undefined;
+    let slug: string | undefined = undefined;
+
+    // Extract data based on product and variant
     if (productData) {
-      // Always start with the product base price
-      price = typeof productData.price === 'number' ? productData.price : 
-              typeof productData.price === 'string' ? Number(productData.price) : 0;
-      
-      this.logger.debug({ 
-        productId: productData.id,
-        rawPrice: productData.price, 
-        convertedPrice: price,
-        productDataType: typeof productData.price 
-      }, 'Processing product price');
-      
-      productName = productData.name || `Product ${productData.id}`;
+      // Base product data
+      productName = productData.name;
       productDescription = productData.description;
-      productImageUrl = productData.mediaUrl;
       
-      // Get variant price if specified
-      if (variantId && productData.variants && productData.variants.length > 0) {
+      // Check for both mediaUrl and imageUrl for backward compatibility
+      productImageUrl = productData.mediaUrl || (productData as any).imageUrl;
+      
+      price = productData.price;
+      originalPrice = productData.price;
+      salePrice = productData.salePrice;
+      slug = productData.slug;
+      
+      // Extract brand data if available
+      if (productData.brand) {
+        brand = {
+          id: productData.brand.id,
+          name: productData.brand.name
+        };
+      }
+      
+      // Extract category data if available
+      if (productData.category) {
+        category = {
+          id: productData.category.id,
+          name: productData.category.name
+        };
+      }
+      
+      // Extract additional images if available
+      if (productData.images && Array.isArray(productData.images)) {
+        additionalImages = productData.images.map(img => {
+          if (typeof img === 'string') {
+            return img;
+          } else if (img && typeof img === 'object' && 'url' in img) {
+            return img.url || '';
+          }
+          return '';
+        }).filter(url => url !== '');
+      }
+      
+      // Extract product dimensions if available
+      if (productData.dimensions) {
+        dimensions = { ...productData.dimensions };
+      }
+      
+      // Extract product attributes if available
+      if (productData.attributes) {
+        attributes = { ...productData.attributes };
+      }
+
+      // If variant ID is provided, look for the specific variant
+      if (variantId && productData.variants && Array.isArray(productData.variants)) {
         const variant = productData.variants.find(v => v.id === variantId);
         if (variant) {
-          variantName = variant.name || 'Unnamed Variant';
-          // Use variant price ONLY if it's greater than 0, otherwise fall back to product price
-          if (typeof variant.price === 'number' && variant.price > 0) {
-            price = variant.price;
-            this.logger.info({ 
-              productId: productData.id,
-              variantId, 
-              variantName, 
-              variantPrice: price 
-            }, 'Using variant price');
-          } else {
-            this.logger.info({ 
-              productId: productData.id,
-              variantId, 
-              variantName, 
-              productPrice: price 
-            }, 'Variant price is 0 or invalid, using product price instead');
+          variantName = variant.name;
+          price = variant.price || price;
+          sku = variant.sku;
+          
+          // If variant has its own image, use that instead
+          if (variant.image) {
+            productImageUrl = variant.image;
           }
-        } else {
-          this.logger.warn({ 
-            productId: productData.id,
-            variantId,
-            availableVariants: productData.variants?.length || 0
-          }, 'Variant not found in product data');
+          
+          // If variant has specific attributes
+          if (variant.attributes) {
+            attributes = { ...(attributes || {}), ...variant.attributes };
+          }
+        }
       }
-      } else {
-        // No variant specified, ensure we're using the product price
-        this.logger.info({ 
-          productId: productData.id,
-          productPrice: price 
-        }, 'Using product base price (no variant)');
-      }
-      
-      // Special handling for iPhone 13
-      if (productData.id === '66c70c61-4d97-4355-af5f-24817ea51b59') {
-        price = 150;
-        this.logger.info({ 
-          productId: productData.id,
-          forcedPrice: price 
-        }, 'Forcing price for iPhone 13');
-      }
-      
-      // If price is still 0, use a small fallback price but log a warning
-      if (price <= 0) {
-        const originalPrice = price;
-        price = 99; // $0.99 as a minimal fallback price
-        this.logger.warn({ 
-          productId: productData.id,
-          originalPrice,
-          fallbackPrice: price 
-        }, 'Product has zero or invalid price in API data');
+
+      // Fallback to product SKU if no variant SKU
+      if (!sku && 'sku' in productData) {
+        sku = (productData as any).sku;
       }
     } else if (fallbackMode) {
-      // In fallback mode, set temporary values
-      productName = `Product ${variantId ? `with variant` : ''}`;
+      // In fallback mode, we provide generic placeholders
+      this.logger.warn({ 
+        variantId 
+      }, 'Using fallback mode for product details');
+      
+      productName = `Product (Fallback)`;
       if (variantId) {
-        variantName = `Variant`;
+        variantName = `Variant (Fallback)`;
       }
       
-      // Set a small default price in fallback mode
-      price = 99; // $0.99 as a minimal fallback price
-      this.logger.info({ fallbackPrice: price }, 'Using minimal fallback price');
+      // Set a default fallback image if needed
+      productImageUrl = 'https://via.placeholder.com/300?text=Product+Image+Not+Available';
     }
-    
+
+    // Return extracted details
     return {
       price,
       variantName,
       productName,
       productDescription,
-      productImageUrl
+      productImageUrl,
+      additionalImages,
+      sku,
+      brand,
+      category,
+      attributes,
+      dimensions,
+      originalPrice,
+      salePrice,
+      slug
     };
   }
 
@@ -637,9 +759,13 @@ export class CartItemService {
           productId,
           productName: response.data.name,
           productPrice: response.data.price,
-          hasVariants: response.data.variants && response.data.variants.length > 0
+          hasVariants: response.data.variants && response.data.variants.length > 0,
+          mediaUrl: response.data.mediaUrl || 'missing',
+          imageUrl: (response.data as any).imageUrl || 'missing',
+          hasImages: !!response.data.images && response.data.images.length > 0
         }, 'Successfully fetched product data from API');
       
+        
       return response.data;
       }
       

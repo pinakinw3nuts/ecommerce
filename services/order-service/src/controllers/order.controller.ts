@@ -21,6 +21,34 @@ interface CreateOrderBody {
     quantity: number;
     price: number;
     variantId?: string;
+    name: string;
+    image: string;
+    sku: string;
+    additionalImages?: string[];
+    variantName?: string;
+    description?: string;
+    originalPrice?: number;
+    salePrice?: number;
+    brand?: {
+      id?: string;
+      name?: string;
+      logoUrl?: string;
+    };
+    category?: {
+      id?: string;
+      name?: string;
+    };
+    attributes?: {
+      [key: string]: string | number | boolean;
+    };
+    dimensions?: {
+      width?: number;
+      height?: number;
+      depth?: number;
+      weight?: number;
+      unit?: string;
+    };
+    slug?: string;
     metadata?: {
       name?: string;
       sku?: string;

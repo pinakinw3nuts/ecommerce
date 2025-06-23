@@ -15,7 +15,31 @@ export interface ProductSnapshot {
   name: string;
   description?: string;
   imageUrl?: string;
+  additionalImages?: string[];
   variantName?: string;
+  sku?: string;
+  brand?: {
+    id?: string;
+    name?: string;
+    logoUrl?: string;
+  };
+  category?: {
+    id?: string;
+    name?: string;
+  };
+  attributes?: {
+    [key: string]: string | number | boolean;
+  };
+  dimensions?: {
+    width?: number;
+    height?: number;
+    depth?: number;
+    weight?: number;
+    unit?: string;
+  };
+  originalPrice?: number;
+  salePrice?: number;
+  slug?: string;
   metadata?: Record<string, unknown>;
 }
 

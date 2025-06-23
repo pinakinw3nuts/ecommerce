@@ -87,10 +87,36 @@ function CheckoutPageContent() {
         setCurrentStep(0);
       }
       // Recalculate preview only after setting all initial data
-      calculateOrderPreview(user?.id as string, items.map(item => ({ productId: item.productId, quantity: item.quantity, price: item.price, name: item.name })));
+      calculateOrderPreview(user?.id as string, sessionToLoad.cartSnapshot || items.map(item => mapCartItemToCheckoutItem(item)));
     }
     setIsReady(true);
     setIsLoadingSession(false);
+  };
+
+  // Helper function to map cart items to checkout items with all required fields
+  const mapCartItemToCheckoutItem = (item: any): checkoutService.CartItem => {
+    return {
+      productId: item.productId,
+      quantity: item.quantity,
+      price: item.price,
+      name: item.name,
+      imageUrl: item.imageUrl,
+      additionalImages: item.additionalImages,
+      variant: item.variant,
+      variantId: item.variantId,
+      variantName: item.variantName,
+      description: item.description,
+      sku: item.sku,
+      inStock: item.inStock,
+      brand: item.brand,
+      category: item.category,
+      attributes: item.attributes,
+      dimensions: item.dimensions,
+      originalPrice: item.originalPrice,
+      salePrice: item.salePrice,
+      slug: item.slug,
+      metadata: item.metadata
+    };
   };
 
   useEffect(() => {
@@ -161,7 +187,7 @@ function CheckoutPageContent() {
       try {
         const newSession = await createCheckoutSession(
           user.id!,
-          items.map(item => ({ productId: item.productId, quantity: item.quantity, price: item.price, name: item.name }))
+          items.map(item => mapCartItemToCheckoutItem(item))
         );
         if (newSession) {
           sessionToLoad = newSession;
@@ -221,6 +247,50 @@ function CheckoutPageContent() {
           </div>
           <div className="lg:w-1/3">
             <OrderSummaryCard orderPreview={orderPreview} showCouponInput={currentStep !== 3} />
+            
+            {/* Quick links to help during checkout */}
+            <div className="mt-8 bg-white shadow rounded-lg p-4 border border-gray-200">
+              <h3 className="text-lg font-medium mb-3">Need Help?</h3>
+              <ul className="space-y-2 text-sm">
+                <li>
+                  <a href="/faq" className="text-blue-600 hover:underline flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Frequently Asked Questions
+                  </a>
+                </li>
+                <li>
+                  <a href="/shipping-policy" className="text-blue-600 hover:underline flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                    </svg>
+                    Shipping Information
+                  </a>
+                </li>
+                <li>
+                  <a href="/returns" className="text-blue-600 hover:underline flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                    </svg>
+                    Returns & Refunds Policy
+                  </a>
+                </li>
+                <li>
+                  <a href="/contact" className="text-blue-600 hover:underline flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Contact Support
+                  </a>
+                </li>
+              </ul>
+            </div>
+            
+            {/* Order recovery info */}
+            <div className="mt-4 text-sm text-gray-600 p-4 bg-blue-50 rounded-lg">
+              <p>Your checkout progress is automatically saved. You can safely return later to complete your order.</p>
+            </div>
           </div>
         </div>
       </div>

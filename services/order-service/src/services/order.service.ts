@@ -14,6 +14,31 @@ export interface CreateOrderItemDto {
   name: string;
   image: string;
   sku: string;
+  additionalImages?: string[];
+  variantName?: string;
+  description?: string;
+  originalPrice?: number;
+  salePrice?: number;
+  brand?: {
+    id?: string;
+    name?: string;
+    logoUrl?: string;
+  };
+  category?: {
+    id?: string;
+    name?: string;
+  };
+  attributes?: {
+    [key: string]: string | number | boolean;
+  };
+  dimensions?: {
+    width?: number;
+    height?: number;
+    depth?: number;
+    weight?: number;
+    unit?: string;
+  };
+  slug?: string;
   metadata?: {
     name?: string;
     sku?: string;
@@ -115,6 +140,18 @@ export class OrderService {
       item.name = itemDto.metadata?.name || itemDto.name;
       item.sku = itemDto.metadata?.sku || itemDto.sku;
       item.image = itemDto.metadata?.image || itemDto.image;
+      
+      // Set enhanced properties
+      item.additionalImages = itemDto.additionalImages;
+      item.variantName = itemDto.metadata?.variantName || itemDto.variantName;
+      item.description = itemDto.description;
+      item.originalPrice = itemDto.originalPrice;
+      item.salePrice = itemDto.salePrice;
+      item.brand = itemDto.brand;
+      item.category = itemDto.category;
+      item.attributes = itemDto.attributes;
+      item.dimensions = itemDto.dimensions;
+      item.slug = itemDto.slug;
 
       // Set properties from metadata if available
       if (itemDto.metadata) {
