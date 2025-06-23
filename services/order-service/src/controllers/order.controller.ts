@@ -270,6 +270,7 @@ export class OrderController {
     reply: FastifyReply
   ) {
     try {
+      
       const { id } = request.params;
       const { reason } = request.body;
       const userId = request.user?.id;

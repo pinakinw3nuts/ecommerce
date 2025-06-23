@@ -269,9 +269,9 @@ export default function CartPage() {
 
   // Empty cart state
   if (isEmpty) {
-    return (
-      <div className="container max-w-6xl mx-auto px-4 py-12">
-        <h1 className="text-2xl font-bold mb-6">Your Cart</h1>
+  return (
+    <div className="container max-w-6xl mx-auto px-4 py-12">
+      <h1 className="text-2xl font-bold mb-6">Your Cart</h1>
         <div className="bg-white rounded-lg border p-8 text-center">
           <div className="flex flex-col items-center justify-center py-12">
             <ShoppingCart size={64} className="text-gray-300 mb-4" />
@@ -281,7 +281,7 @@ export default function CartPage() {
               <Button size="lg" className="px-8">
                 Continue Shopping
               </Button>
-            </Link>
+              </Link>
           </div>
         </div>
       </div>
@@ -302,28 +302,28 @@ export default function CartPage() {
         </div>
       )}
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Cart Items */}
-        <div className="lg:col-span-2">
+          <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-            <div className="hidden md:grid grid-cols-12 p-4 border-b bg-gray-50 text-sm font-medium text-gray-500">
-              <div className="col-span-6">Product</div>
-              <div className="col-span-2 text-center">Price</div>
-              <div className="col-span-2 text-center">Quantity</div>
-              <div className="col-span-2 text-right">Subtotal</div>
-            </div>
-            
-            <div className="divide-y">
-              {items.map((item) => (
-                <div key={item.id} className="p-4 grid grid-cols-12 gap-4 items-center">
-                  {/* Product */}
-                  <div className="col-span-12 md:col-span-6 flex items-center gap-4">
-                    <div className="relative h-20 w-20 flex-shrink-0 rounded border overflow-hidden">
-                      <Image 
+              <div className="hidden md:grid grid-cols-12 p-4 border-b bg-gray-50 text-sm font-medium text-gray-500">
+                <div className="col-span-6">Product</div>
+                <div className="col-span-2 text-center">Price</div>
+                <div className="col-span-2 text-center">Quantity</div>
+                <div className="col-span-2 text-right">Subtotal</div>
+              </div>
+              
+              <div className="divide-y">
+                {items.map((item) => (
+                  <div key={item.id} className="p-4 grid grid-cols-12 gap-4 items-center">
+                    {/* Product */}
+                    <div className="col-span-12 md:col-span-6 flex items-center gap-4">
+                      <div className="relative h-20 w-20 flex-shrink-0 rounded border overflow-hidden">
+                        <Image 
                         src={item.imageUrl || (item.productSnapshot?.imageUrl as string) || '/api/placeholder'} 
-                        alt={item.name || 'Product image'}
-                        fill
-                        className="object-cover"
+                          alt={item.name || 'Product image'}
+                          fill
+                          className="object-cover"
                         unoptimized
                         onError={(e) => {
                           // Handle image loading error by setting a fallback
@@ -331,9 +331,9 @@ export default function CartPage() {
                           target.onerror = null; // Prevent infinite fallback loop
                           target.src = '/api/placeholder';
                         }}
-                      />
-                    </div>
-                    <div>
+                        />
+                      </div>
+                      <div>
                       <h3 className="font-medium">
                         {item.name || (item.productSnapshot?.name as string) || 'Unknown Product'}
                       </h3>
@@ -341,45 +341,45 @@ export default function CartPage() {
                         <p className="text-sm text-gray-500">{item.variantName || item.productSnapshot?.variantName}</p>
                       )}
                       {(item.variant && !item.variantName && !item.productSnapshot?.variantName) && (
-                        <p className="text-sm text-gray-500">{item.variant}</p>
-                      )}
-                      <button 
+                          <p className="text-sm text-gray-500">{item.variant}</p>
+                        )}
+                        <button 
                         onClick={() => handleRemoveItem(item.id, item.name || 'Item')}
                         className="text-red-500 hover:text-red-700 text-xs mt-1 flex items-center"
-                      >
-                        <X className="h-3 w-3 mr-1" />
-                        Remove
-                      </button>
+                        >
+                          <X className="h-3 w-3 mr-1" />
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  
+                    
                   {/* Price */}
                   <div className="col-span-4 md:col-span-2 flex md:block">
                     <span className="text-xs text-gray-500 mr-2 md:hidden">Price:</span>
                     <span>{formatPrice(item.price)}</span>
-                  </div>
-                  
+                    </div>
+                    
                   {/* Quantity */}
                   <div className="col-span-4 md:col-span-2">
                     <div className="flex items-center justify-center">
-                      <button
+                          <button
                         className="w-8 h-8 flex items-center justify-center border rounded-l bg-gray-50 hover:bg-gray-100"
                         onClick={() => handleQuantityUpdate(item.id, Math.max(1, item.quantity - 1))}
                         disabled={updatingItem === item.id}
                       >
                         <Minus className="h-3 w-3" />
-                      </button>
-                      <input
-                        type="number"
+                          </button>
+                          <input 
+                            type="number" 
                         min="1"
-                        value={item.quantity}
-                        onChange={(e) => handleQuantityUpdate(item.id, parseInt(e.target.value) || 1)}
+                            value={item.quantity}
+                            onChange={(e) => handleQuantityUpdate(item.id, parseInt(e.target.value) || 1)}
                         className="w-12 h-8 text-center border-t border-b"
-                        disabled={updatingItem === item.id}
-                      />
-                      <button
+                            disabled={updatingItem === item.id}
+                          />
+                          <button
                         className="w-8 h-8 flex items-center justify-center border rounded-r bg-gray-50 hover:bg-gray-100"
-                        onClick={() => handleQuantityUpdate(item.id, item.quantity + 1)}
+                            onClick={() => handleQuantityUpdate(item.id, item.quantity + 1)}
                         disabled={updatingItem === item.id}
                       >
                         <Plus className="h-3 w-3" />
@@ -394,9 +394,9 @@ export default function CartPage() {
                   <div className="col-span-4 md:col-span-2 text-right">
                     <span className="text-xs text-gray-500 mr-2 md:hidden">Subtotal:</span>
                     <span className="font-medium">{formatPrice(item.price * item.quantity)}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
             
             {/* Cart actions */}
@@ -411,11 +411,11 @@ export default function CartPage() {
                 </Button>
               </Link>
             </div>
+            </div>
           </div>
-        </div>
-        
+          
         {/* Order Summary */}
-        <div className="lg:col-span-1">
+          <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow-sm border overflow-hidden sticky top-4">
             <div className="p-4 border-b bg-gray-50">
               <h2 className="font-semibold text-lg">Order Summary</h2>
@@ -424,14 +424,14 @@ export default function CartPage() {
             <div className="p-4 space-y-4">
               {/* Coupon */}
               {coupon ? (
-                <AppliedCoupon 
-                  coupon={coupon} 
-                  onRemove={removeCoupon} 
+                  <AppliedCoupon 
+                    coupon={coupon} 
+                    onRemove={removeCoupon}
                   isLoading={couponLoading} 
-                />
+                  />
               ) : (
                 <CouponForm 
-                  onApply={applyCoupon} 
+                  onApply={applyCoupon}
                   isLoading={couponLoading} 
                   error={couponError} 
                 />

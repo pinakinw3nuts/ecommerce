@@ -29,6 +29,7 @@
     "pnpm": ">=8.0.0"
   },
   "dependencies": {
+    "jwt-decode": "^4.0.0",
     "swr": "^2.3.3"
   }
 }

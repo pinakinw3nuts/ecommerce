@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { CheckCircle, Truck, Package, ClipboardCheck, Calendar, MapPin, ArrowLeft, Loader2 } from 'lucide-react';
+import { CheckCircle, Truck, Package, ClipboardCheck, Calendar, MapPin, ArrowLeft, Loader2, AlertCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { formatPrice } from '@/utils/formatters';
 import Image from 'next/image';
@@ -10,6 +10,7 @@ import * as orderService from '@/services/orders';
 import { Order, OrderItem, OrderStatus } from '@/lib/types/order';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
+import toast from 'react-hot-toast';
 
 export default function OrderDetailsPage() {
   const params = useParams();
@@ -19,6 +20,11 @@ export default function OrderDetailsPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelSuccess, setCancelSuccess] = useState(false);
+  const [isReordering, setIsReordering] = useState(false);
   
   useEffect(() => {
     if (!orderId) return;
@@ -47,6 +53,60 @@ export default function OrderDetailsPage() {
     
     fetchOrderDetails();
   }, [orderId]);
+  
+  const handleCancelOrder = async () => {
+    if (!order || !cancelReason.trim()) return;
+    
+    try {
+      setIsCancelling(true);
+      await orderService.cancelOrder(order.id, cancelReason);
+      setCancelSuccess(true);
+      
+      // Show success toast
+      toast.success('Order cancelled successfully');
+      
+      // Refresh order details to show updated status
+      const updatedOrder = await orderService.getOrderById(orderId);
+      setOrder(updatedOrder);
+      
+      // Close modal after a short delay
+      setTimeout(() => {
+        setCancelModalOpen(false);
+        setCancelSuccess(false);
+      }, 2000);
+    } catch (err) {
+      console.error('Error cancelling order:', err);
+      setError('Failed to cancel order. Please try again or contact customer support.');
+      toast.error('Failed to cancel order');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+  
+  const handleReorder = async () => {
+    if (!order) return;
+    
+    try {
+      setIsReordering(true);
+      const result = await orderService.reorder(order.id);
+      toast.success('Items have been added to your cart');
+      router.push('/cart');
+    } catch (err) {
+      console.error('Error reordering:', err);
+      toast.error('Failed to reorder items. Please try again.');
+    } finally {
+      setIsReordering(false);
+    }
+  };
+  
+  // Function to check if order can be cancelled
+  const canCancel = () => {
+    if (!order) return false;
+    
+    // Only allow cancellation for certain statuses
+    const cancelableStatuses = ['placed', 'processing', 'pending'];
+    return cancelableStatuses.includes(order.status.toLowerCase());
+  };
   
   if (loading) {
     return (
@@ -111,16 +171,28 @@ export default function OrderDetailsPage() {
   return (
     <div className="container mx-auto max-w-5xl py-8 px-4">
       {/* Order Success Banner */}
-      <div className="mb-8 bg-green-50 rounded-lg p-6 text-center">
-        <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-green-700 mb-2">
-          Thank You for Your Order!
-        </h1>
-        <p className="text-green-600 max-w-md mx-auto">
-          Your order has been received and is now being processed. You will receive
-          an email confirmation shortly.
-        </p>
-      </div>
+      {order.status.toLowerCase() === 'cancelled' ? (
+        <div className="mb-8 bg-red-50 rounded-lg p-6 text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-red-700 mb-2">
+            Order Cancelled
+          </h1>
+          <p className="text-red-600 max-w-md mx-auto">
+            This order has been cancelled and will not be processed.
+          </p>
+        </div>
+      ) : (
+        <div className="mb-8 bg-green-50 rounded-lg p-6 text-center">
+          <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-green-700 mb-2">
+            Thank You for Your Order!
+          </h1>
+          <p className="text-green-600 max-w-md mx-auto">
+            Your order has been received and is now being processed. You will receive
+            an email confirmation shortly.
+          </p>
+        </div>
+      )}
       
       {/* Order Summary Card */}
       <div className="grid md:grid-cols-3 gap-8 mb-12">
@@ -313,6 +385,30 @@ export default function OrderDetailsPage() {
               
               {/* Action Buttons */}
               <div className="pt-4 space-y-3">
+                {canCancel() && (
+                  <Button 
+                    className="w-full" 
+                    variant="outline" 
+                    onClick={() => setCancelModalOpen(true)}
+                  >
+                    Cancel Order
+                  </Button>
+                )}
+                <Button 
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
+                  variant="default"
+                  onClick={handleReorder}
+                  disabled={isReordering}
+                >
+                  {isReordering ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Adding to Cart...
+                    </>
+                  ) : (
+                    'Reorder'
+                  )}
+                </Button>
                 <Button className="w-full" variant="outline">
                   <Link href="/contact" className="flex items-center justify-center w-full">
                     Need Help with Order
@@ -336,6 +432,103 @@ export default function OrderDetailsPage() {
           Back to My Orders
         </Button>
       </div>
+      
+      {/* Cancel Order Modal */}
+      {cancelModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 relative">
+            <button 
+              onClick={() => setCancelModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+              disabled={isCancelling}
+            >
+              <X className="h-5 w-5" />
+            </button>
+            
+            {cancelSuccess ? (
+              <div className="text-center py-6">
+                <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-green-700 mb-2">Order Cancelled Successfully</h3>
+                <p className="text-gray-600">Your order has been cancelled and you will receive a confirmation email shortly.</p>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg font-bold mb-4">Cancel Order</h3>
+                <p className="text-gray-600 mb-4">
+                  Are you sure you want to cancel this order? This action cannot be undone.
+                </p>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Reason for Cancellation
+                  </label>
+                  <select
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    disabled={isCancelling}
+                  >
+                    <option value="">Select a reason</option>
+                    <option value="Changed my mind">Changed my mind</option>
+                    <option value="Found a better price elsewhere">Found a better price elsewhere</option>
+                    <option value="Ordered by mistake">Ordered by mistake</option>
+                    <option value="Shipping takes too long">Shipping takes too long</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                
+                {cancelReason === 'Other' && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Please specify
+                    </label>
+                    <textarea
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      rows={3}
+                      placeholder="Please tell us why you're cancelling..."
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      disabled={isCancelling}
+                    ></textarea>
+                  </div>
+                )}
+                
+                <div className="flex justify-end space-x-3 mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCancelModalOpen(false)}
+                    disabled={isCancelling}
+                  >
+                    Keep Order
+                  </Button>
+                  <Button
+                    onClick={handleCancelOrder}
+                    disabled={isCancelling || !cancelReason}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    {isCancelling ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Cancelling...
+                      </>
+                    ) : (
+                      'Cancel Order'
+                    )}
+                  </Button>
+                </div>
+                
+                {error && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-md">
+                    <div className="flex items-center text-red-700">
+                      <AlertCircle className="h-4 w-4 mr-2" />
+                      <p className="text-sm">{error}</p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

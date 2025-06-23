@@ -423,8 +423,48 @@ export async function orderRoutes(fastify: FastifyInstance) {
         }
       },
       async (request, reply) => {
-        // TODO: Implement cancel order
-        return reply.send({});
+        try {
+          const { orderId } = request.params;
+          const body = request.body as any;
+          const reason = body.reason || '';
+          const bodyUserId = body.userId;
+          const createdBy = body.createdBy;
+          const userObj = body.user;
+          
+          // First try to get user from JWT
+          const userFromJwt = request.user as { id?: string, roles?: string[] } || {};
+          
+          // Extract user ID from multiple possible sources with priority
+          const userId = userFromJwt.id || bodyUserId || createdBy || userObj?.id;
+
+          if (!userId) {
+            fastify.log.debug('Request body:', body);
+            fastify.log.debug('User from JWT:', userFromJwt);
+            return reply.status(401).send({ message: 'Unauthorized - User ID not found' });
+          }
+
+          const order = await orderController.orderService.getOrderById(orderId);
+          
+          if (!order) {
+            return reply.status(404).send({ message: 'Order not found' });
+          }
+
+          // Check if user has permission to cancel this order
+          // Only verify user matching if the ID comes from JWT
+          const roles = userFromJwt.roles || [];
+          if (userFromJwt.id && order.userId !== userFromJwt.id && !roles.includes('admin')) {
+            return reply.status(403).send({ message: 'You do not have permission to cancel this order' });
+          }
+
+          const cancelledOrder = await orderController.orderService.cancelOrder(orderId, userId, reason);
+          return reply.send(cancelledOrder);
+        } catch (error) {
+          fastify.log.error(`Failed to cancel order ${request.params.orderId}:`, error);
+          if (error instanceof Error && error.message.includes('cannot be cancelled')) {
+            return reply.status(400).send({ message: error.message });
+          }
+          return reply.status(500).send({ message: 'Failed to cancel order' });
+        }
       }
     );
   });

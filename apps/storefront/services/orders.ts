@@ -1,7 +1,7 @@
+import { API_GATEWAY_URL, ORDER_API_URL } from '@/lib/constants';
 import { Order, OrdersResponse, OrderStatus } from '@/lib/types/order';
 import axios from '../lib/api';
-
-const ORDER_SERVICE_URL = process.env.NEXT_PUBLIC_ORDER_SERVICE_URL || 'http://localhost:3006/api/v1';
+import Cookies from 'js-cookie';
 
 // Helper function to get the auth token
 function getAuthToken(): string | null {
@@ -30,7 +30,7 @@ async function handleApiResponse<T>(url: string, method: 'GET' | 'POST' | 'PUT' 
       'Authorization': `Bearer ${token}`
     };
 
-    const response = await fetch(`${ORDER_SERVICE_URL}${url}`, {
+    const response = await fetch(`${ORDER_API_URL}${url}`, {
       method,
       headers,
       credentials: 'include',
@@ -99,7 +99,7 @@ export async function getOrders(
   }
 
   const url = `/public/orders?${queryParams}`;
-  console.log('Full request URL:', `${ORDER_SERVICE_URL}${url}`);
+  console.log('Full request URL:', `${ORDER_API_URL}${url}`);
   console.log('Auth Token:', getAuthToken() ? 'Present' : 'Missing');
   
   try {
@@ -122,9 +122,81 @@ export async function getOrderById(orderId: string): Promise<Order> {
   return handleApiResponse<Order>(`/public/orders/${orderId}`, 'GET');
 }
 
-export async function cancelOrder(orderId: string, reason: string): Promise<Order> {
-  return handleApiResponse<Order>(`/orders/${orderId}/cancel`, 'POST', { reason });
-}
+export const cancelOrder = async (orderId: string, reason: string): Promise<Order> => {
+  try {
+    console.log(`Cancelling order ${orderId} with reason: ${reason}`);
+    
+    // Get the token
+    const token = Cookies.get('accessToken');
+    
+    if (!token) {
+      throw new Error('No authentication token available');
+    }
+    
+    // First try the API gateway
+    try {
+      const response = await axios.post(
+        `${API_GATEWAY_URL}/orders/${orderId}/cancel`,
+        { reason },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      
+      console.log('Order cancellation successful through API gateway');
+      return response.data;
+    } catch (gatewayError: any) {
+      console.error('API gateway cancellation failed:', gatewayError.message);
+      
+      // Fall back to direct order service
+      try {
+        const response = await axios.post(
+          `${ORDER_API_URL}/orders/${orderId}/cancel`,
+          { reason },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 5000, // 5 second timeout
+          }
+        );
+        
+        console.log('Order cancellation successful through direct service');
+        return response.data;
+      } catch (directError: any) {
+        console.error('Direct service cancellation failed:', directError.message);
+        
+        // Try the public endpoint as a last resort
+        try {
+          const response = await axios.post(
+            `${ORDER_API_URL}/public/orders/${orderId}/cancel`,
+            { reason },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              timeout: 5000, // 5 second timeout
+            }
+          );
+          
+          console.log('Order cancellation successful through public endpoint');
+          return response.data;
+        } catch (publicError: any) {
+          console.error('Public endpoint cancellation failed:', publicError.message);
+          throw publicError; // Re-throw the last error
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error('Order cancellation failed:', error);
+    throw error;
+  }
+};
 
 export async function createOrder(orderData: {
   items: { productId: string; quantity: number }[];

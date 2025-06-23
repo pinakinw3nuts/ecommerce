@@ -352,6 +352,7 @@ export class OrderService {
       note.adminId = adminId;
       note.content = `Order status changed from ${order.status} to ${newStatus}`;
       note.isInternal = true;
+      note.createdBy = adminId; // Set the createdBy field
       await this.orderNoteRepository.save(note);
 
       const updatedOrder = await this.orderRepository.save(order);
@@ -366,7 +367,7 @@ export class OrderService {
   /**
    * Cancel order
    */
-  async cancelOrder(id: string, adminId: string, reason: string): Promise<Order> {
+  async cancelOrder(id: string, userId: string, reason: string): Promise<Order> {
     try {
       const order = await this.getOrderById(id);
       if (!order) {
@@ -377,21 +378,41 @@ export class OrderService {
         throw new Error(`Order cannot be cancelled in status ${order.status}`);
       }
 
+      // Update order status and add cancellation reason
       order.status = OrderStatus.CANCELLED;
+      order.metadata = {
+        ...order.metadata,
+        cancellationReason: reason,
+        cancelledAt: new Date().toISOString(),
+        cancelledBy: userId
+      };
+
+      // Save the order first to ensure the status is updated
+      const updatedOrder = await this.orderRepository.save(order);
 
       // Add cancellation note
       const note = new OrderNote();
       note.orderId = id;
-      note.adminId = adminId;
+      note.adminId = userId;  // Using userId instead of adminId since it can be either user or admin
       note.content = `Order cancelled: ${reason}`;
       note.isInternal = false;
+      note.createdBy = userId; // Set the required createdBy field
       await this.orderNoteRepository.save(note);
 
-      const updatedOrder = await this.orderRepository.save(order);
-      logger.info(`Cancelled order ${id}`);
-      return updatedOrder;
+      logger.info(`Order ${id} cancelled by user ${userId} with reason: ${reason}`);
+      
+      // Fetch the order again with all relations to ensure we return the complete data
+      const finalOrder = await this.getOrderById(id);
+      if (!finalOrder) {
+        throw new Error('Failed to fetch updated order');
+      }
+
+      return finalOrder;
     } catch (error) {
       logger.error(`Failed to cancel order ${id}:`, error);
+      if (error instanceof Error) {
+        throw error; // Re-throw the original error to preserve the message
+      }
       throw new Error('Failed to cancel order');
     }
   }
@@ -449,6 +470,7 @@ export class OrderService {
       note.adminId = adminId;
       note.content = content;
       note.isInternal = isInternal;
+      note.createdBy = adminId; // Set the createdBy field to the adminId
 
       const savedNote = await this.orderNoteRepository.save(note);
       logger.info(`Added note to order ${orderId}`);

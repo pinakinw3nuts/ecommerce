@@ -357,4 +357,132 @@ export async function publicOrderRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ message: 'Failed to fetch order details' });
     }
   });
+  
+  // Cancel order endpoint
+  fastify.post('/:orderId/cancel', {
+    schema: {
+      tags: ['Public Orders'],
+      summary: 'Cancel an order',
+      description: 'Cancel an existing order by its ID.',
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['orderId'],
+        properties: {
+          orderId: { type: 'string', format: 'uuid' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['reason'],
+        properties: {
+          reason: { type: 'string' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            status: { type: 'string' },
+            message: { type: 'string' }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        },
+        401: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        },
+        403: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        }
+      }
+    },
+    preHandler: async (request, reply) => {
+      try {
+        await request.jwtVerify();
+      } catch (err) {
+        logger.warn('JWT verification failed in public cancel order endpoint:', err);
+        reply.status(401).send({ message: 'Unauthorized - Invalid or expired token' });
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { orderId } = request.params as { orderId: string };
+      const body = request.body as any;
+      const reason = body.reason || '';
+      const bodyUserId = body.userId;
+      const createdBy = body.createdBy;
+      const userObj = body.user;
+      
+      const { user } = request as any;
+      
+      logger.debug(`Attempting to cancel order ${orderId} with reason: ${reason}`);
+      logger.debug('User from token:', user);
+      logger.debug('Request body:', body);
+      
+      // Extract user ID from multiple possible sources with priority:
+      // 1. JWT token (user.userId or user.id)
+      // 2. Request body (userId)
+      // 3. Request body (createdBy)
+      // 4. Request body (user.id)
+      const userId = user?.userId || user?.id || bodyUserId || createdBy || userObj?.id;
+      
+      if (!userId) {
+        logger.warn('User ID not found in token or request body for cancel order request');
+        return reply.status(401).send({ message: 'Unauthorized - User ID not found in token or request' });
+      }
+
+      // Get the order
+      const order = await orderController.orderService.getOrderById(orderId);
+
+      if (!order) {
+        logger.warn(`Order not found for cancellation: ${orderId}`);
+        return reply.status(404).send({ message: 'Order not found' });
+      }
+
+      // Only check if users match if the user ID comes from the JWT
+      // If it's from the request body, we trust the API gateway has verified permissions
+      if ((user?.userId || user?.id) && 
+          order.userId !== (user?.userId || user?.id) && 
+          !(user?.roles && user?.roles.includes('admin'))) {
+        logger.warn(`User ${userId} attempted to cancel order ${orderId} belonging to ${order.userId}`);
+        return reply.status(403).send({ message: 'You do not have permission to cancel this order' });
+      }
+
+      // Cancel the order
+      const cancelledOrder = await orderController.orderService.cancelOrder(orderId, userId, reason);
+      logger.info(`Order ${orderId} successfully cancelled by user ${userId}`);
+      
+      return reply.send({
+        id: cancelledOrder.id,
+        status: cancelledOrder.status,
+        message: 'Order cancelled successfully'
+      });
+    } catch (error) {
+      logger.error(`Error cancelling public order ${(request.params as any).orderId}:`, error);
+      
+      if (error instanceof Error && error.message.includes('cannot be cancelled')) {
+        return reply.status(400).send({ message: error.message });
+      }
+      
+      return reply.status(500).send({ message: 'Failed to cancel order' });
+    }
+  });
 } 

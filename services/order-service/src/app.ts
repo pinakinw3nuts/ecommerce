@@ -72,9 +72,22 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'X-CSRF-Token'],
     exposedHeaders: ['Content-Range', 'X-Total-Count'],
-    maxAge: 86400 // 24 hours
+    maxAge: 86400, // 24 hours
+    preflightContinue: false,
+    optionsSuccessStatus: 204
+  });
+
+  // Add a hook to log all incoming requests
+  app.addHook('onRequest', (request, reply, done) => {
+    app.log.debug(`Incoming ${request.method} request to ${request.url}`);
+    if (request.headers.authorization) {
+      app.log.debug(`Request has Authorization header: ${request.headers.authorization.substring(0, 15)}...`);
+    } else {
+      app.log.debug('Request has no Authorization header');
+    }
+    done();
   });
 
   // Register JWT authentication

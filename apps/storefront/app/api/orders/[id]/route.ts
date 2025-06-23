@@ -95,8 +95,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  // Validate params.id upfront before using it in async operations
+  // Extract and validate orderId first to avoid NextJS warnings
   const orderId = params.id;
+  
   if (!orderId) {
     return NextResponse.json(
       { error: 'Order ID is required' },
@@ -219,8 +220,9 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  // Validate params.id upfront
+  // Extract and validate orderId first to avoid NextJS warnings
   const orderId = params.id;
+  
   if (!orderId) {
     return NextResponse.json(
       { error: 'Order ID is required' },
@@ -296,8 +298,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  // Validate params.id upfront
+  // Extract and validate orderId first to avoid NextJS warnings
   const orderId = params.id;
+  
   if (!orderId) {
     return NextResponse.json(
       { error: 'Order ID is required' },
@@ -315,7 +318,8 @@ export async function POST(
       );
     }
     
-    const { action } = await req.json();
+    const body = await req.json();
+    const { action, reason } = body;
     
     if (action === 'cancel') {
       // Try multiple endpoints in sequence
@@ -328,16 +332,22 @@ export async function POST(
       let response = null;
       let lastError = null;
       
+      // Make sure we have a reason
+      const cancellationReason = reason || 'No reason provided';
+      
+      console.log(`Attempting to cancel order ${orderId} with reason: ${cancellationReason}`);
+      console.log(`Using token: ${token.substring(0, 10)}...`);
+      
       for (const apiUrl of endpoints) {
         try {
           console.log(`Attempting to cancel order at: ${apiUrl}`);
           
           const result = await axios.post(
             apiUrl,
-            {},
+            { reason: cancellationReason }, // Include reason in the request body
             {
               headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${token}`, // Ensure 'Bearer ' prefix is included
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
               },
@@ -345,11 +355,15 @@ export async function POST(
           );
           
           response = result;
-          console.log(`Successfully cancelled order at: ${apiUrl}`);
+          console.log(`Successfully cancelled order at: ${apiUrl}, status: ${result.status}`);
           break;
         } catch (e: any) {
           lastError = e;
           console.log(`Failed to cancel order at ${apiUrl}: ${e.message}`);
+          console.log('Error details:', {
+            status: e.response?.status,
+            data: e.response?.data
+          });
         }
       }
       
@@ -369,9 +383,28 @@ export async function POST(
     );
   } catch (error: any) {
     console.error('Error processing order action:', error);
+    console.error('Error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
     return NextResponse.json(
       { error: 'Failed to process order action', message: error.message },
       { status: error.response?.status || 500 }
     );
   }
+}
+
+// Handle OPTIONS requests for CORS preflight
+export async function OPTIONS() {
+  return NextResponse.json({}, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
 }
