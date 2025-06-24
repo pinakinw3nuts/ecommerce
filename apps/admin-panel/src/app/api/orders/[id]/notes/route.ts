@@ -13,6 +13,75 @@ interface AddNoteBody {
   isInternal?: boolean;
 }
 
+// GET /api/orders/[id]/notes - Get notes for an order
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    console.log('Getting notes for order with ID:', params.id);
+    const adminToken = request.headers.get('X-Admin-Token');
+
+    if (!adminToken) {
+      return NextResponse.json(
+        { message: 'Unauthorized', code: 'TOKEN_MISSING' },
+        { status: 401 }
+      );
+    }
+
+    const url = `${ORDERS_SERVICE_URL}/api/v1/orders/${params.id}/notes`;
+    console.log('Full request URL:', url);
+    
+    const response = await makeRequest(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+        'X-Admin-Role': 'admin'
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      if (response.status === 404) {
+        return NextResponse.json(
+          { message: 'Order or notes not found', code: 'NOT_FOUND' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json(
+        { 
+          message: errorData?.message || 'Failed to fetch order notes',
+          code: errorData?.code || 'API_ERROR'
+        },
+        { status: response.status }
+      );
+    }
+
+    const notes = await response.json();
+    
+    // Transform notes data to match admin panel expectations if needed
+    const transformedNotes = notes.map((note: any) => ({
+      ...note,
+      authorId: note.adminId || note.createdBy || 'system',
+      authorName: note.adminId ? 'Admin' : 'System'
+    }));
+    
+    return NextResponse.json(transformedNotes);
+  } catch (error: any) {
+    console.error('Error fetching order notes:', error);
+    return NextResponse.json(
+      { 
+        message: error.message || 'Internal Server Error',
+        code: error.code || 'INTERNAL_ERROR'
+      },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

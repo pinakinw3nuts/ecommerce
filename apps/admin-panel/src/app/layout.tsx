@@ -22,19 +22,18 @@ function isPublicPath(pathname: string): boolean {
 
 // Auth check middleware
 async function authCheck(pathname: string) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('admin_token');
-  
   // If we're on a public path, no need to check auth
   if (isPublicPath(pathname)) {
     return false;
   }
   
+  const cookieStore = await cookies();
+  const token = cookieStore.get('admin_token');
   const isAuthenticated = !!token;
 
   // If user is not authenticated and trying to access protected route
-  if (!isAuthenticated && !isPublicPath(pathname)) {
-    redirect('/login');
+  if (!isAuthenticated) {
+    return false;
   }
 
   return isAuthenticated;
@@ -72,7 +71,8 @@ export default async function RootLayout({
   // For all other paths, check authentication
   const isAuthenticated = await authCheck(pathname);
   
-  if (!isAuthenticated) {
+  // Only redirect if not on a public path and not authenticated
+  if (!isAuthenticated && !isPublicPath(pathname)) {
     redirect('/login');
   }
 

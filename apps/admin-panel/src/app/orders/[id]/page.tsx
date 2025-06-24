@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { format } from 'date-fns';
@@ -13,11 +13,28 @@ import { Order, OrderStatus, OrderNote } from '@/types/orders';
 // Create a singleton order service instance
 const orderService = new OrderService();
 
-// Custom fetcher that uses the OrderService
+// Custom fetcher that uses the API directly
 const fetcher = async (url: string) => {
-  const id = url.split('/').pop();
-  if (!id) throw new Error('Invalid URL');
-  return await orderService.getOrderById(id);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch order: ${response.status} ${response.statusText}`);
+  }
+  
+  const orderData = await response.json();
+  
+  // Calculate subtotal if it's missing or zero
+  if (!orderData.subtotal && orderData.items && Array.isArray(orderData.items)) {
+    let total = 0;
+    for (const item of orderData.items) {
+      total += (item.price || 0) * (item.quantity || 0);
+    }
+    orderData.subtotal = total;
+  }
+  
+  console.log('Fetched order data:', orderData);
+  console.log('Notes:', orderData.notes);
+  
+  return orderData;
 };
 
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
@@ -25,29 +42,116 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const toast = useToast();
   const [isUpdating, setIsUpdating] = useState(false);
   const [newNote, setNewNote] = useState('');
+  const [orderId, setOrderId] = useState<string | null>(null);
 
-  const { data: order, error, mutate } = useSWR<Order>(`/api/order-service/orders/${params.id}`, fetcher);
+  // Use useEffect to properly handle params.id
+  useEffect(() => {
+    // Async function to resolve params
+    const setOrderIdFromParams = async () => {
+      const resolvedParams = await Promise.resolve(params);
+      setOrderId(resolvedParams.id);
+    };
+    
+    setOrderIdFromParams();
+  }, [params]);
+
+  // Only create the SWR hook when orderId is available
+  const { data: order, error, mutate } = useSWR<Order>(
+    orderId ? `/api/orders/${orderId}` : null, 
+    fetcher
+  );
+
+  // Fallback to fetch notes if they're not in the order data
+  const { data: notesData } = useSWR(
+    order && (!order.notes || order.notes.length === 0) ? 
+      `/api/orders/${orderId}/notes` : null,
+    async (url) => {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          console.error('Failed to fetch notes:', response.status, response.statusText);
+          return [];
+        }
+        const data = await response.json();
+        console.log('Fetched notes separately:', data);
+        return data;
+      } catch (error) {
+        console.error('Error fetching notes:', error);
+        return [];
+      }
+    }
+  );
 
   const handleStatusUpdate = async (newStatus: OrderStatus) => {
+    if (!orderId) {
+      console.error('No order ID available for status update');
+      toast.error('Cannot update: No order ID available');
+      return;
+    }
+    
+    // Don't update if status is the same
+    if (order && order.status === newStatus) {
+      console.log('Status already set to', newStatus);
+      toast.info(`Order already has status: ${newStatus}`);
+      return;
+    }
+    
     try {
       setIsUpdating(true);
-      await orderService.updateOrderStatus(params.id, newStatus);
+      console.log('Updating order status to:', newStatus);
+      console.log('Order ID:', orderId);
+      
+      // Make a direct fetch request to bypass any potential service issues
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Failed to update status: ${response.status} ${response.statusText}`);
+      }
+      
+      const updatedOrder = await response.json();
+      console.log('Update successful, new order data:', updatedOrder);
+      
+      // Update the local order data immediately without waiting for revalidation
+      if (order) {
+        // Create a copy of the order with the updated status
+        const updatedLocalOrder = {
+          ...order,
+          status: newStatus
+        };
+        
+        // Update the SWR cache with the new order data
+        mutate(updatedLocalOrder, { revalidate: false });
+        
+        // Then trigger a background revalidation to get the complete updated data
+        setTimeout(() => {
+          mutate(undefined, { revalidate: true });
+        }, 300);
+      }
+      
       toast.success(`Order status updated to ${newStatus}`);
-      mutate();
     } catch (error) {
       console.error('Error updating order status:', error);
-      toast.error('Failed to update order status');
+      toast.error(`Failed to update order status: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsUpdating(false);
     }
   };
 
   const handleCancel = async () => {
+    if (!orderId) return;
     if (!confirm('Are you sure you want to cancel this order?')) return;
     
     try {
       setIsUpdating(true);
-      await orderService.cancelOrder(params.id, 'Cancelled by admin');
+      await orderService.cancelOrder(orderId, 'Cancelled by admin');
       toast.success('Order has been cancelled');
       mutate();
     } catch (error) {
@@ -59,11 +163,11 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   };
 
   const handleAddNote = async () => {
-    if (!newNote.trim()) return;
+    if (!orderId || !newNote.trim()) return;
 
     try {
       setIsUpdating(true);
-      await orderService.addOrderNote(params.id, newNote);
+      await orderService.addOrderNote(orderId, newNote);
       toast.success('Note added to order');
       setNewNote('');
       mutate();
@@ -141,21 +245,46 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
             </div>
             <div>
               <dt className="text-sm text-gray-500">Status</dt>
-              <dd className="flex items-center gap-3 mt-1">
-                <select
-                  value={order.status}
-                  onChange={(e) => handleStatusUpdate(e.target.value as OrderStatus)}
-                  disabled={isUpdating || order.status === OrderStatus.CANCELLED}
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value={OrderStatus.PENDING}>Pending</option>
-                  <option value={OrderStatus.CONFIRMED}>Confirmed</option>
-                  <option value={OrderStatus.PROCESSING}>Processing</option>
-                  <option value={OrderStatus.SHIPPED}>Shipped</option>
-                  <option value={OrderStatus.DELIVERED}>Delivered</option>
-                  <option value={OrderStatus.CANCELLED}>Cancelled</option>
-                  <option value={OrderStatus.FAILED}>Failed</option>
-                </select>
+              <dd className="mt-1 space-y-3">
+                {/* Original dropdown */}
+                <div className="flex items-center gap-3">
+                  <select
+                    value={order.status}
+                    onChange={(e) => {
+                      console.log('Selected status:', e.target.value);
+                      handleStatusUpdate(e.target.value as OrderStatus);
+                    }}
+                    disabled={isUpdating}
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                  >
+                    <option value={OrderStatus.PENDING}>Pending</option>
+                    <option value={OrderStatus.CONFIRMED}>Confirmed</option>
+                    <option value={OrderStatus.SHIPPED}>Shipped</option>
+                    <option value={OrderStatus.DELIVERED}>Delivered</option>
+                    <option value={OrderStatus.CANCELLED}>Cancelled</option>
+                    <option value={OrderStatus.FAILED}>Failed</option>
+                  </select>
+                </div>
+                
+                {/* Alternative status buttons for testing */}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isUpdating || order.status === OrderStatus.CONFIRMED}
+                    onClick={() => handleStatusUpdate(OrderStatus.CONFIRMED)}
+                  >
+                    Set Confirmed
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isUpdating || order.status === OrderStatus.SHIPPED}
+                    onClick={() => handleStatusUpdate(OrderStatus.SHIPPED)}
+                  >
+                    Set Shipped
+                  </Button>
+                </div>
               </dd>
             </div>
           </dl>
@@ -227,10 +356,10 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                   {item.quantity}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  ${item.price.toFixed(2)}
+                  ${item.price ? item.price.toFixed(2) : '0.00'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  ${(item.price * item.quantity).toFixed(2)}
+                  ${item.price && item.quantity ? (item.price * item.quantity).toFixed(2) : '0.00'}
                 </td>
               </tr>
             ))}
@@ -241,7 +370,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                 Subtotal
               </td>
               <td className="px-6 py-3 text-sm text-gray-900">
-                ${order.subtotal.toFixed(2)}
+                ${(order.subtotal || order.items.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0)).toFixed(2)}
               </td>
             </tr>
             {order.shippingAmount > 0 && (
@@ -250,7 +379,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                   Shipping
                 </td>
                 <td className="px-6 py-3 text-sm text-gray-900">
-                  ${order.shippingAmount.toFixed(2)}
+                  ${order.shippingAmount ? order.shippingAmount.toFixed(2) : '0.00'}
                 </td>
               </tr>
             )}
@@ -260,7 +389,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                   Tax
                 </td>
                 <td className="px-6 py-3 text-sm text-gray-900">
-                  ${order.taxAmount.toFixed(2)}
+                  ${order.taxAmount ? order.taxAmount.toFixed(2) : '0.00'}
                 </td>
               </tr>
             )}
@@ -270,7 +399,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                   Discount
                 </td>
                 <td className="px-6 py-3 text-sm text-gray-900 text-red-600">
-                  -${order.discountAmount.toFixed(2)}
+                  -${order.discountAmount ? order.discountAmount.toFixed(2) : '0.00'}
                 </td>
               </tr>
             )}
@@ -279,7 +408,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                 Total
               </td>
               <td className="px-6 py-3 text-sm font-bold text-gray-900">
-                ${order.totalAmount.toFixed(2)}
+                ${order.totalAmount ? order.totalAmount.toFixed(2) : '0.00'}
               </td>
             </tr>
           </tfoot>
@@ -292,12 +421,12 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
           <h2 className="text-lg font-medium">Notes</h2>
         </div>
         <div className="divide-y divide-gray-200">
-          {order.notes?.length ? (
-            order.notes.map((note) => (
+          {(order.notes && order.notes.length > 0) || (notesData && notesData.length > 0) ? (
+            ((order.notes && order.notes.length > 0) ? order.notes : (notesData || [])).map((note: OrderNote) => (
               <div key={note.id} className="p-6">
                 <div className="flex justify-between mb-2">
                   <span className="text-sm font-medium">
-                    {note.authorName || note.authorId}
+                    {note.authorName || note.authorId || 'System'}
                   </span>
                   <span className="text-sm text-gray-500">
                     {format(new Date(note.createdAt), 'PPp')}

@@ -8,23 +8,28 @@ const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://localhost:300
 
 // Handle all HTTP methods
 export async function GET(request: NextRequest, { params }: { params: { path: string[] } }) {
-  return handleRequest(request, params.path, 'GET');
+  const resolvedParams = await Promise.resolve(params);
+  return handleRequest(request, resolvedParams.path, 'GET');
 }
 
 export async function POST(request: NextRequest, { params }: { params: { path: string[] } }) {
-  return handleRequest(request, params.path, 'POST');
+  const resolvedParams = await Promise.resolve(params);
+  return handleRequest(request, resolvedParams.path, 'POST');
 }
 
 export async function PUT(request: NextRequest, { params }: { params: { path: string[] } }) {
-  return handleRequest(request, params.path, 'PUT');
+  const resolvedParams = await Promise.resolve(params);
+  return handleRequest(request, resolvedParams.path, 'PUT');
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { path: string[] } }) {
-  return handleRequest(request, params.path, 'PATCH');
+  const resolvedParams = await Promise.resolve(params);
+  return handleRequest(request, resolvedParams.path, 'PATCH');
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { path: string[] } }) {
-  return handleRequest(request, params.path, 'DELETE');
+  const resolvedParams = await Promise.resolve(params);
+  return handleRequest(request, resolvedParams.path, 'DELETE');
 }
 
 /**

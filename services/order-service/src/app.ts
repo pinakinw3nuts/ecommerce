@@ -95,6 +95,19 @@ export async function buildApp(): Promise<FastifyInstance> {
     secret: config.jwt.secret
   });
 
+  // Add hook after successful JWT verification to map userId to id
+  app.addHook('preHandler', (request, reply, done) => {
+    // Only run this if the user is already authenticated
+    if (request.user) {
+      // Map userId to id if needed
+      if (!request.user.id && (request.user as any).userId) {
+        request.user.id = (request.user as any).userId;
+        app.log.debug(`Mapped userId to id: ${request.user.id}`);
+      }
+    }
+    done();
+  });
+
   app.log.info(`Order Service JWT configured with secret: ${config.jwt.secret ? 'Provided' : 'Missing'}`);
 
   // Register Swagger

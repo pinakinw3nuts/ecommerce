@@ -27,11 +27,25 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     // Log token info (first few characters for debugging)
     logger.debug(`Verifying token for ${request.url}: ${token.substring(0, 10)}...`);
     
+    // For debugging: decode the token without verification to see what's inside
+    try {
+      const decoded = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+      logger.debug(`Token payload: ${JSON.stringify(decoded)}`);
+    } catch (decodeErr) {
+      logger.warn('Failed to decode token for debugging:', decodeErr);
+    }
+    
     // Set the raw token for JWT verification
     request.headers.authorization = `Bearer ${token}`;
     
     // Verify the JWT token
     await request.jwtVerify();
+
+    // Handle userId to id mapping (auth service uses userId, but order service expects id)
+    if (request.user && !request.user.id && (request.user as any).userId) {
+      request.user.id = (request.user as any).userId;
+      logger.debug(`Mapped userId to id for compatibility: ${request.user.id}`);
+    }
 
     // Normalize roles to lowercase for case-insensitive checks
     if (request.user) {
@@ -91,6 +105,12 @@ export async function adminAuthMiddleware(request: FastifyRequest, reply: Fastif
     
     // First verify the JWT token
     await request.jwtVerify();
+
+    // Handle userId to id mapping (auth service uses userId, but order service expects id)
+    if (request.user && !request.user.id && (request.user as any).userId) {
+      request.user.id = (request.user as any).userId;
+      logger.debug(`Mapped userId to id for compatibility in admin auth: ${request.user.id}`);
+    }
 
     // Normalize roles to lowercase for case-insensitive checks
     if (request.user) {

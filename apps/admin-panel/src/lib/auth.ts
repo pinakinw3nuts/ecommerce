@@ -96,13 +96,15 @@ export async function refreshAccessToken(): Promise<boolean> {
 }
 
 export async function loginAdmin(email: string, password: string) {
+  
   const response = await fetch('/api/auth/login', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ email, password }),
-    cache: 'no-store'
+    cache: 'no-store',
+    credentials: 'include',
   });
 
   if (!response.ok) {

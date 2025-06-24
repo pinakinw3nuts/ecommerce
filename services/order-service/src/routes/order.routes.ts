@@ -278,6 +278,15 @@ export async function orderRoutes(fastify: FastifyInstance) {
             return reply.status(403).send({ message: 'You do not have permission to view this order' });
           }
           
+          // Transform notes data to match admin panel expectations
+          if (order.notes && Array.isArray(order.notes)) {
+            order.notes = order.notes.map(note => ({
+              ...note,
+              authorId: note.adminId || note.createdBy,
+              authorName: note.adminId ? 'Admin' : 'System'
+            }));
+          }
+          
           return reply.send(order);
         } catch (error) {
           request.log.error(`Error fetching order ${request.params.orderId}:`, error);
@@ -369,8 +378,75 @@ export async function orderRoutes(fastify: FastifyInstance) {
         preHandler: roleGuard('admin')
       },
       async (request, reply) => {
-        // TODO: Implement update order
-        return reply.send({});
+        try {
+          const { orderId } = request.params;
+          const updateData = request.body as any;
+          const adminId = request.user?.id;
+          
+          if (!adminId) {
+            return reply.status(401).send({ message: 'Unauthorized' });
+          }
+          
+          // Validate the status if it's included
+          if (updateData.status && !Object.values(OrderStatus).includes(updateData.status)) {
+            return reply.status(400).send({ 
+              message: `Invalid status value. Valid values are: ${Object.values(OrderStatus).join(', ')}` 
+            });
+          }
+          
+          // Get the current order
+          const existingOrder = await orderController.orderService.getOrderById(orderId);
+          if (!existingOrder) {
+            return reply.status(404).send({ message: 'Order not found' });
+          }
+          
+          // Handle status update
+          let updatedOrder;
+          if (updateData.status) {
+            request.log.info(`Admin ${adminId} updating order ${orderId} status to ${updateData.status}`);
+            updatedOrder = await orderController.orderService.updateOrderStatus(
+              orderId, 
+              updateData.status, 
+              adminId
+            );
+          } else {
+            // Handle other updates (not implemented yet, just return existing order)
+            request.log.info(`Admin ${adminId} updating order ${orderId} with data`, updateData);
+            updatedOrder = existingOrder;
+          }
+          
+          return reply.send(updatedOrder);
+        } catch (error) {
+          request.log.error(`Error updating order ${request.params.orderId}:`, error);
+          if (error instanceof Error) {
+            if (error.message.includes('Invalid status transition')) {
+              return reply.status(400).send({ 
+                message: error.message,
+                code: 'INVALID_STATUS_TRANSITION' 
+              });
+            } else if (error.message.includes('not-null constraint')) {
+              return reply.status(500).send({ 
+                message: 'Database constraint error while updating order. Please try again.',
+                code: 'DB_CONSTRAINT_ERROR'
+              });
+            } else if (error.message.includes('Order not found')) {
+              return reply.status(404).send({ 
+                message: 'Order not found',
+                code: 'NOT_FOUND'
+              });
+            }
+            
+            // Return the error message for other types of errors
+            return reply.status(500).send({ 
+              message: `Failed to update order: ${error.message}`,
+              code: 'UPDATE_ERROR'
+            });
+          }
+          return reply.status(500).send({ 
+            message: 'Failed to update order',
+            code: 'UNKNOWN_ERROR'
+          });
+        }
       }
     );
 

@@ -90,17 +90,19 @@ export class OrderService {
   }
   
   async updateOrderStatus(id: string, status: OrderStatus): Promise<Order> {
-    const url = `/api/orders/${id}/status`;
+    const url = `/api/orders/${id}`;
     
     try {
+      console.log('Sending update to URL:', url, 'with status:', status);
       const response = await fetch(url, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ status }),
       });
       
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('Error response text:', errorText);
         
         let errorData;
         try {

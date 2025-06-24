@@ -7,6 +7,9 @@ export interface CustomJWTPayload {
   role?: string;
   iat?: number;
   exp?: number;
+  userId?: string;
+  audience?: string;
+  issuer?: string;
 }
 
 declare module '@fastify/jwt' {

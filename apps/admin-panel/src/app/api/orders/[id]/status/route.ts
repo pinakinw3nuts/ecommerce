@@ -12,7 +12,7 @@ interface StatusUpdateBody {
   status: OrderStatus;
 }
 
-export async function PATCH(
+export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -37,11 +37,12 @@ export async function PATCH(
       );
     }
 
-    const url = `${ORDERS_SERVICE_URL}/api/v1/orders/${params.id}/status`;
+    // Updated URL to use the main order endpoint
+    const url = `${ORDERS_SERVICE_URL}/api/v1/orders/${params.id}`;
     console.log('Full request URL:', url);
     
     const response = await makeRequest(url, {
-      method: 'PATCH',
+      method: 'PUT',
       headers: {
         'Authorization': `Bearer ${adminToken}`,
         'Content-Type': 'application/json',
@@ -94,4 +95,7 @@ export async function PATCH(
       { status: 500 }
     );
   }
-} 
+}
+
+// Also expose the PATCH method for backward compatibility
+export { PUT as PATCH }; 

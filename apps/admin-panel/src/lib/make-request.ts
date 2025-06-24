@@ -17,6 +17,22 @@ export async function makeRequest(url: string, options: RequestInit = {}) {
     console.log('Request method:', options.method || 'GET');
     console.log('Request headers:', Object.keys(options.headers || {}));
     
+    // Add detailed debugging for order status updates
+    if (parsedUrl.pathname.includes('/orders/') && options.method === 'PUT') {
+      console.log('Detected order update request. Body:', options.body);
+      if (typeof options.body === 'string') {
+        try {
+          const parsedBody = JSON.parse(options.body);
+          console.log('Parsed request body:', parsedBody);
+          if (parsedBody.status) {
+            console.log('Status update detected. New status:', parsedBody.status);
+          }
+        } catch (err) {
+          console.log('Could not parse request body');
+        }
+      }
+    }
+    
     if (options.headers && 'Authorization' in options.headers) {
       console.log('Authorization header is present');
     } else {
@@ -37,6 +53,26 @@ export async function makeRequest(url: string, options: RequestInit = {}) {
     });
     
     console.log('Response status:', response.status, response.statusText);
+    
+    // Clone the response to be able to inspect it without consuming it
+    const responseClone = response.clone();
+    try {
+      const responseText = await responseClone.text();
+      if (responseText) {
+        console.log('Response body:', responseText.substring(0, 500) + (responseText.length > 500 ? '... (truncated)' : ''));
+        
+        // Try to parse as JSON for better debugging
+        try {
+          const responseJson = JSON.parse(responseText);
+          console.log('Response JSON:', responseJson);
+        } catch (e) {
+          // Not JSON, that's okay
+        }
+      }
+    } catch (e) {
+      console.log('Could not read response body');
+    }
+    
     return response;
   } catch (error) {
     console.error('Request failed:', error);

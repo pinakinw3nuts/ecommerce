@@ -4,7 +4,26 @@ import { Order, OrderStatus } from '../entities/Order';
 import { OrderItem } from '../entities/OrderItem';
 import { OrderNote } from '../entities/OrderNote';
 import { logger } from '../utils/logger';
-import { isOrderCancellable, isValidStatusTransition } from '../utils/status';
+
+// Define valid status transitions based on Order entity's OrderStatus
+const VALID_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED, OrderStatus.FAILED],
+  [OrderStatus.CONFIRMED]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.FAILED],
+  [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.FAILED],
+  [OrderStatus.DELIVERED]: [], // Final state
+  [OrderStatus.CANCELLED]: [], // Final state
+  [OrderStatus.FAILED]: [], // Final state
+};
+
+// Helper function to check if a status transition is valid
+function isValidStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): boolean {
+  return VALID_STATUS_TRANSITIONS[currentStatus]?.includes(newStatus) || false;
+}
+
+// Helper function to check if an order is cancellable
+function isOrderCancellable(status: OrderStatus): boolean {
+  return [OrderStatus.PENDING, OrderStatus.CONFIRMED].includes(status);
+}
 
 export interface CreateOrderItemDto {
   productId: string;
@@ -344,22 +363,44 @@ export class OrderService {
         throw new Error(`Invalid status transition from ${order.status} to ${newStatus}`);
       }
 
+      // Store the previous status for the note
+      const previousStatus = order.status;
+      
+      // Update status
       order.status = newStatus;
-
-      // Add system note for status change
-      const note = new OrderNote();
-      note.orderId = id;
-      note.adminId = adminId;
-      note.content = `Order status changed from ${order.status} to ${newStatus}`;
-      note.isInternal = true;
-      note.createdBy = adminId; // Set the createdBy field
-      await this.orderNoteRepository.save(note);
-
-      const updatedOrder = await this.orderRepository.save(order);
-      logger.info(`Updated order ${id} status to ${newStatus}`);
-      return updatedOrder;
+      
+      try {
+        // Save order with updated status first
+        const updatedOrder = await this.orderRepository.save(order);
+        
+        // Then create a note about the status change
+        const note = new OrderNote();
+        note.orderId = id; // Set the order ID explicitly
+        note.adminId = adminId;
+        note.content = `Order status changed from ${previousStatus} to ${newStatus}`;
+        note.isInternal = true;
+        note.createdBy = adminId;
+        
+        // Save the note
+        await this.orderNoteRepository.save(note);
+        
+        logger.info(`Updated order ${id} status to ${newStatus}`);
+        return updatedOrder;
+      } catch (noteError) {
+        // If there's an error with the note, log it but don't fail the status update
+        logger.error(`Failed to create status change note for order ${id}:`, noteError);
+        // Return the order anyway - the status was updated but we couldn't add the note
+        const updatedOrder = await this.getOrderById(id);
+        if (!updatedOrder) {
+          throw new Error('Failed to retrieve updated order');
+        }
+        return updatedOrder;
+      }
     } catch (error) {
       logger.error(`Failed to update order ${id} status:`, error);
+      if (error instanceof Error) {
+        throw error; // Preserve the original error message
+      }
       throw new Error('Failed to update order status');
     }
   }
@@ -428,7 +469,7 @@ export class OrderService {
       }
 
       if (order.status !== OrderStatus.PENDING) {
-        throw new Error('Only pending orders can be confirmed');
+        throw new Error('Only orders in PENDING status can be confirmed');
       }
 
       order.status = OrderStatus.CONFIRMED;

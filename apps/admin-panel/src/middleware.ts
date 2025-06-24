@@ -10,6 +10,13 @@ const PROTECTED_ROUTES = [
   '/settings',
 ];
 
+// List of public routes that should bypass auth checks
+const PUBLIC_ROUTES = [
+  '/login',
+  '/forgot-password',
+  '/reset-password',
+];
+
 // List of API routes that need token forwarding
 const API_ROUTES = [
   '/api/orders',
@@ -22,10 +29,19 @@ const API_ROUTES = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
+  // Store the current URL in a cookie for the layout to use
+  const response = NextResponse.next();
+  response.cookies.set('next-url', request.url);
+  
+  // Allow public routes to pass through without auth checks
+  if (PUBLIC_ROUTES.some(route => pathname === route)) {
+    return response;
+  }
+  
   // Skip non-protected routes and non-API routes
   if (!PROTECTED_ROUTES.some(route => pathname.startsWith(route)) && 
       !API_ROUTES.some(route => pathname.startsWith(route))) {
-    return NextResponse.next();
+    return response;
   }
   
   // Check for admin token in cookies
@@ -53,7 +69,7 @@ export async function middleware(request: NextRequest) {
   }
   
   // Continue for all other routes
-  return NextResponse.next();
+  return response;
 }
 
 // Configure middleware to run only for specific paths

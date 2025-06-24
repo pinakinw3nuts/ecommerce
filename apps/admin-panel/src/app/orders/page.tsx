@@ -62,7 +62,6 @@ const filterConfig: FilterConfig = {
     options: [
       { value: OrderStatus.PENDING, label: 'Pending' },
       { value: OrderStatus.CONFIRMED, label: 'Confirmed' },
-      { value: OrderStatus.PROCESSING, label: 'Processing' },
       { value: OrderStatus.SHIPPED, label: 'Shipped' },
       { value: OrderStatus.DELIVERED, label: 'Delivered' },
       { value: OrderStatus.CANCELLED, label: 'Cancelled' },
@@ -407,7 +406,6 @@ export default function OrdersPage() {
         const statusClasses = {
           [OrderStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
           [OrderStatus.CONFIRMED]: 'bg-blue-100 text-blue-800',
-          [OrderStatus.PROCESSING]: 'bg-purple-100 text-purple-800',
           [OrderStatus.SHIPPED]: 'bg-green-100 text-green-800',
           [OrderStatus.DELIVERED]: 'bg-purple-100 text-purple-800',
           [OrderStatus.CANCELLED]: 'bg-red-100 text-red-800',

@@ -2,12 +2,11 @@
  * Enum representing the possible states of an order
  */
 export enum OrderStatus {
-  PENDING = 'PENDING',
+  CREATED = 'CREATED',
   CONFIRMED = 'CONFIRMED',
   SHIPPED = 'SHIPPED',
   DELIVERED = 'DELIVERED',
   CANCELLED = 'CANCELLED',
-  FAILED = 'FAILED',
 }
 
 /**
@@ -23,14 +22,13 @@ export const isValidOrderStatus = (status: string): status is OrderStatus => {
 export const FINAL_STATUSES = [
   OrderStatus.DELIVERED,
   OrderStatus.CANCELLED,
-  OrderStatus.FAILED,
 ] as const;
 
 /**
  * States where the order can still be cancelled
  */
 export const CANCELLABLE_STATUSES = [
-  OrderStatus.PENDING,
+  OrderStatus.CREATED,
   OrderStatus.CONFIRMED,
 ] as const;
 
@@ -46,12 +44,11 @@ export type CancellableStatus = typeof CANCELLABLE_STATUSES[number];
  * Value: array of valid next statuses
  */
 export const VALID_STATUS_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED, OrderStatus.FAILED],
-  [OrderStatus.CONFIRMED]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.FAILED],
-  [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.FAILED],
+  [OrderStatus.CREATED]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
+  [OrderStatus.CONFIRMED]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+  [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
   [OrderStatus.DELIVERED]: [], // Final state
   [OrderStatus.CANCELLED]: [], // Final state
-  [OrderStatus.FAILED]: [], // Final state
 } as const;
 
 /**
