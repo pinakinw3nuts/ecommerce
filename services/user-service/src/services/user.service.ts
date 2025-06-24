@@ -728,4 +728,30 @@ export class UserService {
     user.status = status;
     return this.userRepo.save(user);
   }
+
+  /**
+   * Get multiple users by their IDs
+   */
+  async getUsersByIds(ids: string[]): Promise<User[]> {
+    try {
+      if (!ids || ids.length === 0) {
+        return [];
+      }
+      
+      // Limit the number of IDs to prevent performance issues
+      const limitedIds = ids.slice(0, 100);
+      
+      // Use parameterized query with dynamic number of parameters
+      const placeholders = limitedIds.map((_, index) => `$${index + 1}`).join(',');
+      const query = `SELECT * FROM users WHERE id IN (${placeholders})`;
+      
+      const users = await this.dataSource.query(query, limitedIds);
+      
+      logger.debug(`Retrieved ${users.length} users by batch ID lookup`);
+      return users;
+    } catch (error) {
+      logger.error({ error, userIds: ids }, 'Failed to get users by IDs');
+      throw error;
+    }
+  }
 } 

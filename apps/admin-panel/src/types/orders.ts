@@ -83,6 +83,7 @@ export interface Order {
   userId: string;
   customerName?: string;
   customerEmail?: string;
+  customerPhone?: string;
   status: OrderStatus;
   paymentStatus?: PaymentStatus;
   paymentMethod?: string;

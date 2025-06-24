@@ -1,10 +1,10 @@
 import 'reflect-metadata';
 import { FastifyInstance, fastify } from 'fastify';
-import { config } from './config/env';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
+import { config } from './config/env';
 import { orderRoutes } from './routes/order.routes';
 import { noteRoutes } from './routes/note.routes';
 import { publicOrderRoutes } from './routes/public-orders.routes';

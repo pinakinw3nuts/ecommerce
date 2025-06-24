@@ -20,6 +20,10 @@ interface UpdateUserStatusParams {
   Body: { status: UserStatus };
 }
 
+interface BatchUsersParams {
+  Body: { userIds: string[] };
+}
+
 export function createAdminRouter(userService: UserService) {
   const adminController = new AdminController(userService);
   
@@ -52,6 +56,11 @@ export function createAdminRouter(userService: UserService) {
     // Delete user
     fastify.delete<GetUserParams>('/users/:id', async (request, reply) => {
       return adminController.deleteUser(request, reply);
+    });
+
+    // Batch users endpoint
+    fastify.post<BatchUsersParams>('/users/batch', async (request, reply) => {
+      return adminController.getUsersByIds(request, reply);
     });
   };
 } 

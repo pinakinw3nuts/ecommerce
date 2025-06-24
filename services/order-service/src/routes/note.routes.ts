@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { NoteController } from '../controllers/note.controller';
-import { roleGuard } from '../middleware/roleGuard';
+import { roleGuard } from '../middleware/auth.middleware';
 
 const noteResponseSchema = {
   type: 'object',
@@ -137,7 +137,7 @@ export async function noteRoutes(fastify: FastifyInstance) {
           }
         }
       },
-      preHandler: roleGuard('admin')
+      preHandler: roleGuard(['admin'])
     },
     async (request, reply) => {
       return noteController.addNote(request, reply);
@@ -194,7 +194,7 @@ export async function noteRoutes(fastify: FastifyInstance) {
           }
         }
       },
-      preHandler: roleGuard('admin')
+      preHandler: roleGuard(['admin'])
     },
     async (request, reply) => {
       return noteController.updateNote(request, reply);
@@ -245,7 +245,7 @@ export async function noteRoutes(fastify: FastifyInstance) {
           }
         }
       },
-      preHandler: roleGuard('admin')
+      preHandler: roleGuard(['admin'])
     },
     async (request, reply) => {
       return noteController.deleteNote(request, reply);

@@ -31,51 +31,6 @@ export const orderApi = {
     filters: OrderFilters = {},
     pagination: PaginationOptions = { page: 1, limit: 10 }
   ): Promise<{ orders: Order[]; pagination: any }> => {
-    // Check if we have multiple status values
-    if (filters.status && filters.status.includes(',')) {
-      // Split status values
-      const statusValues = filters.status.split(',');
-      let allOrders: Order[] = [];
-      let totalOrders = 0;
-      
-      // Make separate API calls for each status value
-      for (const status of statusValues) {
-        const modifiedFilters = { ...filters, status };
-        const result = await orderApi.listOrders(modifiedFilters, pagination);
-        allOrders = [...allOrders, ...result.orders];
-        totalOrders += result.pagination.total;
-      }
-      
-      // Sort the combined results according to the original sort criteria
-      if (pagination.sortBy) {
-        allOrders = allOrders.sort((a: any, b: any) => {
-          const valA = a[pagination.sortBy as keyof Order];
-          const valB = b[pagination.sortBy as keyof Order];
-          
-          if (pagination.order?.toUpperCase() === 'DESC') {
-            return valA > valB ? -1 : valA < valB ? 1 : 0;
-          } else {
-            return valA < valB ? -1 : valA > valB ? 1 : 0;
-          }
-        });
-      }
-      
-      // Apply pagination to the combined results
-      const startIndex = (pagination.page - 1) * pagination.limit;
-      const endIndex = startIndex + pagination.limit;
-      const paginatedOrders = allOrders.slice(startIndex, endIndex);
-      
-      return {
-        orders: paginatedOrders,
-        pagination: {
-          total: totalOrders,
-          page: pagination.page,
-          limit: pagination.limit,
-          pages: Math.ceil(totalOrders / pagination.limit)
-        }
-      };
-    }
-    
     const params = new URLSearchParams({
       page: pagination.page.toString(),
       limit: pagination.limit.toString(),
@@ -155,15 +110,8 @@ export const orderApi = {
   exportOrders: async (filters: OrderFilters = {}): Promise<Blob> => {
     const params = new URLSearchParams();
     
-    // Handle status filter - if comma-separated, use only the first status or remove
     if (filters.status) {
-      if (filters.status.includes(',')) {
-        // For export, we'll just use the first status value
-        const firstStatus = filters.status.split(',')[0];
-        params.append('status', firstStatus);
-      } else {
-        params.append('status', filters.status);
-      }
+      params.append('status', filters.status);
     }
     
     if (filters.startDate) params.append('startDate', filters.startDate.toISOString());

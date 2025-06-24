@@ -234,8 +234,33 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
           <dl className="space-y-3">
             <div>
               <dt className="text-sm text-gray-500">Customer</dt>
-              <dd className="text-sm font-medium">{order.customerName || 'N/A'}</dd>
-              <dd className="text-sm text-gray-600">{order.customerEmail || order.userId}</dd>
+              {order.customerName ? (
+                <dd className="text-sm font-medium">{order.customerName}</dd>
+              ) : (
+                <dd className="text-sm font-medium text-gray-400">N/A</dd>
+              )}
+              
+              {order.customerEmail && (
+                <dd className="text-sm text-gray-600">
+                  <a href={`mailto:${order.customerEmail}`} className="hover:underline">
+                    {order.customerEmail}
+                  </a>
+                </dd>
+              )}
+              
+              {order.customerPhone && (
+                <dd className="text-sm text-gray-600">
+                  <a href={`tel:${order.customerPhone}`} className="hover:underline">
+                    {order.customerPhone}
+                  </a>
+                </dd>
+              )}
+              
+              {!order.customerName && !order.customerEmail && !order.customerPhone && (
+                <dd className="text-sm text-gray-500">
+                  <span className="font-medium">User ID:</span> {order.userId}
+                </dd>
+              )}
             </div>
             <div>
               <dt className="text-sm text-gray-500">Date</dt>

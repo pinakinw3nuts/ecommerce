@@ -119,6 +119,16 @@ export class Order {
   @Column('decimal', { precision: 10, scale: 2, default: 0 })
   discountAmount: number = 0;
 
+  // Customer information fields
+  @Column({ nullable: true })
+  customerName?: string;
+  
+  @Column({ nullable: true })
+  customerEmail?: string;
+  
+  @Column({ nullable: true })
+  customerPhone?: string;
+
   // Helper methods
   calculateTotalAmount(): number {
     const itemsTotal = this.items?.reduce((sum, item) => 

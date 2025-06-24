@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { roleGuard } from '../middleware/roleGuard';
+import { roleGuard } from '../middleware/auth.middleware';
 import { Order, OrderStatus } from '../entities/Order';
 import { OrderController } from '../controllers/order.controller';
 import { orderCheckoutRoutes } from './orders-checkout.routes';
@@ -170,7 +170,7 @@ export async function orderRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        preHandler: roleGuard('admin')
+        preHandler: roleGuard(['admin'])
       },
       async (request, reply) => {
         try {
@@ -375,7 +375,7 @@ export async function orderRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        preHandler: roleGuard('admin')
+        preHandler: roleGuard(['admin'])
       },
       async (request, reply) => {
         try {

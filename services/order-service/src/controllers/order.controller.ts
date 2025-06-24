@@ -85,7 +85,7 @@ interface CancelOrderBody {
 interface OrderQuerystring {
   page?: string;
   limit?: string;
-  status?: OrderStatus;
+  status?: string;
   startDate?: string;
   endDate?: string;
   minAmount?: string;
@@ -145,20 +145,30 @@ export class OrderController {
     reply: FastifyReply
   ) {
     try {
-      const userId = request.user?.id;
-      if (!userId) {
+      const user = request.user;
+      if (!user?.id) {
         return reply.status(401).send({ message: 'Unauthorized' });
       }
 
       const { page, limit, status, startDate, endDate, minAmount, maxAmount, sortBy, order } = request.query;
 
       const filters: OrderFilters = {
-        status: status,
         startDate: startDate ? new Date(startDate) : undefined,
         endDate: endDate ? new Date(endDate) : undefined,
         minAmount: minAmount ? Number(minAmount) : undefined,
         maxAmount: maxAmount ? Number(maxAmount) : undefined,
       };
+
+      if (status) {
+        const statuses = status.split(',').map(s => s.trim()) as OrderStatus[];
+        const validStatuses = Object.values(OrderStatus);
+        for (const s of statuses) {
+          if (!validStatuses.includes(s)) {
+            return reply.status(400).send({ message: `Invalid status value: ${s}` });
+          }
+        }
+        filters.status = statuses.length > 1 ? statuses : statuses[0];
+      }
 
       const pagination: PaginationOptions = {
         page: Number(page) || 1,
@@ -166,12 +176,27 @@ export class OrderController {
         sortBy: sortBy,
         order: order,
       };
-
-      const [orders, total] = await this.orderService.getOrdersByUserId(
-        userId,
-        filters,
-        pagination
-      );
+      
+      // Check if user is admin
+      const isAdmin = user.roles?.includes('admin');
+      
+      let orders: any[];
+      let total: number;
+      
+      if (isAdmin) {
+        // Admins can see all orders
+        [orders, total] = await this.orderService.getOrders(
+          filters,
+          pagination
+        );
+      } else {
+        // Regular users can only see their own orders
+        [orders, total] = await this.orderService.getOrdersByUserId(
+          user.id,
+          filters,
+          pagination
+        );
+      }
 
       return reply.send({
         orders,
@@ -199,26 +224,27 @@ export class OrderController {
   ) {
     try {
       const { id } = request.params;
-      const userId = request.user?.id;
-
-      if (!userId) {
+      const user = request.user;
+      
+      if (!user?.id) {
         return reply.status(401).send({ message: 'Unauthorized' });
       }
-
+      
       const order = await this.orderService.getOrderById(id);
-
+      
       if (!order) {
         return reply.status(404).send({ message: 'Order not found' });
       }
 
-      // Ensure user can only access their own orders
-      if (order.userId !== userId) {
-        return reply.status(403).send({ message: 'Forbidden' });
+      // Regular users can only view their own orders
+      const isAdmin = user.roles?.includes('admin');
+      if (!isAdmin && order.userId !== user.id) {
+        return reply.status(403).send({ message: 'Access denied' });
       }
 
       return reply.send(order);
     } catch (error) {
-      logger.error(`Failed to get order ${request.params.id}:`, error);
+      logger.error('Failed to get order:', error);
       return reply.status(500).send({ message: 'Failed to get order' });
     }
   }

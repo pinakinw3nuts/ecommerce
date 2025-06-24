@@ -29,7 +29,7 @@ export async function GET(
       );
     }
 
-    const url = `${ORDERS_SERVICE_URL}/api/v1/orders/${params.id}/notes`;
+    const url = `${ORDERS_SERVICE_URL}/api/v1/admin/orders/${params.id}/notes`;
     console.log('Full request URL:', url);
     
     const response = await makeRequest(url, {
@@ -108,7 +108,7 @@ export async function POST(
       );
     }
 
-    const url = `${ORDERS_SERVICE_URL}/api/v1/orders/${params.id}/notes`;
+    const url = `${ORDERS_SERVICE_URL}/api/v1/admin/orders/${params.id}/notes`;
     console.log('Full request URL:', url);
     
     const response = await makeRequest(url, {

@@ -110,41 +110,6 @@ const initialFilters: OrderFilterState = {
   valueRange: { min: '', max: '' },
 };
 
-// Update the fetcher function to use the new orderApi
-const fetcher = async (url: string) => {
-  // Extract query parameters from URL
-  const searchParams = new URL(url, window.location.origin).searchParams;
-
-  const page = parseInt(searchParams.get('page') || '1');
-  const pageSize = parseInt(searchParams.get('pageSize') || '10');
-  const status = searchParams.get('status') || undefined;
-  const search = searchParams.get('search') || undefined;
-  const fromDate = searchParams.get('fromDate');
-  const toDate = searchParams.get('toDate');
-  const minValue = searchParams.get('minValue');
-  const maxValue = searchParams.get('maxValue');
-  const sortBy = searchParams.get('sortBy');
-  const order = searchParams.get('sortOrder') as 'ASC' | 'DESC' | undefined;
-
-  const filters: OrderFilters = {
-    status,
-    search,
-    startDate: fromDate ? new Date(fromDate) : undefined,
-    endDate: toDate ? new Date(toDate) : undefined,
-    minAmount: minValue ? parseFloat(minValue) : undefined,
-    maxAmount: maxValue ? parseFloat(maxValue) : undefined,
-  };
-
-  const pagination: PaginationOptions = {
-    page,
-    limit: pageSize,
-    sortBy: sortBy || undefined,
-    order: order?.toLowerCase() === 'asc' ? 'ASC' : 'DESC',
-  };
-
-  return await orderApi.listOrders(filters, pagination);
-};
-
 export default function OrdersPage() {
   const router = useRouter();
   const toast = useToast();
@@ -157,6 +122,27 @@ export default function OrdersPage() {
   const [isLoadingOperation, setIsLoadingOperation] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
+  const apiFilters: OrderFilters = {
+    search: filters.search || undefined,
+    status: filters.status.length > 0 ? filters.status.join(',') : undefined,
+    startDate: filters.dateRange.from ? new Date(filters.dateRange.from) : undefined,
+    endDate: filters.dateRange.to ? new Date(filters.dateRange.to) : undefined,
+    minAmount: filters.valueRange.min ? parseFloat(filters.valueRange.min) : undefined,
+    maxAmount: filters.valueRange.max ? parseFloat(filters.valueRange.max) : undefined,
+  };
+
+  const apiPagination: PaginationOptions = {
+    page,
+    limit: pageSize,
+    sortBy: sortBy || undefined,
+    order: sortOrder.toUpperCase() as 'ASC' | 'DESC',
+  };
+
+  const { data, error, isLoading, mutate } = useSWR<OrdersResponse>(
+    ['orders', apiFilters, apiPagination],
+    ([_key, filters, pagination]: [string, OrderFilters, PaginationOptions]) => orderApi.listOrders(filters, pagination)
+  );
+
   const hasActiveFilters =
     filters.search ||
     filters.status.length > 0 ||
@@ -165,25 +151,6 @@ export default function OrdersPage() {
     filters.dateRange.to ||
     filters.valueRange.min ||
     filters.valueRange.max;
-
-  const queryString = new URLSearchParams({
-    page: page.toString(),
-    pageSize: pageSize.toString(),
-    ...(filters.search && { search: filters.search }),
-    ...(filters.status.length && { status: filters.status.join(',') }),
-    ...(filters.paymentStatus.length && { paymentStatus: filters.paymentStatus.join(',') }),
-    ...(filters.dateRange.from && { fromDate: filters.dateRange.from }),
-    ...(filters.dateRange.to && { toDate: filters.dateRange.to }),
-    ...(filters.valueRange.min && { minValue: filters.valueRange.min }),
-    ...(filters.valueRange.max && { maxValue: filters.valueRange.max }),
-    sortBy,
-    sortOrder,
-  }).toString();
-
-  const { data, error, isLoading, mutate } = useSWR<OrdersResponse>(
-    `/api/orders?${queryString}`,
-    fetcher
-  );
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -360,9 +327,25 @@ export default function OrdersPage() {
           <div className="font-medium">
             {row.customerName || (row.userId ? `User: ${row.userId.substring(0, 8)}...` : 'N/A')}
           </div>
-          <div className="text-sm text-gray-500">
-            {row.customerEmail || (row.userId ? row.userId : '')}
-          </div>
+          {row.customerEmail && (
+            <div className="text-sm text-gray-500">
+              <a href={`mailto:${row.customerEmail}`} className="hover:underline">
+                {row.customerEmail}
+              </a>
+            </div>
+          )}
+          {row.customerPhone && (
+            <div className="text-sm text-gray-500">
+              <a href={`tel:${row.customerPhone}`} className="hover:underline">
+                {row.customerPhone}
+              </a>
+            </div>
+          )}
+          {!row.customerEmail && !row.customerPhone && row.userId && (
+            <div className="text-sm text-gray-500">
+              {row.userId}
+            </div>
+          )}
         </div>
       ),
     },

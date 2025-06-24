@@ -2,9 +2,14 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { UserService } from '../services/user.service';
 import { UserStatus, UserRole } from '../entities';
 import logger from '../utils/logger';
+import { AppDataSource } from '../data-source';
 
 export class AdminController {
-  constructor(private userService: UserService) {}
+  private userService: UserService;
+
+  constructor() {
+    this.userService = new UserService(AppDataSource);
+  }
 
   /**
    * List users with filtering and pagination
@@ -103,6 +108,34 @@ export class AdminController {
     } catch (error) {
       logger.error(error, 'Failed to delete user');
       return reply.status(500).send({ message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Get multiple users by IDs (batch)
+   */
+  async getUsersByIds(
+    request: FastifyRequest<{
+      Body: { userIds: string[] };
+    }>,
+    reply: FastifyReply
+  ) {
+    try {
+      const { userIds } = request.body;
+      
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        return reply.status(400).send({ message: 'User IDs must be a non-empty array' });
+      }
+      
+      if (userIds.length > 100) {
+        return reply.status(400).send({ message: 'Too many user IDs. Maximum allowed: 100' });
+      }
+      
+      const users = await this.userService.getUsersByIds(userIds);
+      return reply.send(users);
+    } catch (error) {
+      logger.error(`Failed to get users batch: ${error}`);
+      return reply.status(500).send({ message: 'Failed to fetch users' });
     }
   }
 } 

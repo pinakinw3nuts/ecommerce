@@ -1,24 +1,19 @@
 import pino from 'pino';
-import { NODE_ENV } from '../config/env';
+import { config } from '../config/env';
 
-// Configure pretty printing for development
-const prettyPrint = NODE_ENV === 'development' ? {
-  transport: {
+// Create logger instance
+const logger = pino({
+  name: 'order-service',
+  level: process.env.LOG_LEVEL || 'info',
+  timestamp: pino.stdTimeFunctions.isoTime,
+  transport: config.isDevelopment ? {
     target: 'pino-pretty',
     options: {
       colorize: true,
       levelFirst: true,
       translateTime: 'UTC:yyyy-mm-dd HH:MM:ss.l',
     },
-  },
-} : undefined;
-
-// Create logger instance
-const loggerInstance = pino({
-  name: 'order-service',
-  level: process.env.LOG_LEVEL || 'info',
-  timestamp: pino.stdTimeFunctions.isoTime,
-  ...prettyPrint,
+  } : undefined,
   // Redact sensitive information
   redact: {
     paths: ['*.password', '*.email', 'DATABASE_URL'],
@@ -26,16 +21,10 @@ const loggerInstance = pino({
   },
   // Add service version
   base: {
-    env: NODE_ENV,
+    env: config.nodeEnv,
     version: process.env.npm_package_version,
   },
 });
 
-// Export logger instance
-export default loggerInstance;
-
-// Export named logger for compatibility with existing code
-export const logger = loggerInstance;
-
-// Export type for use in other files
-export type Logger = typeof loggerInstance; 
+export { logger };
+export type Logger = typeof logger; 

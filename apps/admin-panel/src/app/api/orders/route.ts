@@ -100,6 +100,13 @@ export async function GET(request: NextRequest) {
                                order.metadata?.userEmail || 
                                null;
           
+          // Extract customer phone from metadata if available
+          const customerPhone = order.metadata?.customerPhone || 
+                               order.metadata?.customer?.phone || 
+                               order.metadata?.customer?.phoneNumber ||
+                               order.metadata?.userPhone || 
+                               null;
+          
           // Extract order number from metadata if not already set
           const orderNumber = order.orderNumber || 
                              order.metadata?.orderNumber || 
@@ -109,6 +116,7 @@ export async function GET(request: NextRequest) {
             ...order,
             customerName,
             customerEmail,
+            customerPhone,
             orderNumber
           };
         });
@@ -207,6 +215,13 @@ export async function GET(request: NextRequest) {
                              order.metadata?.userEmail || 
                              null;
         
+        // Extract customer phone from metadata if available
+        const customerPhone = order.metadata?.customerPhone || 
+                             order.metadata?.customer?.phone || 
+                             order.metadata?.customer?.phoneNumber ||
+                             order.metadata?.userPhone || 
+                             null;
+        
         // Extract order number from metadata if not already set
         const orderNumber = order.orderNumber || 
                            order.metadata?.orderNumber || 
@@ -216,6 +231,7 @@ export async function GET(request: NextRequest) {
           ...order,
           customerName,
           customerEmail,
+          customerPhone,
           orderNumber
         };
       });
@@ -322,6 +338,13 @@ export async function GET(request: NextRequest) {
                              order.metadata?.userEmail || 
                              null;
         
+        // Extract customer phone from metadata if available
+        const customerPhone = order.metadata?.customerPhone || 
+                             order.metadata?.customer?.phone || 
+                             order.metadata?.customer?.phoneNumber ||
+                             order.metadata?.userPhone || 
+                             null;
+        
         // Extract order number from metadata if not already set
         const orderNumber = order.orderNumber || 
                            order.metadata?.orderNumber || 
@@ -331,6 +354,7 @@ export async function GET(request: NextRequest) {
           ...order,
           customerName,
           customerEmail,
+          customerPhone,
           orderNumber
         };
       });

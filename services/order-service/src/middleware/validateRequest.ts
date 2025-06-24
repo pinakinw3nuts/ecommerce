@@ -65,30 +65,6 @@ export const validateRequest = (schema: ValidationConfig) => {
 };
 
 /**
- * Example usage:
- * 
- * const createOrderSchema = {
- *   body: z.object({
- *     items: z.array(z.object({
- *       productId: z.string().uuid(),
- *       quantity: z.number().int().positive(),
- *     })),
- *     shippingAddress: z.object({
- *       street: z.string(),
- *       city: z.string(),
- *       country: z.string(),
- *       postalCode: z.string(),
- *     }),
- *   }),
- * };
- * 
- * fastify.post('/orders', {
- *   preHandler: validateRequest(createOrderSchema),
- *   handler: createOrderHandler,
- * });
- */
-
-/**
  * Helper function to create a validation schema for ID parameters
  */
 export const createIdParamSchema = () => ({

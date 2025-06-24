@@ -1,4 +1,4 @@
-import { FindOptionsWhere, Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
+import { FindOptionsWhere, Repository, Between, LessThanOrEqual, MoreThanOrEqual, In } from 'typeorm';
 import { AppDataSource } from '../data-source';
 import { Order, OrderStatus } from '../entities/Order';
 import { OrderItem } from '../entities/OrderItem';
@@ -113,7 +113,7 @@ export interface UpdateOrderDto {
 
 export interface OrderFilters {
   userId?: string;
-  status?: OrderStatus;
+  status?: OrderStatus | OrderStatus[];
   startDate?: Date;
   endDate?: Date;
   minAmount?: number;
@@ -203,10 +203,42 @@ export class OrderService {
    */
   async getOrderById(id: string): Promise<Order | null> {
     try {
+      // First get the order with its items and notes
       const order = await this.orderRepository.findOne({
         where: { id },
         relations: ['items', 'notes'],
       });
+      
+      if (!order) {
+        return null;
+      }
+      
+      // If we have customer fields already populated, return the order
+      if (order.customerName && order.customerEmail) {
+        return order;
+      }
+      
+      // Otherwise, look up the user information from the database directly
+      try {
+        // Use the TypeORM repository to query the user table directly
+        const userRepository = AppDataSource.getRepository('users');
+        const user = await userRepository.findOne({
+          where: { id: order.userId }
+        });
+        
+        if (user) {
+          order.customerName = user.name;
+          order.customerEmail = user.email;
+          order.customerPhone = user.phone_number || user.phoneNumber;
+          
+          // Save the order with the updated user information
+          await this.orderRepository.save(order);
+        }
+      } catch (error) {
+        logger.warn(`Failed to get user info for order ${id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        // Continue with the order as is
+      }
+      
       return order;
     } catch (error) {
       logger.error(`Failed to get order ${id}:`, error);
@@ -230,7 +262,11 @@ export class OrderService {
       }
 
       if (filters.status) {
-        where.status = filters.status;
+        if (Array.isArray(filters.status)) {
+          where.status = In(filters.status);
+        } else {
+          where.status = filters.status;
+        }
       }
 
       if (filters.startDate || filters.endDate) {
@@ -259,6 +295,44 @@ export class OrderService {
         },
       });
 
+      // If there are no orders, return early
+      if (orders.length === 0) {
+        return [orders, total];
+      }
+
+      // Get all unique user IDs from the orders
+      const userIds = [...new Set(orders.map(order => order.userId))];
+      
+      try {
+        // Query users directly from the database
+        const userRepository = AppDataSource.getRepository('users');
+        const users = await userRepository.find({
+          where: { id: In(userIds) }
+        });
+
+        // Create a map of user ID to user data for quick lookups
+        const userMap = new Map();
+        users.forEach(user => {
+          userMap.set(user.id, user);
+        });
+
+        // Populate order customer information
+        for (const order of orders) {
+          const user = userMap.get(order.userId);
+          if (user) {
+            if (!order.customerName) order.customerName = user.name;
+            if (!order.customerEmail) order.customerEmail = user.email;
+            if (!order.customerPhone) order.customerPhone = user.phone_number || user.phoneNumber;
+          }
+        }
+
+        // Save the orders with the updated user info
+        await this.orderRepository.save(orders);
+      } catch (error) {
+        logger.warn(`Failed to get user info for orders: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        // Continue with the orders as they are
+      }
+
       return [orders, total];
     } catch (error) {
       logger.error('Failed to get orders:', error);
@@ -279,7 +353,11 @@ export class OrderService {
 
       // Apply filters
       if (filters.status) {
-        where.status = filters.status;
+        if (Array.isArray(filters.status)) {
+          where.status = In(filters.status);
+        } else {
+          where.status = filters.status;
+        }
       }
 
       if (filters.startDate || filters.endDate) {
@@ -306,6 +384,34 @@ export class OrderService {
           [pagination.sortBy || 'createdAt']: pagination.order || 'DESC',
         },
       });
+
+      // If there are no orders, return early
+      if (orders.length === 0) {
+        return [orders, total];
+      }
+
+      try {
+        // Since all orders have the same userId, we can just query that one user
+        const userRepository = AppDataSource.getRepository('users');
+        const user = await userRepository.findOne({
+          where: { id: userId }
+        });
+
+        if (user) {
+          // Populate order customer information for all orders
+          for (const order of orders) {
+            if (!order.customerName) order.customerName = user.name;
+            if (!order.customerEmail) order.customerEmail = user.email;
+            if (!order.customerPhone) order.customerPhone = user.phone_number || user.phoneNumber;
+          }
+
+          // Save the orders with the updated user info
+          await this.orderRepository.save(orders);
+        }
+      } catch (error) {
+        logger.warn(`Failed to get user info for user ${userId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        // Continue with the orders as they are
+      }
 
       return [orders, total];
     } catch (error) {

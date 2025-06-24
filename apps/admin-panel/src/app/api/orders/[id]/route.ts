@@ -58,6 +58,25 @@ export async function GET(
     }
 
     const data = await response.json();
+    
+    // Ensure customer information is included
+    if (data) {
+      // Set default customer name if not available
+      if (!data.customerName && data.metadata?.customerName) {
+        data.customerName = data.metadata.customerName;
+      }
+      
+      // Set default customer email if not available
+      if (!data.customerEmail && data.metadata?.customerEmail) {
+        data.customerEmail = data.metadata.customerEmail;
+      }
+      
+      // Set default customer phone if not available
+      if (!data.customerPhone && data.metadata?.customerPhone) {
+        data.customerPhone = data.metadata.customerPhone;
+      }
+    }
+    
     return NextResponse.json(data);
     
   } catch (error: any) {
