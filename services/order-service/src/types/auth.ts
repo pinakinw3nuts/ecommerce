@@ -4,6 +4,7 @@ export interface CustomJWTPayload {
   id: string;
   email?: string;
   roles?: string[];
+  role?: string;
   iat?: number;
   exp?: number;
 }

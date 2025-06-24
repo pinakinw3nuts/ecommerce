@@ -41,10 +41,19 @@ export function roleGuard(roles: string[]) {
     try {
       await request.jwtVerify();
       const user = request.user as CustomJWTPayload;
-
+      
+      // Check for X-Admin-Role header specifically for admin panel integration
+      const adminRoleHeader = request.headers['x-admin-role'];
+      
+      // If the header exists and matches 'admin', allow access if 'admin' role is required
+      if (adminRoleHeader === 'admin' && roles.includes('admin')) {
+        return;
+      }
+      
+      // Otherwise check roles in JWT payload
       if (!user.roles?.some(role => roles.includes(role))) {
         return reply.status(403).send({
-          message: `Access denied. Required roles: ${roles.join(', ')}`
+          message: `Access denied. Required role: ${roles.join(', ')}`
         });
       }
     } catch (err) {
@@ -62,6 +71,14 @@ export const verifyOrderAccess = async (
   reply: FastifyReply
 ) => {
   const user = request.user as CustomJWTPayload;
+
+  // Check for X-Admin-Role header specifically for admin panel integration
+  const adminRoleHeader = request.headers['x-admin-role'];
+  
+  // If the header exists and matches 'admin', allow access
+  if (adminRoleHeader === 'admin') {
+    return;
+  }
 
   // Admin users can access all orders
   if (user.roles?.includes('admin')) {

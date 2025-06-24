@@ -1,102 +1,71 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-// Define paths that don't require authentication
-const PUBLIC_PATHS = [
-  '/login',
-  '/unauthorized',
-  '/api/auth/login',
-  '/api/auth/refresh-token',
-  '/api/auth/logout',
-  '/api/test',
+// List of protected routes that require authentication
+const PROTECTED_ROUTES = [
+  '/dashboard',
+  '/orders',
+  '/products',
+  '/categories',
+  '/users',
+  '/settings',
+];
+
+// List of API routes that need token forwarding
+const API_ROUTES = [
+  '/api/orders',
+  '/api/products',
+  '/api/categories',
+  '/api/users',
+  '/api/settings',
 ];
 
 export async function middleware(request: NextRequest) {
-  // Handle CORS preflight requests for API routes
-  if (request.nextUrl.pathname.startsWith('/api') && request.method === 'OPTIONS') {
-    return new NextResponse(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Max-Age': '86400',
-      },
-    });
-  }
-
-  // Store current URL in cookies for redirects after login
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-url', request.url);
-
-  // Get the path from URL
-  const { pathname } = new URL(request.url);
+  const { pathname } = request.nextUrl;
   
-  // Skip auth check for public paths
-  if (PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
-    const response = NextResponse.next({
+  // Skip non-protected routes and non-API routes
+  if (!PROTECTED_ROUTES.some(route => pathname.startsWith(route)) && 
+      !API_ROUTES.some(route => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+  
+  // Check for admin token in cookies
+  const adminToken = request.cookies.get('admin_token');
+  
+  // For UI routes, redirect to login if no token is found
+  if (PROTECTED_ROUTES.some(route => pathname.startsWith(route)) && !adminToken) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+  
+  // For API routes, add token to request headers
+  if (API_ROUTES.some(route => pathname.startsWith(route)) && adminToken) {
+    // Clone the request headers
+    const requestHeaders = new Headers(request.headers);
+    
+    // Add admin token to the request headers
+    requestHeaders.set('X-Admin-Token', adminToken.value);
+    
+    // Return the modified request
+    return NextResponse.next({
       request: {
         headers: requestHeaders,
       },
     });
-    response.cookies.set('next-url', request.url);
-
-    // Add CORS headers for API routes
-    if (pathname.startsWith('/api')) {
-      response.headers.set('Access-Control-Allow-Origin', '*');
-      response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-      response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    }
-
-    return response;
-  }
-
-  // Skip auth check for static assets
-  if (pathname.includes('/_next') || pathname.includes('/favicon.ico')) {
-    return NextResponse.next();
-  }
-
-  // Get the access token from cookies
-  const accessToken = request.cookies.get('admin_token');
-  
-  // If no access token, redirect to login with return URL
-  if (!accessToken) {
-    const redirectUrl = new URL('/login', request.url);
-    redirectUrl.searchParams.set('returnUrl', pathname);
-    
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  // Continue with the request for authenticated paths
-  const response = NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  });
-  
-  // Store the current URL in cookies for reference
-  response.cookies.set('next-url', request.url);
-  
-  // Add CORS headers for API routes
-  if (pathname.startsWith('/api')) {
-    response.headers.set('Access-Control-Allow-Origin', '*');
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   }
   
-  return response;
+  // Continue for all other routes
+  return NextResponse.next();
 }
 
-// Configure which paths the middleware applies to
+// Configure middleware to run only for specific paths
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for:
+     * Match all request paths except for the ones starting with:
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public (public files)
+     * - public directory (public files)
      */
-    '/((?!_next/static|_next/image|favicon.ico|public).*)',
+    '/((?!_next/static|_next/image|favicon.ico|images/).*)',
   ],
 }; 

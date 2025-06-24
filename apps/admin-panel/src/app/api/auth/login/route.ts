@@ -1,11 +1,9 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { setAuthCookies } from '../../../../lib/auth-utils';
 
 // Force dynamic rendering for this route
 export const dynamic = 'force-dynamic';
-
-
 
 // Validation schema
 const loginSchema = z.object({
@@ -21,7 +19,7 @@ const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://127
 const AUTH_ENDPOINT = `${API_GATEWAY_URL}/api/auth/admin/login`;
 const DIRECT_AUTH_ENDPOINT = `${AUTH_SERVICE_URL}/api/auth/admin/login`;
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
@@ -94,22 +92,10 @@ export async function POST(request: Request) {
         user: data.user
       });
 
-      // Set the token in an HTTP-only cookie
-      res.cookies.set('admin_token', data.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 15 * 60, // 15 minutes (match token expiration)
-        path: '/',
-      });
-
-      // Store refresh token in a separate cookie with longer expiration
-      res.cookies.set('admin_refresh_token', data.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60, // 7 days
-        path: '/',
+      // Set the auth cookies
+      setAuthCookies(res, {
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken
       });
 
       return res;

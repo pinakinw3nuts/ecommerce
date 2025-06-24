@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import { 
-  ShoppingBag, 
+import {
+  ShoppingBag,
   Download,
-  Trash2, 
+  Trash2,
   Eye,
   ChevronLeft,
   ChevronRight,
@@ -19,39 +19,16 @@ import {
   Search,
   Plus,
 } from 'lucide-react';
-import Table, { type Column, TableInstance } from '@/components/Table';
+import Table, { type Column } from '@/components/Table';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
 import { formatDate } from '@/lib/utils';
 import { Pagination } from '@/components/ui/Pagination';
 import { CommonFilters, FilterConfig, FilterState } from '@/components/ui/CommonFilters';
 import { format } from 'date-fns';
-
-interface PaginationData {
-  total: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
-  hasMore: boolean;
-  hasPrevious: boolean;
-}
-
-interface Order {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  customerEmail: string;
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
-  paymentStatus: 'paid' | 'unpaid' | 'refunded';
-  total: number;
-  items: number;
-  createdAt: string;
-}
-
-interface ApiResponse {
-  orders: Order[];
-  pagination: PaginationData;
-}
+import { OrderFilters, OrdersResponse, Order, PaginationOptions, OrderStatus, PaymentStatus } from '@/types/orders';
+import { orderApi } from '@/lib/order-api-client';
+import { orderService } from '@/services/orders';
 
 interface OrderFilterState extends FilterState {
   status: string[];
@@ -83,21 +60,25 @@ const filterConfig: FilterConfig = {
     type: 'select',
     placeholder: 'Filter by status',
     options: [
-      { value: 'pending', label: 'Pending' },
-      { value: 'processing', label: 'Processing' },
-      { value: 'shipped', label: 'Shipped' },
-      { value: 'delivered', label: 'Delivered' },
-      { value: 'cancelled', label: 'Cancelled' },
+      { value: OrderStatus.PENDING, label: 'Pending' },
+      { value: OrderStatus.CONFIRMED, label: 'Confirmed' },
+      { value: OrderStatus.PROCESSING, label: 'Processing' },
+      { value: OrderStatus.SHIPPED, label: 'Shipped' },
+      { value: OrderStatus.DELIVERED, label: 'Delivered' },
+      { value: OrderStatus.CANCELLED, label: 'Cancelled' },
+      { value: OrderStatus.FAILED, label: 'Failed' },
     ],
   },
   paymentStatus: {
     type: 'select',
     placeholder: 'Filter by payment status',
     options: [
-      { value: 'paid', label: 'Paid' },
-      { value: 'pending', label: 'Pending' },
-      { value: 'failed', label: 'Failed' },
-      { value: 'refunded', label: 'Refunded' },
+      { value: PaymentStatus.PENDING, label: 'Pending' },
+      { value: PaymentStatus.PAID, label: 'Paid' },
+      { value: PaymentStatus.PARTIALLY_PAID, label: 'Partially Paid' },
+      { value: PaymentStatus.FAILED, label: 'Failed' },
+      { value: PaymentStatus.REFUNDED, label: 'Refunded' },
+      { value: PaymentStatus.PARTIALLY_REFUNDED, label: 'Partially Refunded' },
     ],
   },
   hasDateRange: {
@@ -130,19 +111,39 @@ const initialFilters: OrderFilterState = {
   valueRange: { min: '', max: '' },
 };
 
+// Update the fetcher function to use the new orderApi
 const fetcher = async (url: string) => {
-  const response = await fetch(url, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to fetch data');
-  }
-  
-  return response.json();
+  // Extract query parameters from URL
+  const searchParams = new URL(url, window.location.origin).searchParams;
+
+  const page = parseInt(searchParams.get('page') || '1');
+  const pageSize = parseInt(searchParams.get('pageSize') || '10');
+  const status = searchParams.get('status') || undefined;
+  const search = searchParams.get('search') || undefined;
+  const fromDate = searchParams.get('fromDate');
+  const toDate = searchParams.get('toDate');
+  const minValue = searchParams.get('minValue');
+  const maxValue = searchParams.get('maxValue');
+  const sortBy = searchParams.get('sortBy');
+  const order = searchParams.get('sortOrder') as 'ASC' | 'DESC' | undefined;
+
+  const filters: OrderFilters = {
+    status,
+    search,
+    startDate: fromDate ? new Date(fromDate) : undefined,
+    endDate: toDate ? new Date(toDate) : undefined,
+    minAmount: minValue ? parseFloat(minValue) : undefined,
+    maxAmount: maxValue ? parseFloat(maxValue) : undefined,
+  };
+
+  const pagination: PaginationOptions = {
+    page,
+    limit: pageSize,
+    sortBy: sortBy || undefined,
+    order: order?.toLowerCase() === 'asc' ? 'ASC' : 'DESC',
+  };
+
+  return await orderApi.listOrders(filters, pagination);
 };
 
 export default function OrdersPage() {
@@ -157,7 +158,7 @@ export default function OrdersPage() {
   const [isLoadingOperation, setIsLoadingOperation] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
-  const hasActiveFilters = 
+  const hasActiveFilters =
     filters.search ||
     filters.status.length > 0 ||
     filters.paymentStatus.length > 0 ||
@@ -180,7 +181,7 @@ export default function OrdersPage() {
     sortOrder,
   }).toString();
 
-  const { data, error, isLoading, mutate } = useSWR<ApiResponse>(
+  const { data, error, isLoading, mutate } = useSWR<OrdersResponse>(
     `/api/orders?${queryString}`,
     fetcher
   );
@@ -199,14 +200,14 @@ export default function OrdersPage() {
 
     try {
       setIsLoadingOperation(true);
-      const response = await fetch(`/api/orders/${orderId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) throw new Error('Failed to delete order');
-
+      await orderApi.deleteOrder(orderId);
       toast.success('Order deleted successfully');
       mutate();
+      
+      // If the order was selected, remove it from the selection
+      if (selectedOrders.includes(orderId)) {
+        setSelectedOrders(prev => prev.filter(id => id !== orderId));
+      }
     } catch (error) {
       console.error('Error deleting order:', error);
       toast.error('Failed to delete order');
@@ -216,27 +217,17 @@ export default function OrdersPage() {
   };
 
   const handleBulkDelete = async () => {
+    if (!selectedOrders.length) return;
     if (!confirm(`Are you sure you want to delete ${selectedOrders.length} orders?`)) return;
-
+    
     try {
       setIsLoadingOperation(true);
-      const response = await fetch('/api/orders/bulk-delete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ orderIds: selectedOrders }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete orders');
-      }
-
-      mutate();
-      setSelectedOrders([]);
+      await orderApi.bulkDeleteOrders(selectedOrders);
       toast.success(`${selectedOrders.length} orders deleted successfully`);
+      setSelectedOrders([]);
+      mutate();
     } catch (error) {
-      console.error('Error deleting orders:', error);
+      console.error('Error bulk deleting orders:', error);
       toast.error('Failed to delete orders');
     } finally {
       setIsLoadingOperation(false);
@@ -246,28 +237,27 @@ export default function OrdersPage() {
   const handleExport = async () => {
     try {
       setIsLoadingOperation(true);
-      const response = await fetch('/api/orders/export', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ orderIds: selectedOrders.length ? selectedOrders : 'all' }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to export orders');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      
+      // Build filters from current filter state
+      const exportFilters: OrderFilters = {
+        search: filters.search,
+        status: filters.status.length ? filters.status.join(',') : undefined,
+        startDate: filters.dateRange.from ? new Date(filters.dateRange.from) : undefined,
+        endDate: filters.dateRange.to ? new Date(filters.dateRange.to) : undefined,
+        minAmount: filters.valueRange.min ? parseFloat(filters.valueRange.min) : undefined,
+        maxAmount: filters.valueRange.max ? parseFloat(filters.valueRange.max) : undefined,
+      };
+      
+      const blob = await orderApi.exportOrders(exportFilters);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'orders.csv';
+      a.download = `orders-export-${format(new Date(), 'yyyy-MM-dd')}.csv`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-
+      URL.revokeObjectURL(url);
+      
       toast.success('Orders exported successfully');
     } catch (error) {
       console.error('Error exporting orders:', error);
@@ -279,356 +269,337 @@ export default function OrdersPage() {
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
-    setSelectedOrders([]);
+    window.scrollTo(0, 0);
   };
 
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize);
     setPage(1);
-    setSelectedOrders([]);
   };
 
   const handleFiltersChange = (newFilters: FilterState) => {
     setFilters(newFilters as OrderFilterState);
     setPage(1);
-    setSelectedOrders([]);
   };
 
   const handleFiltersReset = () => {
     setFilters(initialFilters);
     setPage(1);
-    setSelectedOrders([]);
   };
 
+  // Define columns for the table
   const columns: Column<Order>[] = [
     {
-      header: ({ table }: { table: TableInstance }) => (
+      accessorKey: 'id',
+      header: (
         <input
           type="checkbox"
-          checked={table.getIsAllRowsSelected()}
-          onChange={table.getToggleAllRowsSelectedHandler()}
           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          checked={selectedOrders.length > 0 && selectedOrders.length === data?.orders.length}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setSelectedOrders(data?.orders.map(order => order.id) || []);
+            } else {
+              setSelectedOrders([]);
+            }
+          }}
         />
       ),
-      cell: ({ row, table }: { row: Order; table: TableInstance & { getRowProps: (row: Order) => { getIsSelected: () => boolean; getToggleSelectedHandler: () => () => void } } }) => {
-        const rowProps = table.getRowProps(row);
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          checked={selectedOrders.includes(row.id as string)}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setSelectedOrders([...selectedOrders, row.id as string]);
+            } else {
+              setSelectedOrders(selectedOrders.filter(id => id !== row.id));
+            }
+          }}
+        />
+      ),
+    },
+    {
+      accessorKey: 'orderNumber',
+      header: (
+        <div
+          className="flex items-center cursor-pointer"
+          onClick={() => handleSort('orderNumber')}
+        >
+          Order ID
+          {sortBy === 'orderNumber' ? (
+            sortOrder === 'asc' ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />
+          ) : (
+            <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />
+          )}
+        </div>
+      ),
+      cell: ({ row }) => (
+        <div className="font-medium">
+          {row.orderNumber || (typeof row.id === 'string' ? String(row.id).substring(0, 8) : row.id)}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'customerName',
+      header: (
+        <div
+          className="flex items-center cursor-pointer"
+          onClick={() => handleSort('customerName')}
+        >
+          Customer
+          {sortBy === 'customerName' ? (
+            sortOrder === 'asc' ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />
+          ) : (
+            <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />
+          )}
+        </div>
+      ),
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium">
+            {row.customerName || (row.userId ? `User: ${row.userId.substring(0, 8)}...` : 'N/A')}
+          </div>
+          <div className="text-sm text-gray-500">
+            {row.customerEmail || (row.userId ? row.userId : '')}
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'totalAmount',
+      header: (
+        <div
+          className="flex items-center cursor-pointer"
+          onClick={() => handleSort('totalAmount')}
+        >
+          Total
+          {sortBy === 'totalAmount' ? (
+            sortOrder === 'asc' ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />
+          ) : (
+            <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />
+          )}
+        </div>
+      ),
+      cell: ({ row }) => (
+        <div className="font-medium">
+          ${row.totalAmount.toFixed(2)}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'status',
+      header: (
+        <div
+          className="flex items-center cursor-pointer"
+          onClick={() => handleSort('status')}
+        >
+          Status
+          {sortBy === 'status' ? (
+            sortOrder === 'asc' ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />
+          ) : (
+            <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />
+          )}
+        </div>
+      ),
+      cell: ({ row }) => {
+        const statusClasses = {
+          [OrderStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
+          [OrderStatus.CONFIRMED]: 'bg-blue-100 text-blue-800',
+          [OrderStatus.PROCESSING]: 'bg-purple-100 text-purple-800',
+          [OrderStatus.SHIPPED]: 'bg-green-100 text-green-800',
+          [OrderStatus.DELIVERED]: 'bg-purple-100 text-purple-800',
+          [OrderStatus.CANCELLED]: 'bg-red-100 text-red-800',
+          [OrderStatus.FAILED]: 'bg-gray-100 text-gray-800',
+        };
         return (
-          <input
-            type="checkbox"
-            checked={rowProps.getIsSelected()}
-            onChange={rowProps.getToggleSelectedHandler()}
-            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClasses[row.status as OrderStatus]}`}>
+            {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+          </span>
         );
       },
     },
     {
-      header: () => (
-        <button
-          onClick={() => handleSort('orderNumber')}
-          className="flex items-center gap-1 hover:text-blue-600"
-        >
-          Order Number
-          <span className="inline-flex">
-            {sortBy === 'orderNumber' ? (
-              sortOrder === 'asc' ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )
-            ) : (
-              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
-            )}
-          </span>
-        </button>
-      ),
-      accessorKey: 'orderNumber' as keyof Order,
-      cell: ({ row }: { row: Order }) => (
-        <div className="font-medium text-blue-600">#{row.orderNumber}</div>
-      ),
-    },
-    {
-      header: () => (
-        <button
-          onClick={() => handleSort('customerName')}
-          className="flex items-center gap-1 hover:text-blue-600"
-        >
-          Customer
-          <span className="inline-flex">
-            {sortBy === 'customerName' ? (
-              sortOrder === 'asc' ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )
-            ) : (
-              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
-            )}
-          </span>
-        </button>
-      ),
-      accessorKey: 'customerName' as keyof Order,
-      cell: ({ row }: { row: Order }) => (
-        <div>
-          <div className="font-medium">{row.customerName}</div>
-          <div className="text-sm text-gray-500">{row.customerEmail}</div>
-        </div>
-      ),
-    },
-    {
-      header: () => (
-        <button
-          onClick={() => handleSort('status')}
-          className="flex items-center gap-1 hover:text-blue-600"
-        >
-          Status
-          <span className="inline-flex">
-            {sortBy === 'status' ? (
-              sortOrder === 'asc' ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )
-            ) : (
-              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
-            )}
-          </span>
-        </button>
-      ),
-      accessorKey: 'status' as keyof Order,
-      cell: ({ row }: { row: Order }) => (
-        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
-          ${row.status === 'completed'
-            ? 'bg-green-100 text-green-700'
-            : row.status === 'processing'
-            ? 'bg-blue-100 text-blue-700'
-            : row.status === 'cancelled'
-            ? 'bg-red-100 text-red-700'
-            : 'bg-yellow-100 text-yellow-700'
-          }`}
-        >
-          {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-        </span>
-      ),
-    },
-    {
-      header: () => (
-        <button
+      accessorKey: 'paymentStatus',
+      header: (
+        <div
+          className="flex items-center cursor-pointer"
           onClick={() => handleSort('paymentStatus')}
-          className="flex items-center gap-1 hover:text-blue-600"
         >
           Payment
-          <span className="inline-flex">
-            {sortBy === 'paymentStatus' ? (
-              sortOrder === 'asc' ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )
-            ) : (
-              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
-            )}
-          </span>
-        </button>
-      ),
-      accessorKey: 'paymentStatus' as keyof Order,
-      cell: ({ row }: { row: Order }) => (
-        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
-          ${row.paymentStatus === 'paid'
-            ? 'bg-green-100 text-green-700'
-            : row.paymentStatus === 'refunded'
-            ? 'bg-orange-100 text-orange-700'
-            : 'bg-red-100 text-red-700'
-          }`}
-        >
-          {row.paymentStatus.charAt(0).toUpperCase() + row.paymentStatus.slice(1)}
-        </span>
-      ),
-    },
-    {
-      header: () => (
-        <button
-          onClick={() => handleSort('total')}
-          className="flex items-center gap-1 hover:text-blue-600"
-        >
-          Total
-          <span className="inline-flex">
-            {sortBy === 'total' ? (
-              sortOrder === 'asc' ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )
-            ) : (
-              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
-            )}
-          </span>
-        </button>
-      ),
-      accessorKey: 'total' as keyof Order,
-      cell: ({ row }: { row: Order }) => (
-        <div className="font-medium">
-          ${row.total.toFixed(2)}
-          <div className="text-sm text-gray-500">{row.items} items</div>
+          {sortBy === 'paymentStatus' ? (
+            sortOrder === 'asc' ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />
+          ) : (
+            <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />
+          )}
         </div>
       ),
+      cell: ({ row }) => {
+        if (!row.paymentStatus) return <span>-</span>;
+
+        const paymentStatusClasses = {
+          [PaymentStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
+          [PaymentStatus.PAID]: 'bg-green-100 text-green-800',
+          [PaymentStatus.PARTIALLY_PAID]: 'bg-blue-100 text-blue-800',
+          [PaymentStatus.FAILED]: 'bg-gray-100 text-gray-800',
+          [PaymentStatus.REFUNDED]: 'bg-red-100 text-red-800',
+          [PaymentStatus.PARTIALLY_REFUNDED]: 'bg-purple-100 text-purple-800',
+        };
+        return (
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusClasses[row.paymentStatus as PaymentStatus]}`}>
+            {row.paymentStatus.charAt(0).toUpperCase() + row.paymentStatus.slice(1)}
+          </span>
+        );
+      },
     },
     {
-      header: () => (
-        <button
+      accessorKey: 'createdAt',
+      header: (
+        <div
+          className="flex items-center cursor-pointer"
           onClick={() => handleSort('createdAt')}
-          className="flex items-center gap-1 hover:text-blue-600"
         >
           Date
-          <span className="inline-flex">
-            {sortBy === 'createdAt' ? (
-              sortOrder === 'asc' ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )
-            ) : (
-              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
-            )}
-          </span>
-        </button>
+          {sortBy === 'createdAt' ? (
+            sortOrder === 'asc' ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />
+          ) : (
+            <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />
+          )}
+        </div>
       ),
-      accessorKey: 'createdAt' as keyof Order,
-      cell: ({ row }: { row: Order }) => (
-        <span className="text-sm text-gray-500">
-          {format(new Date(row.createdAt), 'MMM d, yyyy')}
-        </span>
+      cell: ({ row }) => (
+        <div className="text-sm">{formatDate(row.createdAt)}</div>
       ),
     },
     {
+      accessorKey: undefined,
       header: 'Actions',
-      cell: ({ row }: { row: Order }) => (
-        <div className="flex items-center gap-2">
+      cell: ({ row }) => (
+        <div className="flex items-center space-x-2">
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
             onClick={() => router.push(`/orders/${row.id}`)}
-            disabled={isLoadingOperation}
           >
             <Eye className="h-4 w-4" />
           </Button>
           <Button
-            variant="destructive"
-            size="sm"
+            variant="ghost"
+            size="icon"
             onClick={() => handleDelete(row.id)}
-            disabled={isLoadingOperation}
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-4 w-4 text-red-500" />
           </Button>
         </div>
       ),
     },
   ];
 
-  if (error) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-        <p className="text-red-600">Failed to load orders</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Orders</h1>
-        <div className="flex items-center gap-2">
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Orders</h1>
+          <p className="text-gray-500 mt-1">View and manage orders from customers</p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2">
           <Button
-            variant="outline"
-            size="sm"
             onClick={handleExport}
+            variant="outline"
             disabled={isLoadingOperation}
           >
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
+
+          <Button
+            variant="destructive"
+            disabled={selectedOrders.length === 0 || isLoadingOperation}
+            onClick={handleBulkDelete}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete ({selectedOrders.length})
+          </Button>
+
+          <Button
+            variant={isFiltersOpen ? "default" : "outline"}
+            onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            {isFiltersOpen ? 'Hide Filters' : 'Filter'}
+            {hasActiveFilters && !isFiltersOpen ? (
+              <span className="ml-1 flex h-2 w-2 rounded-full bg-blue-600"></span>
+            ) : null}
+          </Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <CommonFilters
-        config={filterConfig}
-        filters={filters}
-        onChange={handleFiltersChange}
-        onReset={handleFiltersReset}
-      />
-
-      {/* Bulk Actions */}
-      {selectedOrders.length > 0 && (
-        <div className="flex items-center gap-4 py-4">
-          <span className="text-sm text-gray-600">
-            {selectedOrders.length} items selected
-          </span>
-          <div className="flex items-center gap-2">
+      {isFiltersOpen && (
+        <div className="border border-gray-200 rounded-md p-4 bg-white">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium">Filters</h2>
             <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBulkDelete}
-              disabled={isLoadingOperation}
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsFiltersOpen(false)}
             >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Selected
+              <X className="h-4 w-4" />
             </Button>
           </div>
+
+          <CommonFilters
+            config={filterConfig}
+            filters={filters}
+            onChange={handleFiltersChange}
+            onReset={handleFiltersReset}
+          />
         </div>
       )}
 
-      {/* Table */}
-      <div className="rounded-lg border border-gray-200">
-        <Table
-          data={data?.orders ?? []}
-          columns={columns}
-          isLoading={isLoading}
-          selection={{
-            selectedRows: selectedOrders,
-            onSelectedRowsChange: setSelectedOrders,
-          }}
-        />
-
-        {/* Pagination */}
-        <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-4">
-            <p className="text-sm text-gray-700">
-              Showing{' '}
-              <span className="font-medium">
-                {data ? (page - 1) * pageSize + 1 : 0}
-              </span>{' '}
-              to{' '}
-              <span className="font-medium">
-                {data
-                  ? Math.min(page * pageSize, data.pagination.total)
-                  : 0}
-              </span>{' '}
-              of{' '}
-              <span className="font-medium">{data?.pagination.total || 0}</span>{' '}
-              results
-            </p>
-
-            <select
-              value={pageSize}
-              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-              className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value={10}>10 per page</option>
-              <option value={25}>25 per page</option>
-              <option value={50}>50 per page</option>
-              <option value={100}>100 per page</option>
-            </select>
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-red-600">Failed to load orders</p>
+        </div>
+      ) : (
+        <>
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <Table
+              columns={columns}
+              data={data?.orders || []}
+              isLoading={isLoading || isLoadingOperation}
+              selection={{
+                selectedRows: selectedOrders,
+                onSelectedRowsChange: setSelectedOrders
+              }}
+            />
+            {data?.orders && data.orders.length === 0 && !isLoading && (
+              <div className="text-center py-10">
+                <ShoppingBag className="h-10 w-10 text-gray-400 mb-3 mx-auto" />
+                <h3 className="text-sm font-medium text-gray-900">No orders found</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {hasActiveFilters ? 'Try adjusting your filters.' : 'Orders will appear here when customers place them.'}
+                </p>
+              </div>
+            )}
           </div>
 
-          <Pagination
-            currentPage={page}
-            pageSize={pageSize}
-            totalItems={data?.pagination.total || 0}
-            onPageChange={handlePageChange}
-          />
-        </div>
-      </div>
+          {data?.pagination && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                Showing {((data.pagination.page - 1) * data.pagination.limit) + 1} to {Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)} of {data.pagination.total} orders
+              </p>
+              <Pagination
+                currentPage={page}
+                pageSize={pageSize}
+                totalItems={data.pagination?.total || 0}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 } 

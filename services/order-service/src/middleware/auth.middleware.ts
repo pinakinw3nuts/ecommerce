@@ -32,6 +32,15 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     
     // Verify the JWT token
     await request.jwtVerify();
+
+    // Normalize roles to lowercase for case-insensitive checks
+    if (request.user) {
+      if (!Array.isArray(request.user.roles) && typeof request.user.role === 'string') {
+        request.user.roles = [request.user.role.toLowerCase()];
+      } else if (Array.isArray(request.user.roles)) {
+        request.user.roles = request.user.roles.map((role: string) => role.toLowerCase());
+      }
+    }
     
     // Log successful authentication and user info
     const user = request.user as { id?: string, roles?: string[] };
@@ -82,6 +91,15 @@ export async function adminAuthMiddleware(request: FastifyRequest, reply: Fastif
     
     // First verify the JWT token
     await request.jwtVerify();
+
+    // Normalize roles to lowercase for case-insensitive checks
+    if (request.user) {
+      if (!Array.isArray(request.user.roles) && typeof request.user.role === 'string') {
+        request.user.roles = [request.user.role.toLowerCase()];
+      } else if (Array.isArray(request.user.roles)) {
+        request.user.roles = request.user.roles.map((role: string) => role.toLowerCase());
+      }
+    }
     
     // Check if user has admin role
     const user = request.user as { id?: string, roles?: string[] };

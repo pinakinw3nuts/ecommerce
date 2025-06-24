@@ -141,15 +141,15 @@ export async function orderRoutes(fastify: FastifyInstance) {
             200: {
               type: 'object',
               properties: {
-                data: {
+                orders: {
                   type: 'array',
                   items: orderResponseSchema
                 },
-                meta: {
+                pagination: {
                   type: 'object',
                   properties: {
                     total: { type: 'number' },
-                    totalPages: { type: 'number' },
+                    pages: { type: 'number' },
                     page: { type: 'number' },
                     limit: { type: 'number' }
                   }
@@ -207,12 +207,12 @@ export async function orderRoutes(fastify: FastifyInstance) {
           );
 
           return reply.send({
-            data: orders,
-            meta: {
+            orders: orders,
+            pagination: {
               total,
               page: pagination.page,
               limit: pagination.limit,
-              totalPages: Math.ceil(total / pagination.limit)
+              pages: Math.ceil(total / pagination.limit)
             }
           });
         } catch (error) {

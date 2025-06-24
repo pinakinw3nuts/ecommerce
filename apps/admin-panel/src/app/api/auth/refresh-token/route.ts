@@ -1,17 +1,15 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
+import { setAuthCookies, clearAuthCookies } from '../../../../lib/auth-utils';
 
 // Force dynamic rendering for this route
 export const dynamic = 'force-dynamic';
 
-
-
 const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:3001';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    // Get the refresh token from the HTTP-only cookie
-    const refreshToken = cookies().get('admin_refresh_token')?.value;
+    // Get the refresh token directly from the cookie
+    const refreshToken = request.cookies.get('admin_refresh_token')?.value;
 
     if (!refreshToken) {
       return NextResponse.json(
@@ -43,16 +41,15 @@ export async function POST() {
       if (!response.ok) {
         // If refresh token is invalid or expired, clear cookies
         if (response.status === 401) {
-          cookies().set('admin_token', '', {
-            httpOnly: true,
-            maxAge: 0,
-            path: '/',
-          });
-          cookies().set('admin_refresh_token', '', {
-            httpOnly: true,
-            maxAge: 0,
-            path: '/',
-          });
+          const expiredResponse = NextResponse.json(
+            { message: data.message || 'Failed to refresh token' },
+            { status: response.status }
+          );
+          
+          // Clear cookies
+          clearAuthCookies(expiredResponse);
+          
+          return expiredResponse;
         }
 
         return NextResponse.json(
@@ -61,28 +58,16 @@ export async function POST() {
         );
       }
 
-      // Create the response
+      // Create the response with the new tokens
       const res = NextResponse.json({
         accessToken: data.accessToken,
         refreshToken: data.refreshToken
       });
 
-      // Set the new access token in an HTTP-only cookie
-      cookies().set('admin_token', data.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 15 * 60, // 15 minutes (match token expiration)
-        path: '/',
-      });
-
-      // Store refresh token in a separate cookie with longer expiration
-      cookies().set('admin_refresh_token', data.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60, // 7 days
-        path: '/',
+      // Set the auth cookies
+      setAuthCookies(res, {
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken
       });
 
       return res;
