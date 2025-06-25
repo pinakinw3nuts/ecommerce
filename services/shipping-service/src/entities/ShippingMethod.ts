@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { ShippingZone } from './ShippingZone';
 import { ShippingRate } from './ShippingRate';
+import { formatDateColumn } from '../utils/date-formatter';
 
 /**
  * ShippingMethod entity for storing shipping method options
@@ -63,4 +64,24 @@ export class ShippingMethod {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  /**
+   * Custom toJSON method to handle serialization and avoid circular references
+   */
+  toJSON() {
+    return {
+      id: this.id,
+      name: this.name,
+      code: this.code,
+      description: this.description,
+      baseRate: this.baseRate,
+      estimatedDays: this.estimatedDays,
+      icon: this.icon,
+      isActive: this.isActive,
+      displayOrder: this.displayOrder,
+      settings: this.settings,
+      createdAt: formatDateColumn(this.createdAt),
+      updatedAt: formatDateColumn(this.updatedAt)
+    };
+  }
 } 

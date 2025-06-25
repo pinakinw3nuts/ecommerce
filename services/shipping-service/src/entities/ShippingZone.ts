@@ -6,10 +6,12 @@ import {
   UpdateDateColumn,
   Index,
   OneToMany,
-  ManyToMany
+  ManyToMany,
+  JoinTable
 } from 'typeorm';
 import { ShippingRate } from './ShippingRate';
 import { ShippingMethod } from './ShippingMethod';
+import { formatDateColumn } from '../utils/date-formatter';
 
 /**
  * ShippingZone entity for storing geographical shipping regions
@@ -53,7 +55,12 @@ export class ShippingZone {
   @OneToMany(() => ShippingRate, rate => rate.shippingZone)
   rates: ShippingRate[];
 
-  @ManyToMany(() => ShippingMethod, method => method.zones)
+  @ManyToMany(() => ShippingMethod)
+  @JoinTable({
+    name: 'shipping_method_zones',
+    joinColumn: { name: 'shipping_zone_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'shipping_method_id', referencedColumnName: 'id' }
+  })
   methods: ShippingMethod[];
 
   @CreateDateColumn()
@@ -61,4 +68,25 @@ export class ShippingZone {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  /**
+   * Custom toJSON method to handle serialization and avoid circular references
+   */
+  toJSON() {
+    return {
+      id: this.id,
+      name: this.name,
+      code: this.code,
+      description: this.description,
+      countries: this.countries,
+      regions: this.regions,
+      pincodePatterns: this.pincodePatterns,
+      pincodeRanges: this.pincodeRanges,
+      excludedPincodes: this.excludedPincodes,
+      isActive: this.isActive,
+      priority: this.priority,
+      createdAt: formatDateColumn(this.createdAt),
+      updatedAt: formatDateColumn(this.updatedAt)
+    };
+  }
 } 

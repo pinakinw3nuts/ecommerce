@@ -22,7 +22,10 @@ import {
   ChevronRight,
   Tag,
   Sliders,
-  Loader2
+  Loader2,
+  Truck,
+  Star,
+  Gift
 } from 'lucide-react';
 
 interface NavigationItem {
@@ -52,6 +55,16 @@ const navigation: NavigationItem[] = [
   { name: 'Payments', href: '/payments', icon: CreditCard },
   { name: 'Offers', href: '/offers', icon: Ticket },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  {
+    name: 'Shipping Management',
+    href: '/shipping',
+    icon: Truck,
+    submenu: [
+      { name: 'Shipping Methods', href: '/shipping/methods', icon: Truck },
+      { name: 'Shipping Zones', href: '/shipping/zones', icon: BookmarkIcon },
+      { name: 'Shipping Rates', href: '/shipping/rates', icon: Sliders },
+    ],
+  },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 

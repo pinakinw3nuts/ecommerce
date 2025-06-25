@@ -708,6 +708,34 @@ export function CommonFilters({ config, filters, onChange, onReset }: CommonFilt
                   // Skip text type (search) in the dropdown
                   if (field.type === 'text') return null;
                   
+                  // Custom status filter as buttons
+                  if (key === 'isActive') {
+                    const selected = Array.isArray(filters.isActive) ? filters.isActive[0] : undefined;
+                    return (
+                      <div key={key} className="space-y-2 border-t border-gray-100 pt-4 mt-4">
+                        <h4 className="text-sm font-medium text-gray-700">{field.placeholder}</h4>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={selected === 'true' ? 'default' : 'outline'}
+                            className={selected === 'true' ? 'bg-green-600 text-white' : ''}
+                            onClick={() => handleChange('isActive', ['true'])}
+                          >
+                            Active
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={selected === 'false' ? 'default' : 'outline'}
+                            className={selected === 'false' ? 'bg-gray-700 text-white' : ''}
+                            onClick={() => handleChange('isActive', ['false'])}
+                          >
+                            Inactive
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  
                   return (
                     <div key={key} className="space-y-2 border-t border-gray-100 pt-4 mt-4">
                       <h4 

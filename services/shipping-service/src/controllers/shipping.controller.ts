@@ -6,16 +6,33 @@ import { logger } from '../utils/logger';
 import {
   Entity,
   Repository,
-  In
+  In,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+  OneToMany,
+  ManyToMany,
+  JoinTable,
+  ILike,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual
 } from 'typeorm';
 import { AppDataSource } from '../config/dataSource';
 import { ShippingMethod } from '../entities/ShippingMethod';
 import { ShippingZone } from '../entities/ShippingZone';
 import { ShippingRate } from '../entities/ShippingRate';
 import { calculateETA } from '../utils/eta';
-import { FastifyRequest as FastifyRequestBase } from 'fastify';
 import { authenticate, authorize } from '../middlewares/auth';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import { 
+  shippingMethodToPlainObject, 
+  shippingZoneToPlainObject, 
+  shippingRateToPlainObject 
+} from '../utils/entity-formatter';
+import { entityToPlain } from '../utils/property-accessor';
 
 // Type definitions to work with Fastify
 type FastifyInstance = any;
@@ -393,7 +410,28 @@ export class ShippingController {
         schema: {
           tags: ['admin-shipping'],
           summary: 'List shipping zones',
-          response: { 200: { type: 'array' } }
+          querystring: {
+            type: 'object',
+            properties: {
+              page: { type: 'integer', minimum: 1, default: 1 },
+              limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+              sortBy: { type: 'string', enum: ['name', 'code', 'createdAt', 'updatedAt', 'priority'], default: 'createdAt' },
+              order: { type: 'string', enum: ['ASC', 'DESC'], default: 'DESC' },
+              search: { type: 'string' },
+              isActive: { type: 'boolean', description: 'Filter by active status' }
+            }
+          },
+          response: {
+            200: {
+              type: 'object',
+              properties: {
+                data: { type: 'array', items: { type: 'object' } },
+                total: { type: 'integer' },
+                page: { type: 'integer' },
+                pageSize: { type: 'integer' }
+              }
+            }
+          }
         }
       },
       this.listShippingZones.bind(this)
@@ -464,7 +502,27 @@ export class ShippingController {
         schema: {
           tags: ['admin-shipping'],
           summary: 'List shipping rates',
-          response: { 200: { type: 'array' } }
+          querystring: {
+            type: 'object',
+            properties: {
+              page: { type: 'integer', minimum: 1, default: 1 },
+              limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+              sortBy: { type: 'string', enum: ['name', 'createdAt', 'updatedAt', 'rate', 'estimatedDays'], default: 'createdAt' },
+              order: { type: 'string', enum: ['ASC', 'DESC'], default: 'DESC' },
+              search: { type: 'string' }
+            }
+          },
+          response: {
+            200: {
+              type: 'object',
+              properties: {
+                data: { type: 'array', items: { type: 'object' } },
+                total: { type: 'integer' },
+                page: { type: 'integer' },
+                pageSize: { type: 'integer' }
+              }
+            }
+          }
         }
       },
       this.listShippingRates.bind(this)
@@ -483,6 +541,40 @@ export class ShippingController {
       },
       this.getShippingRateById.bind(this)
     );
+
+    fastify.get(
+      '/admin/shipping-method',
+      {
+        preHandler: [authenticate, authorize(['admin'])],
+        schema: {
+          tags: ['admin-shipping'],
+          summary: 'List shipping methods (singular endpoint)',
+          querystring: {
+            type: 'object',
+            properties: {
+              page: { type: 'integer', minimum: 1, default: 1 },
+              limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+              sortBy: { type: 'string', enum: ['name', 'code', 'createdAt', 'updatedAt', 'displayOrder'], default: 'createdAt' },
+              order: { type: 'string', enum: ['ASC', 'DESC'], default: 'DESC' },
+              search: { type: 'string' },
+              isActive: { type: 'boolean', description: 'Filter by active status' }
+            }
+          },
+          response: {
+            200: {
+              type: 'object',
+              properties: {
+                data: { type: 'array', items: { type: 'object' } },
+                total: { type: 'integer' },
+                page: { type: 'integer' },
+                pageSize: { type: 'integer' }
+              }
+            }
+          }
+        }
+      },
+      this.listShippingMethods.bind(this)
+    );
   }
 
   /**
@@ -490,8 +582,136 @@ export class ShippingController {
    */
   async listShippingMethods(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const methods = await this.shippingService.listShippingMethods();
-      return reply.code(200).send(methods);
+      const {
+        page = 1,
+        limit = 20,
+        sortBy = 'createdAt',
+        order = 'DESC',
+        search = '',
+        isActive,
+        minRate,
+        maxRate
+      } = request.query as any;
+      const skip = (Number(page) - 1) * Number(limit);
+      const take = Number(limit);
+      const sortField = ['name', 'code', 'createdAt', 'updatedAt', 'displayOrder', 'baseRate'].includes(sortBy) ? sortBy : 'createdAt';
+      const sortOrder = order === 'ASC' ? 'ASC' : 'DESC';
+      
+      console.log('Query params:', { page, limit, sortBy, order, search, isActive, minRate, maxRate });
+      
+      // Build where clause
+      let where: any = {};
+      
+      // Handle search
+      if (search) {
+        where = [
+          { name: ILike(`%${search}%`) },
+          { code: ILike(`%${search}%`) }
+        ];
+      }
+      
+      // Handle isActive filter
+      if (isActive !== undefined) {
+        // Convert string 'true'/'false' to boolean
+        const isActiveBool = isActive === 'true' ? true : isActive === 'false' ? false : !!isActive;
+        
+        console.log(`Processing isActive filter: ${isActive} (${typeof isActive}) -> ${isActiveBool}`);
+        
+        // If we already have search conditions, add isActive to each
+        if (Array.isArray(where)) {
+          where = where.map(condition => ({ ...condition, isActive: isActiveBool }));
+        } else {
+          where.isActive = isActiveBool;
+        }
+      }
+      
+      // Handle rate range filter
+      if (minRate !== undefined || maxRate !== undefined) {
+        const minRateVal = minRate !== undefined ? parseFloat(minRate as string) : undefined;
+        const maxRateVal = maxRate !== undefined ? parseFloat(maxRate as string) : undefined;
+        
+        console.log('Rate range filter:', { minRate: minRateVal, maxRate: maxRateVal });
+        
+        // If we already have search or isActive conditions
+        if (Array.isArray(where)) {
+          where = where.map(condition => {
+            const newCondition = { ...condition };
+            
+            if (minRateVal !== undefined && maxRateVal !== undefined) {
+              newCondition.baseRate = Between(minRateVal, maxRateVal);
+            } else if (minRateVal !== undefined) {
+              newCondition.baseRate = MoreThanOrEqual(minRateVal);
+            } else if (maxRateVal !== undefined) {
+              newCondition.baseRate = LessThanOrEqual(maxRateVal);
+            }
+            
+            return newCondition;
+          });
+        } else {
+          // Add rate range conditions to where clause
+          if (minRateVal !== undefined && maxRateVal !== undefined) {
+            where.baseRate = Between(minRateVal, maxRateVal);
+          } else if (minRateVal !== undefined) {
+            where.baseRate = MoreThanOrEqual(minRateVal);
+          } else if (maxRateVal !== undefined) {
+            where.baseRate = LessThanOrEqual(maxRateVal);
+          }
+        }
+      }
+      const [data, total] = await this.shippingMethodRepository.findAndCount({
+        where,
+        order: { [sortField]: sortOrder },
+        skip,
+        take
+      });
+
+      // Debug: Log the entities to see what's in them before serialization
+      console.log('Number of shipping methods found:', data.length);
+      if (data.length > 0) {
+        console.log('Keys in first object:', Object.keys(data[0]));
+        console.log('toJSON in first object?', typeof data[0].toJSON === 'function');
+        console.log('First object prototype:', Object.getPrototypeOf(data[0]));
+      }
+
+      // Manual serialization approach - creating completely new plain objects
+      const plainData = data.map(method => ({
+        id: method.id,
+        name: method.name,
+        code: method.code,
+        description: method.description,
+        baseRate: typeof method.baseRate === 'object' && method.baseRate !== null ? parseFloat((method.baseRate as any).toString()) : method.baseRate,
+        estimatedDays: method.estimatedDays,
+        icon: method.icon,
+        isActive: method.isActive,
+        displayOrder: method.displayOrder,
+        settings: method.settings,
+        createdAt: method.createdAt instanceof Date ? method.createdAt.toISOString() : method.createdAt,
+        updatedAt: method.updatedAt instanceof Date ? method.updatedAt.toISOString() : method.updatedAt
+      }));
+      
+      // Force proper serialization by using JSON.stringify and then parsing back to an object
+      const serializedData = JSON.stringify(plainData);
+      const deserializedData = JSON.parse(serializedData);
+      
+      // Debug: Log the formatted data
+      console.log('Plain data first item:', deserializedData.length > 0 ? JSON.stringify(deserializedData[0]) : 'No data');
+
+      // Use a direct approach to build the response object
+      const responseObj = {
+        data: deserializedData,
+        total,
+        page: Number(page),
+        pageSize: Number(limit)
+      };
+
+      // Serialize the entire response
+      const serializedResponse = JSON.stringify(responseObj);
+      
+      // Set content type explicitly
+      reply.header('Content-Type', 'application/json');
+      
+      // Send the pre-serialized JSON string directly
+      return reply.code(200).send(serializedResponse);
     } catch (error) {
       logger.error({
         method: 'listShippingMethods',
@@ -833,8 +1053,37 @@ export class ShippingController {
     try {
       const { id } = request.params;
       const method = await this.shippingMethodRepository.findOne({ where: { id } });
+      console.log('method', method);
       if (!method) return reply.code(404).send({ error: 'Shipping method not found' });
-      return reply.code(200).send(method);
+      // Return a plain object and wrap in { data: ... }, force serialization
+      const plain = {
+        id: method.id,
+        name: method.name,
+        code: method.code,
+        description: method.description,
+        baseRate: method.baseRate,
+        estimatedDays: method.estimatedDays,
+        icon: method.icon,
+        isActive: method.isActive,
+        settings: method.settings,
+        displayOrder: method.displayOrder,
+        createdAt: method.createdAt,
+        updatedAt: method.updatedAt
+      };
+      console.log('plain', plain);
+
+      // Force proper serialization by using JSON.stringify and then parsing back to an object
+      const serializedData = JSON.stringify(plain);
+      const deserializedData = JSON.parse(serializedData);
+      // Use a direct approach to build the response object
+      const responseObj = { data: deserializedData };
+
+      // Serialize the entire response
+      const serializedResponse = JSON.stringify(responseObj);
+      
+      // Set content type explicitly
+      reply.header('Content-Type', 'application/json');
+      return reply.code(200).send(serializedResponse);
     } catch (error) {
       logger.error({ method: 'getShippingMethodById', error });
       return reply.code(500).send({ error: 'Failed to get shipping method' });
@@ -971,21 +1220,86 @@ export class ShippingController {
   // Admin: List shipping zones
   async listShippingZones(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const zones = await this.shippingZoneRepository.find({
-        relations: ['rates', 'methods']
+      const {
+        page = 1,
+        limit = 20,
+        sortBy = 'createdAt',
+        order = 'DESC',
+        search = '',
+        isActive
+      } = request.query as any;
+      const skip = (Number(page) - 1) * Number(limit);
+      const take = Number(limit);
+      const sortField = ['name', 'code', 'createdAt', 'updatedAt', 'priority'].includes(sortBy) ? sortBy : 'createdAt';
+      const sortOrder = order === 'ASC' ? 'ASC' : 'DESC';
+      let where: any = {};
+      
+      if (search) {
+        where = [
+          { name: ILike(`%${search}%`) },
+          { code: ILike(`%${search}%`) }
+        ];
+      }
+      
+      // Handle isActive filter (same as listShippingMethods)
+      if (isActive !== undefined) {
+        const isActiveBool = isActive === 'true' ? true : isActive === 'false' ? false : !!isActive;
+        if (Array.isArray(where)) {
+          where = where.map(condition => ({ ...condition, isActive: isActiveBool }));
+        } else {
+          where.isActive = isActiveBool;
+        }
+      }
+      
+      const [data, total] = await this.shippingZoneRepository.findAndCount({
+        where,
+        order: { [sortField]: sortOrder },
+        skip,
+        take
       });
       
-      return reply.code(200).send({
-        statusCode: 200,
-        message: 'Shipping zones retrieved successfully',
-        data: zones
-      });
+      // Manual serialization approach - creating completely new plain objects
+      const plainData = data.map(zone => ({
+        id: zone.id,
+        name: zone.name,
+        code: zone.code,
+        description: zone.description,
+        countries: zone.countries,
+        regions: zone.regions,
+        pincodePatterns: zone.pincodePatterns,
+        pincodeRanges: zone.pincodeRanges,
+        excludedPincodes: zone.excludedPincodes,
+        isActive: zone.isActive,
+        priority: zone.priority,
+        createdAt: zone.createdAt instanceof Date ? zone.createdAt.toISOString() : zone.createdAt,
+        updatedAt: zone.updatedAt instanceof Date ? zone.updatedAt.toISOString() : zone.updatedAt
+      }));
+      
+      // Force proper serialization
+      const serializedData = JSON.stringify(plainData);
+      const deserializedData = JSON.parse(serializedData);
+      
+      // Use a direct approach to build the response object
+      const responseObj = {
+        data: deserializedData,
+        total,
+        page: Number(page),
+        pageSize: Number(limit)
+      };
+
+      // Serialize the entire response
+      const serializedResponse = JSON.stringify(responseObj);
+      
+      // Set content type explicitly
+      reply.header('Content-Type', 'application/json');
+      
+      // Send the pre-serialized JSON string directly
+      return reply.code(200).send(serializedResponse);
     } catch (error) {
       logger.error({
         method: 'listShippingZones',
         error: error instanceof Error ? error.message : String(error)
       });
-      
       return reply.code(500).send({
         statusCode: 500,
         error: 'Internal Server Error',
@@ -999,6 +1313,11 @@ export class ShippingController {
     try {
       const { id } = request.params;
       
+      // Ensure database connection is initialized
+      if (!AppDataSource.isInitialized) {
+        await AppDataSource.initialize();
+      }
+
       const zone = await this.shippingZoneRepository.findOne({
         where: { id },
         relations: ['rates', 'methods']
@@ -1012,16 +1331,59 @@ export class ShippingController {
         });
       }
       
-      return reply.code(200).send({
+      // Convert to plain object before sending
+      const plainZone = {
+        id: zone.id,
+        name: zone.name,
+        code: zone.code,
+        description: zone.description,
+        countries: zone.countries,
+        regions: zone.regions,
+        pincodePatterns: zone.pincodePatterns,
+        pincodeRanges: zone.pincodeRanges,
+        excludedPincodes: zone.excludedPincodes,
+        isActive: zone.isActive,
+        priority: zone.priority,
+        createdAt: zone.createdAt,
+        updatedAt: zone.updatedAt,
+        rates: zone.rates?.map(rate => ({
+          id: rate.id,
+          name: rate.name,
+          rate: rate.rate,
+          isActive: rate.isActive
+        })) || [],
+        methods: zone.methods?.map(method => ({
+          id: method.id,
+          name: method.name,
+          code: method.code,
+          isActive: method.isActive
+        })) || []
+      };
+      
+      // Force proper serialization by using JSON.stringify and then parsing back to an object
+      const serializedData = JSON.stringify(plainZone);
+      const deserializedData = JSON.parse(serializedData);
+
+      // Use a direct approach to build the response object
+      const responseObj = {
         statusCode: 200,
         message: 'Shipping zone retrieved successfully',
-        data: zone
-      });
+        data: deserializedData
+      };
+
+      // Serialize the entire response
+      const serializedResponse = JSON.stringify(responseObj);
+      
+      // Set content type explicitly
+      reply.header('Content-Type', 'application/json');
+
+      return reply.code(200).send(serializedResponse);
     } catch (error) {
       logger.error({
         method: 'getShippingZoneById',
+        params: request.params,
         error: error instanceof Error ? error.message : String(error),
-        params: request.params
+        stack: error instanceof Error ? error.stack : undefined
       });
       
       return reply.code(500).send({
@@ -1195,21 +1557,85 @@ export class ShippingController {
   // Admin: List shipping rates
   async listShippingRates(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const rates = await this.shippingRateRepository.find({
+      const {
+        page = 1,
+        limit = 20,
+        sortBy = 'createdAt',
+        order = 'DESC',
+        search = ''
+      } = request.query as any;
+      const skip = (Number(page) - 1) * Number(limit);
+      const take = Number(limit);
+      const sortField = ['name', 'createdAt', 'updatedAt', 'rate', 'estimatedDays'].includes(sortBy) ? sortBy : 'createdAt';
+      const sortOrder = order === 'ASC' ? 'ASC' : 'DESC';
+      let where: any = {};
+      if (search) {
+        where = [
+          { name: ILike(`%${search}%`) }
+        ] as any;
+      }
+      const [data, total] = await this.shippingRateRepository.findAndCount({
+        where,
+        order: { [sortField]: sortOrder },
+        skip,
+        take,
         relations: ['shippingMethod', 'shippingZone']
       });
+
+      // Manual serialization approach - creating completely new plain objects with relation handling
+      const plainData = data.map(rate => ({
+        id: rate.id,
+        name: rate.name,
+        rate: typeof rate.rate === 'object' && rate.rate !== null ? parseFloat((rate.rate as any).toString()) : rate.rate,
+        shippingMethodId: rate.shippingMethodId,
+        shippingZoneId: rate.shippingZoneId,
+        minWeight: rate.minWeight,
+        maxWeight: rate.maxWeight,
+        minOrderValue: rate.minOrderValue,
+        maxOrderValue: rate.maxOrderValue,
+        estimatedDays: rate.estimatedDays,
+        conditions: rate.conditions,
+        isActive: rate.isActive,
+        createdAt: rate.createdAt instanceof Date ? rate.createdAt.toISOString() : rate.createdAt,
+        updatedAt: rate.updatedAt instanceof Date ? rate.updatedAt.toISOString() : rate.updatedAt,
+        // Handle related entities
+        shippingMethod: rate.shippingMethod ? {
+          id: rate.shippingMethod.id,
+          name: rate.shippingMethod.name,
+          code: rate.shippingMethod.code
+        } : null,
+        shippingZone: rate.shippingZone ? {
+          id: rate.shippingZone.id,
+          name: rate.shippingZone.name,
+          code: rate.shippingZone.code
+        } : null
+      }));
       
-      return reply.code(200).send({
-        statusCode: 200,
-        message: 'Shipping rates retrieved successfully',
-        data: rates
-      });
+      // Force proper serialization
+      const serializedData = JSON.stringify(plainData);
+      const deserializedData = JSON.parse(serializedData);
+      
+      // Use a direct approach to build the response object
+      const responseObj = {
+        data: deserializedData,
+        total,
+        page: Number(page),
+        pageSize: Number(limit)
+      };
+
+      // Serialize the entire response
+      const serializedResponse = JSON.stringify(responseObj);
+      
+      // Set content type explicitly
+      reply.header('Content-Type', 'application/json');
+      
+      // Send the pre-serialized JSON string directly
+      return reply.code(200).send(serializedResponse);
     } catch (error) {
       logger.error({
         method: 'listShippingRates',
         error: error instanceof Error ? error.message : String(error)
       });
-      
       return reply.code(500).send({
         statusCode: 500,
         error: 'Internal Server Error',

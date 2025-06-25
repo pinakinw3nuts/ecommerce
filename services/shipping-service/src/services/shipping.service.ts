@@ -5,11 +5,35 @@ import { ShippingZone } from '../entities/ShippingZone';
 import { ShippingRate } from '../entities/ShippingRate';
 import { calculateETA, ETAResult } from '../utils/eta';
 import { logger } from '../utils/logger';
+import { formatDateColumn } from '../utils/date-formatter';
 
 // Define ShippingMethodWithETA type
-interface ShippingMethodWithETA extends ShippingMethod {
+interface ShippingMethodWithETA extends Omit<ShippingMethod, 'toJSON'> {
   eta: ETAResult;
   rate: number;
+  toJSON?: () => Record<string, any>;
+}
+
+// Helper function to create a ShippingMethodWithETA object
+function createShippingMethodWithETA(
+  method: ShippingMethod, 
+  rate: number, 
+  eta: ETAResult
+): ShippingMethodWithETA {
+  // Create a new object with all properties needed
+  const result: ShippingMethodWithETA = {
+    ...method,
+    rate,
+    eta,
+    // Add a toJSON method that handles both the base ShippingMethod properties and the additional properties
+    toJSON: () => ({
+      ...method.toJSON(),
+      rate,
+      eta
+    })
+  };
+  
+  return result;
 }
 
 interface ShippingOptions {
@@ -116,12 +140,8 @@ export class ShippingService {
           // Calculate ETA
           const eta = calculateETA(pincode, method.code);
           
-          // Add to results
-          result.push({
-            ...method,
-            rate: rate.rate,
-            eta
-          });
+          // Add to results using our helper function
+          result.push(createShippingMethodWithETA(method, rate.rate, eta));
         } catch (error) {
           logger.error(`Error processing method ${method.id} for pincode ${pincode}`, error);
           // Skip this method and continue with others

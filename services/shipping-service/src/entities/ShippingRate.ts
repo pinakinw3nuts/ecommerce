@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { ShippingMethod } from './ShippingMethod';
 import { ShippingZone } from './ShippingZone';
+import { formatDateColumn } from '../utils/date-formatter';
 
 /**
  * Interface for shipping rate conditions
@@ -82,4 +83,37 @@ export class ShippingRate {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  /**
+   * Custom toJSON method to handle serialization and avoid circular references
+   */
+  toJSON() {
+    return {
+      id: this.id,
+      name: this.name,
+      rate: this.rate,
+      shippingMethodId: this.shippingMethodId,
+      shippingZoneId: this.shippingZoneId,
+      minWeight: this.minWeight,
+      maxWeight: this.maxWeight,
+      minOrderValue: this.minOrderValue,
+      maxOrderValue: this.maxOrderValue,
+      estimatedDays: this.estimatedDays,
+      conditions: this.conditions,
+      isActive: this.isActive,
+      createdAt: formatDateColumn(this.createdAt),
+      updatedAt: formatDateColumn(this.updatedAt),
+      // Include basic info from relations but avoid circular references
+      shippingMethod: this.shippingMethod ? {
+        id: this.shippingMethod.id,
+        name: this.shippingMethod.name,
+        code: this.shippingMethod.code
+      } : null,
+      shippingZone: this.shippingZone ? {
+        id: this.shippingZone.id,
+        name: this.shippingZone.name,
+        code: this.shippingZone.code
+      } : null
+    };
+  }
 } 
