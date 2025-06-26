@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const url = `${SHIPPING_SERVICE_URL}/api/v1/admin/shipping-rates`;
+    const url = `${SHIPPING_SERVICE_URL}/api/v1/shipping/admin/shipping-rates`;
 
     const response = await fetch(url, {
       method: 'POST',

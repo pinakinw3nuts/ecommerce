@@ -16,7 +16,7 @@ async function forwardRequest(req: NextRequest, context: RouteContext) {
   }
 
   const id = context.params.id;
-  const adminPath = `/admin/shipping/rates/${id}`;
+  const adminPath = `/api/v1/shipping/admin/shipping-rates/${id}`;
   const destinationUrl = `${SHIPPING_SERVICE_URL}${adminPath}`;
 
   try {
@@ -28,7 +28,7 @@ async function forwardRequest(req: NextRequest, context: RouteContext) {
       },
       body: req.method !== 'GET' ? req.body : null,
     });
-
+    
     return new NextResponse(response.body, {
       status: response.status,
       statusText: response.statusText,

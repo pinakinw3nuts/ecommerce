@@ -193,7 +193,7 @@ export default function ShippingRatesPage() {
       header: () => (
         <input
           type="checkbox"
-          checked={data && data.rates && data.rates.length > 0 && selectedRates.length === data.rates.length}
+          checked={Boolean(data && data.rates && data.rates.length > 0 && selectedRates.length === data.rates.length)}
           onChange={e => {
             if (e.target.checked && data && data.rates) {
               setSelectedRates(data.rates.map(r => r.id));
@@ -238,13 +238,26 @@ export default function ShippingRatesPage() {
           <span className="font-medium">{row.name}</span>
         </div>
       ),
+      sortable: true,
     },
     {
-      header: 'Rate',
+      header: () => (
+        <button onClick={() => handleSort('rate')} className="flex items-center gap-1 hover:text-blue-600">
+          Rate
+          <span className="inline-flex">
+            {sortBy === 'rate' ? (
+              sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
+        </button>
+      ),
       cell: ({ row }: { row: ShippingRate }) => {
         const rate = typeof row.rate === 'string' ? parseFloat(row.rate) : row.rate;
         return `$${rate.toFixed(2)}`;
       },
+      sortable: true,
     },
     {
       header: 'Method',
@@ -256,10 +269,10 @@ export default function ShippingRatesPage() {
     },
     {
       header: () => (
-        <button onClick={() => handleSort('isActive')} className="flex items-center gap-1 hover:text-blue-600">
-          Status
+        <button onClick={() => handleSort('estimatedDays')} className="flex items-center gap-1 hover:text-blue-600">
+          Estimated Days
           <span className="inline-flex">
-            {sortBy === 'isActive' ? (
+            {sortBy === 'estimatedDays' ? (
               sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
             ) : (
               <ChevronsUpDown className="h-4 w-4 text-gray-400" />
@@ -267,17 +280,46 @@ export default function ShippingRatesPage() {
           </span>
         </button>
       ),
+      cell: ({ row }: { row: ShippingRate }) => row.estimatedDays,
+      sortable: true,
+    },
+    {
+      header: 'Status',
       cell: ({ row }: { row: ShippingRate }) => (
         <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${row.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{row.isActive ? 'Active' : 'Inactive'}</span>
       ),
     },
     {
-      header: 'Created',
+      header: () => (
+        <button onClick={() => handleSort('createdAt')} className="flex items-center gap-1 hover:text-blue-600">
+          Created At
+          <span className="inline-flex">
+            {sortBy === 'createdAt' ? (
+              sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
+        </button>
+      ),
       cell: ({ row }: { row: ShippingRate }) => <span className="text-sm text-gray-500">{row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '-'}</span>,
+      sortable: true,
     },
     {
-      header: 'Updated',
+      header: () => (
+        <button onClick={() => handleSort('updatedAt')} className="flex items-center gap-1 hover:text-blue-600">
+          Updated At
+          <span className="inline-flex">
+            {sortBy === 'updatedAt' ? (
+              sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+            )}
+          </span>
+        </button>
+      ),
       cell: ({ row }: { row: ShippingRate }) => <span className="text-sm text-gray-500">{row.updatedAt ? new Date(row.updatedAt).toLocaleDateString() : '-'}</span>,
+      sortable: true,
     },
     {
       header: 'Actions',
