@@ -9,8 +9,11 @@ import { config } from './config/env'
 import logger from './utils/logger'
 import { paymentRoutes } from './routes/payment.routes'
 import { webhookRoutes } from './routes/webhook.routes'
+import { paymentMethodRoutes } from './routes/payment-method.routes'
 import { PaymentService } from './services/payment.service'
 import { StripeService } from './services/stripe.service'
+import { RazorpayService } from './services/razorpay.service'
+import { PaypalService } from './services/paypal.service'
 import { Payment } from './entities/payment.entity'
 import { PaymentMethod } from './entities/payment-method.entity'
 import { TypeormPlugin } from './plugins/typeorm'
@@ -22,6 +25,8 @@ declare module 'fastify' {
     db: DataSource
     paymentService: PaymentService
     stripeService: StripeService
+    razorpayService: RazorpayService
+    paypalService: PaypalService
   }
 }
 
@@ -84,18 +89,25 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     // Initialize services
     const stripeService = new StripeService(config.stripe.secretKey)
+    const razorpayService = new RazorpayService(config.razorpay.key, config.razorpay.secret)
+    const paypalService = new PaypalService(config.paypal.clientId, config.paypal.clientSecret)
     server.decorate('stripeService', stripeService)
+    server.decorate('razorpayService', razorpayService)
+    server.decorate('paypalService', paypalService)
 
     const paymentService = new PaymentService(
       server.db.getRepository(Payment),
       server.db.getRepository(PaymentMethod),
-      stripeService
+      stripeService,
+      razorpayService,
+      paypalService
     )
     server.decorate('paymentService', paymentService)
 
     // Register routes
     await server.register(paymentRoutes, { prefix: '/api/v1' })
     await server.register(webhookRoutes, { prefix: '/api/v1' })
+    await server.register(paymentMethodRoutes, { prefix: '/api/v1' })
 
     // Global error handler
     server.setErrorHandler((error, request, reply) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,8 +25,11 @@ import {
   Loader2,
   Truck,
   Star,
-  Gift
+  Gift,
+  Menu,
+  X
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface NavigationItem {
   name: string;
@@ -72,9 +75,64 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { logout } = useAuth();
   const { setLoading } = useLoadingState();
-  const [isOpen, setIsOpen] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Product Management']);
   const [activeItem, setActiveItem] = useState<string | null>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  
+  // Always use slide-from-left style on mobile
+  const [isMobileView, setIsMobileView] = useState(true);
+  
+  // Check if we're on a mobile device
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobileView(window.innerWidth < 768);
+    };
+    
+    // Initial check
+    checkIfMobile();
+    
+    // Add event listener for window resize
+    window.addEventListener('resize', checkIfMobile);
+    
+    return () => window.removeEventListener('resize', checkIfMobile);
+  }, []);
+  
+  // Close sidebar on route changes for mobile
+  useEffect(() => {
+    if (isMobileView) {
+      setIsMobileMenuOpen(false);
+    }
+  }, [pathname, isMobileView]);
+  
+  // Close sidebar when clicking outside on mobile
+  useEffect(() => {
+    const handleClickOutside = (event: Event) => {
+      const sidebar = sidebarRef.current;
+      const menuButton = document.getElementById('mobile-menu-button');
+      const target = event.target as Node;
+      
+      if (
+        isMobileMenuOpen && 
+        sidebar && 
+        !sidebar.contains(target) && 
+        menuButton && 
+        !menuButton.contains(target)
+      ) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    
+    if (isMobileMenuOpen && isMobileView) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isMobileMenuOpen, isMobileView]);
 
   const toggleSubmenu = (menuName: string) => {
     setExpandedMenus((prev) =>
@@ -209,34 +267,70 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-white border-r">
-      {/* Logo */}
-      <div className="p-6">
-        <div className="flex items-center gap-2">
-          <span className="h-8 w-8 rounded-lg bg-blue-600" />
-          <span className="text-xl font-semibold">Admin</span>
+    <>
+      {/* Mobile menu button - visible on small screens */}
+      <button 
+        id="mobile-menu-button"
+        className="fixed top-4 left-4 z-50 md:hidden bg-white p-2 rounded-md shadow-md"
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        aria-label="Toggle menu"
+      >
+        {isMobileMenuOpen ? (
+          <X className="h-6 w-6 text-gray-600" />
+        ) : (
+          <Menu className="h-6 w-6 text-gray-600" />
+        )}
+      </button>
+      
+      {/* Sidebar */}
+      <div 
+        ref={sidebarRef}
+        id="sidebar"
+        className={`
+          ${isMobileView 
+            ? isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full' 
+            : 'translate-x-0'
+          }
+          fixed md:static inset-y-0 left-0 z-40 w-64 flex-col bg-white border-r shadow-md md:shadow-none 
+          transition-all duration-300 ease-in-out h-full overflow-y-auto flex flex-shrink-0
+        `}
+      >
+        {/* Logo */}
+        <div className="p-6">
+          <div className="flex items-center gap-2">
+            <span className="h-8 w-8 rounded-lg bg-blue-600" />
+            <span className="text-xl font-semibold">Admin</span>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 px-3">
+          {navigation.map(renderNavigationItem)}
+        </nav>
+
+        {/* Logout button */}
+        <div className="border-t p-4">
+          <button
+            type="button"
+            className="group flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-red-600"
+            onClick={handleLogout}
+          >
+            <LogOut
+              className="mr-3 h-5 w-5 text-gray-400 group-hover:text-red-600"
+              aria-hidden="true"
+            />
+            Logout
+          </button>
         </div>
       </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3">
-        {navigation.map(renderNavigationItem)}
-      </nav>
-
-      {/* Logout button */}
-      <div className="border-t p-4">
-        <button
-          type="button"
-          className="group flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-red-600"
-          onClick={handleLogout}
-        >
-          <LogOut
-            className="mr-3 h-5 w-5 text-gray-400 group-hover:text-red-600"
-            aria-hidden="true"
-          />
-          Logout
-        </button>
-      </div>
-    </div>
+      
+      {/* Overlay for mobile */}
+      {isMobileMenuOpen && isMobileView && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+    </>
   );
 } 

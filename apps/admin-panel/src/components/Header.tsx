@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Menu, Transition } from '@headlessui/react';
 import { usePathname } from 'next/navigation';
-import { UserCircle, LogOut, Settings, ChevronDown } from 'lucide-react';
+import { UserCircle, LogOut, Settings, ChevronDown, Bell } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 function classNames(...classes: string[]) {
@@ -60,8 +60,24 @@ const getPageTitle = (pathname: string): string => {
 export default function Header() {
   const pathname = usePathname();
   const { logout } = useAuth();
+  const [isMobileView, setIsMobileView] = useState(false);
   // Initialize with the correct page title based on the current pathname
   const [pageTitle, setPageTitle] = useState(() => getPageTitle(pathname));
+
+  // Check if we're on a mobile device
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobileView(window.innerWidth < 768);
+    };
+    
+    // Initial check
+    checkIfMobile();
+    
+    // Add event listener for window resize
+    window.addEventListener('resize', checkIfMobile);
+    
+    return () => window.removeEventListener('resize', checkIfMobile);
+  }, []);
 
   // Update page title when pathname changes
   useEffect(() => {
@@ -91,18 +107,29 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
-      <div className="flex h-16 items-center justify-between px-6">
+    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
+      <div className="flex h-16 items-center justify-between px-4 md:px-6">
         {/* Left side - Page title */}
-        <h1 className="text-xl font-semibold text-gray-900">{pageTitle}</h1>
+        <div className="flex items-center">
+          {/* Space for mobile menu button */}
+          <div className="md:hidden w-8"></div>
+          <h1 className="text-lg md:text-xl font-semibold text-gray-900 truncate">
+            {pageTitle}
+          </h1>
+        </div>
 
         {/* Right side - User menu */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
+          {/* Notifications - hidden on smallest screens */}
+          <button className="hidden sm:flex p-1.5 rounded-full hover:bg-gray-100">
+            <Bell className="h-5 w-5 text-gray-600" />
+          </button>
+          
           <Menu as="div" className="relative">
-            <Menu.Button className="flex items-center gap-2 rounded-full bg-white p-1.5 text-gray-700 hover:text-gray-900">
-              <UserCircle className="h-8 w-8" />
-              <span className="hidden text-sm font-medium sm:block">Admin User</span>
-              <ChevronDown className="h-4 w-4" />
+            <Menu.Button className="flex items-center gap-1 md:gap-2 rounded-full bg-white p-1.5 text-gray-700 hover:text-gray-900">
+              <UserCircle className="h-6 w-6 md:h-8 md:w-8" />
+              <span className="hidden md:block text-sm font-medium">Admin User</span>
+              <ChevronDown className="hidden md:block h-4 w-4" />
             </Menu.Button>
 
             <Transition
@@ -114,7 +141,7 @@ export default function Header() {
               leaveFrom="transform opacity-100 scale-100"
               leaveTo="transform opacity-0 scale-95"
             >
-              <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+              <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
                 <Menu.Item>
                   {({ active }) => (
                     <button

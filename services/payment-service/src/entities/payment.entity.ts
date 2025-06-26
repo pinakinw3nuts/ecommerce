@@ -28,8 +28,11 @@ export enum PaymentStatus {
 // Payment method enum
 export enum PaymentProvider {
   STRIPE = 'stripe',
-  PAYPAL = 'paypal'
+  PAYPAL = 'paypal',
+  RAZORPAY = 'razorpay'
 }
+
+export type SupportedPaymentProvider = 'stripe' | 'razorpay' | 'paypal';
 
 @Entity('payments')
 export class Payment {

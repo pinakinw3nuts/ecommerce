@@ -83,18 +83,16 @@ export default async function RootLayout({
         <ToastProvider>
           <LoadingProvider>
             <div className="flex min-h-screen bg-gray-50">
-              {/* Sidebar */}
-              <div className="fixed inset-y-0 z-50 flex w-64 flex-col">
-                <Sidebar />
-              </div>
+              {/* Sidebar - in its own component with responsive handling */}
+              <Sidebar />
 
-              {/* Main content */}
-              <div className="pl-64 flex flex-col flex-1">
+              {/* Main content area - directly adjacent to sidebar with no gap */}
+              <div className="flex-1 flex flex-col w-full">
                 {/* Header */}
                 <Header />
 
                 {/* Page content */}
-                <main className="flex-1 p-6">
+                <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
                   {children}
                 </main>
               </div>

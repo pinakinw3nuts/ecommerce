@@ -76,10 +76,10 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+      <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Dashboard</h1>
       
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Stats Grid - Responsive with 1 column on mobile, 2 on tablet, 4 on desktop */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           label="Total Users"
           value={metrics.totalUsers}
@@ -113,31 +113,41 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Chart */}
-      <Chart data={orderTrends} title="Order Trends - Last 7 Days" />
+      {/* Chart - Full width with responsive height */}
+      <div className="h-[300px] sm:h-[350px] md:h-[400px]">
+        <Chart data={orderTrends} title="Order Trends - Last 7 Days" />
+      </div>
 
-      {/* Recent Logs */}
-      <div className="rounded-lg border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 px-6 py-4">
+      {/* Recent Logs - Responsive card layout */}
+      <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+        <div className="border-b border-gray-200 px-4 sm:px-6 py-4">
           <h3 className="text-lg font-medium text-gray-900">Recent Activity</h3>
         </div>
         <div className="divide-y divide-gray-200">
-          {recentLogs.map((log: ActivityLog) => (
-            <div key={log.id} className="px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Clock className="h-5 w-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{log.action}</p>
-                    <p className="text-sm text-gray-500">{log.details}</p>
+          {recentLogs.length === 0 ? (
+            <div className="px-4 sm:px-6 py-4 text-center text-gray-500">
+              No recent activity
+            </div>
+          ) : (
+            recentLogs.map((log: ActivityLog) => (
+              <div key={log.id} className="px-4 sm:px-6 py-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="mt-0.5 sm:mt-0">
+                      <Clock className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{log.action}</p>
+                      <p className="text-sm text-gray-500 line-clamp-2">{log.details}</p>
+                    </div>
+                  </div>
+                  <div className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-0 ml-8 sm:ml-0">
+                    {formatDate(log.timestamp)}
                   </div>
                 </div>
-                <div className="text-sm text-gray-500">
-                  {formatDate(log.timestamp)}
-                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

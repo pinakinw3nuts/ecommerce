@@ -22,6 +22,7 @@ export interface Column<T> {
   accessorKey?: keyof T;
   cell?: (props: { row: T; table: TableInstance & { getRowProps: (row: T) => { getIsSelected: () => boolean; getToggleSelectedHandler: () => () => void } } }) => React.ReactNode;
   sortable?: boolean;
+  width?: string;
 }
 
 interface PaginationProps {
@@ -41,6 +42,7 @@ interface TableProps<T> {
     selectedRows: string[];
     onSelectedRowsChange: (selectedRows: string[]) => void;
   };
+  onAdd?: () => void;
 }
 
 export default function Table<T extends { id: string }>({
@@ -50,6 +52,7 @@ export default function Table<T extends { id: string }>({
   pagination,
   onSort,
   selection,
+  onAdd,
 }: TableProps<T>) {
   const [sortConfig, setSortConfig] = useState<{
     key: keyof T | null;
@@ -118,89 +121,99 @@ export default function Table<T extends { id: string }>({
 
   return (
     <div className="w-full">
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      {/* Table with horizontal scrolling */}
+      <table className="w-full table-fixed border-separate border-spacing-0">
+        <thead className="bg-gray-50 sticky top-0 z-10">
+          <tr>
+            {columns.map((column, i) => (
+              <th
+                key={i}
+                scope="col"
+                style={{ width: column.width }}
+                className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap ${
+                  column.sortable ? 'cursor-pointer select-none' : ''
+                }`}
+                onClick={() => column.sortable ? handleSort(column) : undefined}
+              >
+                <div className="flex items-center gap-1">
+                  {typeof column.header === 'function' ? column.header({
+                    table: {
+                      getIsAllRowsSelected: () => selection?.selectedRows.length === data.length,
+                      getToggleAllRowsSelectedHandler: () => () => toggleAllRows(),
+                    },
+                  }) : column.header}
+                  {column.sortable && getSortIcon(column)}
+                </div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {isLoading ? (
             <tr>
-              {columns.map((column, i) => (
-                <th
-                  key={i}
-                  scope="col"
-                  className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                    column.sortable ? 'cursor-pointer select-none' : ''
-                  }`}
-                  onClick={() => column.sortable ? handleSort(column) : undefined}
-                >
-                  <div className="flex items-center gap-1">
-                    {typeof column.header === 'function' ? column.header({
-                      table: {
-                        getIsAllRowsSelected: () => selection?.selectedRows.length === data.length,
-                        getToggleAllRowsSelectedHandler: () => () => toggleAllRows(),
-                      },
-                    }) : column.header}
-                    {column.sortable && getSortIcon(column)}
-                  </div>
-                </th>
-              ))}
+              <td
+                colSpan={columns.length}
+                className="px-6 py-4 whitespace-nowrap text-center"
+              >
+                <div className="flex items-center justify-center text-gray-500">
+                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                  Loading...
+                </div>
+              </td>
             </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {isLoading ? (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-6 py-4 whitespace-nowrap text-center"
-                >
-                  <div className="flex items-center justify-center text-gray-500">
-                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                    Loading...
-                  </div>
-                </td>
+          ) : data.length === 0 ? (
+            <tr>
+              <td
+                colSpan={columns.length}
+                className="px-6 py-12 whitespace-nowrap text-center text-gray-500"
+              >
+                <div className="flex flex-col items-center justify-center gap-4">
+                  {/* Illustration (emoji for simplicity) */}
+                  <span className="text-6xl">🛒</span>
+                  <div className="text-lg font-semibold text-gray-700">No products found</div>
+                  <div className="text-sm text-gray-500 mb-2">Get started by adding your first product.</div>
+                  {typeof onAdd === 'function' && (
+                    <Button variant="default" size="sm" onClick={onAdd}>
+                      + Add Product
+                    </Button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ) : (
+            data.map((row) => (
+              <tr
+                key={row.id}
+                className="hover:bg-gray-50 focus-within:bg-gray-50 transition-colors"
+              >
+                {columns.map((column, i) => (
+                  <td
+                    key={i}
+                    className="px-6 py-4"
+                    style={{ width: column.width }}
+                  >
+                    {column.cell
+                      ? column.cell({
+                          row,
+                          table: {
+                            getIsAllRowsSelected: () => selection?.selectedRows.length === data.length,
+                            getToggleAllRowsSelectedHandler: () => () => toggleAllRows(),
+                            getRowProps: (row: T) => ({
+                              getIsSelected: () => isRowSelected(row),
+                              getToggleSelectedHandler: () => () => toggleRowSelection(row),
+                            }),
+                          },
+                        })
+                      : column.accessorKey
+                      ? String(row[column.accessorKey])
+                      : null}
+                  </td>
+                ))}
               </tr>
-            ) : data.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-6 py-4 whitespace-nowrap text-center text-gray-500"
-                >
-                  No data available
-                </td>
-              </tr>
-            ) : (
-              data.map((row) => (
-                <tr
-                  key={row.id}
-                  className="hover:bg-gray-50 focus-within:bg-gray-50 transition-colors"
-                >
-                  {columns.map((column, i) => (
-                    <td
-                      key={i}
-                      className="px-6 py-4 whitespace-nowrap"
-                    >
-                      {column.cell
-                        ? column.cell({
-                            row,
-                            table: {
-                              getIsAllRowsSelected: () => selection?.selectedRows.length === data.length,
-                              getToggleAllRowsSelectedHandler: () => () => toggleAllRows(),
-                              getRowProps: (row: T) => ({
-                                getIsSelected: () => isRowSelected(row),
-                                getToggleSelectedHandler: () => () => toggleRowSelection(row),
-                              }),
-                            },
-                          })
-                        : column.accessorKey
-                        ? String(row[column.accessorKey])
-                        : null}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+            ))
+          )}
+        </tbody>
+      </table>
 
       {/* Pagination */}
       {pagination && totalPages > 1 && (

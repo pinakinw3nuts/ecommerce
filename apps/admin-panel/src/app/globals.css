@@ -4,6 +4,7 @@
 
 html, body {
   @apply bg-gray-50 text-gray-900 antialiased;
+  overscroll-behavior-y: contain;
 }
 
 @layer base {
@@ -59,4 +60,78 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Improve touch interactions */
+@media (max-width: 768px) {
+  button, a, input, select, textarea {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+  
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+  
+  /* Prevent pull-to-refresh on mobile but allow scrolling */
+  html, body {
+    overscroll-behavior-y: none;
+  }
+  
+  body {
+    position: relative;
+    min-height: 100vh;
+  }
+}
+
+/* Fix for desktop sidebar spacing */
+@media (min-width: 768px) {
+  /* This ensures the sidebar has enough space on desktop */
+  #sidebar {
+    width: 256px !important; /* 64 * 4px = 256px */
+    min-width: 256px;
+  }
+  
+  /* Main content should have margin to avoid overlapping with sidebar */
+  .main-content {
+    margin-left: 256px;
+  }
+}
+
+/* Slide-up animation for mobile menu */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Slide-in animation for mobile menu */
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out forwards;
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* Fix for mobile menu */
+#sidebar {
+  display: flex;
+  flex-direction: column;
 }

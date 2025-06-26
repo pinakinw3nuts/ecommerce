@@ -6,6 +6,14 @@ import { Payment } from '../entities/payment.entity';
 import { PaymentMethod } from '../entities/payment-method.entity';
 import { Refund } from '../entities/refund.entity';
 
+// Extend FastifyInstance type to include 'db' property
+import 'fastify';
+declare module 'fastify' {
+  interface FastifyInstance {
+    db: DataSource;
+  }
+}
+
 // Create TypeORM data source
 export const AppDataSource = new DataSource({
   type: 'postgres',

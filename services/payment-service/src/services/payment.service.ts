@@ -1,8 +1,10 @@
 import { Repository } from 'typeorm'
-import { Payment, PaymentStatus, PaymentMethod } from '../entities/payment.entity'
+import { Payment, PaymentStatus, PaymentMethod, SupportedPaymentProvider, PaymentProvider } from '../entities/payment.entity'
 import { logger } from '../utils/logger'
-import { PaymentMethod as PaymentMethodEntity } from '../entities/payment-method.entity'
+import { PaymentMethod as PaymentMethodEntity, PaymentMethodType, PaymentMethodStatus } from '../entities/payment-method.entity'
 import { StripeService } from './stripe.service'
+import { RazorpayService } from './razorpay.service'
+import { PaypalService } from './paypal.service'
 
 const paymentLogger = logger.child({ service: 'PaymentService' })
 
@@ -10,24 +12,32 @@ export class PaymentService {
   private paymentRepo: Repository<Payment>
   private paymentMethodRepo: Repository<PaymentMethodEntity>
   private stripeService: StripeService
+  private razorpayService: RazorpayService
+  private paypalService: PaypalService
 
   constructor(
     paymentRepo: Repository<Payment>,
     paymentMethodRepo: Repository<PaymentMethodEntity>,
-    stripeService: StripeService
+    stripeService: StripeService,
+    razorpayService: RazorpayService,
+    paypalService: PaypalService
   ) {
     this.paymentRepo = paymentRepo
     this.paymentMethodRepo = paymentMethodRepo
     this.stripeService = stripeService
+    this.razorpayService = razorpayService
+    this.paypalService = paypalService
   }
 
-  // Create and process a new payment
+  // Create and process a new payment (multi-provider)
   async createPayment(data: {
     orderId: string
     userId: string
     amount: number
     currency: string
     paymentMethodId: string
+    provider?: SupportedPaymentProvider
+    description?: string
   }): Promise<Payment> {
     const paymentMethod = await this.paymentMethodRepo.findOneBy({
       id: data.paymentMethodId
@@ -37,6 +47,9 @@ export class PaymentService {
       throw new Error('Payment method not found')
     }
 
+    // Determine provider
+    const provider: SupportedPaymentProvider = data.provider || (paymentMethod.provider as SupportedPaymentProvider) || 'stripe'
+
     // Create payment record
     const payment = this.paymentRepo.create({
       orderId: data.orderId,
@@ -44,23 +57,42 @@ export class PaymentService {
       amount: data.amount,
       currency: data.currency,
       paymentMethodId: data.paymentMethodId,
+      provider: provider as PaymentProvider,
       status: PaymentStatus.PENDING
     })
 
     await this.paymentRepo.save(payment)
 
     try {
-      // Process payment with Stripe
-      const stripePayment = await this.stripeService.createPayment({
-        amount: data.amount,
-        currency: data.currency,
-        paymentMethodId: paymentMethod.providerMethodId,
-        description: `Payment for order ${data.orderId}`
-      })
+      let providerPayment
+      if (provider === 'stripe') {
+        providerPayment = await this.stripeService.createPayment({
+          amount: data.amount,
+          currency: data.currency,
+          paymentMethodId: paymentMethod.providerMethodId,
+          description: data.description || `Payment for order ${data.orderId}`
+        })
+      } else if (provider === 'razorpay') {
+        providerPayment = await this.razorpayService.createPayment({
+          amount: data.amount,
+          currency: data.currency,
+          paymentMethodId: paymentMethod.providerMethodId,
+          description: data.description || `Payment for order ${data.orderId}`
+        })
+      } else if (provider === 'paypal') {
+        providerPayment = await this.paypalService.createPayment({
+          amount: data.amount,
+          currency: data.currency,
+          paymentMethodId: paymentMethod.providerMethodId,
+          description: data.description || `Payment for order ${data.orderId}`
+        })
+      } else {
+        throw new Error('Unsupported payment provider')
+      }
 
       // Update payment record with provider response
-      payment.providerPaymentId = stripePayment.id
-      payment.providerResponse = stripePayment
+      payment.providerPaymentId = providerPayment.id
+      payment.providerResponse = providerPayment
       payment.status = PaymentStatus.COMPLETED
       
       await this.paymentRepo.save(payment)
@@ -238,8 +270,9 @@ export class PaymentService {
     }
   }
 
+  // Refund payment (multi-provider)
   async refundPayment(paymentId: string, amount?: number) {
-    const payment = await this.getPayment(paymentId)
+    const payment = await this.getPaymentById(paymentId)
 
     if (!payment) {
       throw new Error('Payment not found')
@@ -250,24 +283,26 @@ export class PaymentService {
     }
 
     try {
-      if (!payment.providerPaymentId) {
-        throw new Error('No payment ID found to process refund');
+      let providerRefund
+      if (payment.provider === 'stripe') {
+        providerRefund = await this.stripeService.createRefund(payment.providerPaymentId!, amount)
+      } else if (payment.provider === 'razorpay') {
+        providerRefund = await this.razorpayService.refundPayment(payment.providerPaymentId!, amount)
+      } else if (payment.provider === 'paypal') {
+        providerRefund = await this.paypalService.refundPayment(payment.providerPaymentId!, amount)
+      } else {
+        throw new Error('Unsupported payment provider')
       }
-      
-      const refund = await this.stripeService.createRefund(
-        payment.providerPaymentId,
-        amount
-      )
 
       payment.status = PaymentStatus.REFUNDED
       payment.metadata = {
         ...payment.metadata,
-        refund: refund
+        refund: providerRefund
       }
 
       await this.paymentRepo.save(payment)
 
-      return payment
+      return providerRefund
     } catch (error) {
       logger.error({ err: error, paymentId }, 'Refund processing failed')
       throw error
@@ -281,5 +316,85 @@ export class PaymentService {
       signature,
       webhookSecret
     );
+  }
+
+  // Payment Method CRUD
+  async createPaymentMethod(userId: string, data: {
+    type: PaymentMethodType;
+    provider: string;
+    card: {
+      number: string;
+      exp_month: number;
+      exp_year: number;
+      cvc: string;
+    };
+    isDefault?: boolean | undefined;
+    metadata?: Record<string, any> | undefined;
+  }) {
+    // Create in Stripe (if provider is stripe)
+    let providerMethodId = '';
+    let brand = '';
+    let last4 = '';
+    if (data.provider === 'stripe') {
+      const paymentMethod = await this.stripeService.createPaymentMethod({
+        type: 'card',
+        card: data.card
+      });
+      providerMethodId = paymentMethod.id;
+      brand = paymentMethod.card?.brand ?? '';
+      last4 = paymentMethod.card?.last4 ?? '';
+    }
+    // Save in DB
+    const paymentMethod = this.paymentMethodRepo.create({
+      userId,
+      type: data.type,
+      provider: data.provider,
+      providerMethodId,
+      last4,
+      expiryMonth: data.card.exp_month.toString(),
+      expiryYear: data.card.exp_year.toString(),
+      brand,
+      status: PaymentMethodStatus.ACTIVE,
+      isDefault: data.isDefault ?? false,
+      metadata: data.metadata ?? {}
+    });
+    if (paymentMethod.isDefault) {
+      // Unset previous default
+      await this.paymentMethodRepo.update({ userId, isDefault: true }, { isDefault: false });
+    }
+    return this.paymentMethodRepo.save(paymentMethod);
+  }
+
+  async getPaymentMethods(userId: string) {
+    return this.paymentMethodRepo.find({ where: { userId } });
+  }
+
+  async getPaymentMethodById(userId: string, id: string) {
+    return this.paymentMethodRepo.findOne({ where: { id, userId } });
+  }
+
+  async updatePaymentMethod(userId: string, id: string, data: Partial<{
+    status?: PaymentMethodStatus;
+    isDefault?: boolean | undefined;
+    metadata?: Record<string, any> | undefined;
+  }>) {
+    const paymentMethod = await this.getPaymentMethodById(userId, id);
+    if (!paymentMethod) throw new Error('Payment method not found');
+    if (data.isDefault) {
+      await this.paymentMethodRepo.update({ userId, isDefault: true }, { isDefault: false });
+      paymentMethod.isDefault = true;
+    }
+    if (data.status) paymentMethod.status = data.status;
+    if (data.metadata) paymentMethod.metadata = { ...paymentMethod.metadata, ...data.metadata };
+    return this.paymentMethodRepo.save(paymentMethod);
+  }
+
+  async deletePaymentMethod(userId: string, id: string) {
+    const paymentMethod = await this.getPaymentMethodById(userId, id);
+    if (!paymentMethod) throw new Error('Payment method not found');
+    if (paymentMethod.provider === 'stripe') {
+      await this.stripeService.deletePaymentMethod(paymentMethod.providerMethodId);
+    }
+    return this.paymentMethodRepo.remove(paymentMethod);
   }
 } 

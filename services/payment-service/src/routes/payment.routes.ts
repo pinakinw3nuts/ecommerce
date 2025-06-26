@@ -13,7 +13,9 @@ const createPaymentSchema = z.object({
   orderId: z.string().uuid(),
   amount: z.number().positive(),
   currency: z.string().length(3), // e.g., 'USD', 'EUR'
-  paymentMethodId: z.string().uuid()
+  paymentMethodId: z.string().uuid(),
+  provider: z.enum(['stripe', 'razorpay', 'paypal']).optional(),
+  description: z.string().optional()
 })
 
 const updatePaymentStatusSchema = z.object({
@@ -84,7 +86,9 @@ export async function paymentRoutes(fastify: FastifyInstance) {
           orderId: { type: 'string', format: 'uuid', description: 'ID of the order' },
           amount: { type: 'number', minimum: 0, description: 'Payment amount' },
           currency: { type: 'string', minLength: 3, maxLength: 3, description: 'Currency code (e.g. USD, EUR)' },
-          paymentMethodId: { type: 'string', format: 'uuid', description: 'ID of the payment method' }
+          paymentMethodId: { type: 'string', format: 'uuid', description: 'ID of the payment method' },
+          provider: { type: 'string', enum: ['stripe', 'razorpay', 'paypal'], description: 'Payment provider (optional)' },
+          description: { type: 'string', description: 'Payment description (optional)' }
         }
       },
       response: {

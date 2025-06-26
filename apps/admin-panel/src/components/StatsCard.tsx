@@ -4,7 +4,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 // Define card variants for different color schemes
 const cardVariants = cva(
   // Base styles
-  "relative overflow-hidden rounded-lg bg-white p-6 shadow",
+  "relative overflow-hidden rounded-lg bg-white p-4 sm:p-6 shadow",
   {
     variants: {
       color: {
@@ -43,19 +43,19 @@ export default function StatsCard({
 
   return (
     <div className={cardVariants({ color, className })}>
-      <div className="flex justify-between">
+      <div className="flex justify-between items-center">
         {/* Label and value section */}
-        <div>
-          <p className="text-sm font-medium leading-6 text-gray-600">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs sm:text-sm font-medium leading-6 text-gray-600 truncate">
             {label}
           </p>
-          <p className="mt-2 flex items-baseline gap-x-2">
-            <span className="text-3xl font-semibold tracking-tight text-gray-900">
+          <div className="mt-1 sm:mt-2 flex items-baseline gap-x-1 sm:gap-x-2">
+            <span className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 truncate">
               {value}
             </span>
             {changePct !== undefined && (
               <span
-                className={`text-sm ${
+                className={`text-xs sm:text-sm ${
                   isPositiveChange
                     ? "text-green-600"
                     : isNegativeChange
@@ -67,14 +67,14 @@ export default function StatsCard({
                 {changePct.toFixed(1)}%
               </span>
             )}
-          </p>
+          </div>
         </div>
 
         {/* Icon section */}
         {Icon && (
-          <div className="flex items-center">
+          <div className="flex items-center ml-2">
             <Icon
-              className={`h-12 w-12 ${
+              className={`h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 ${
                 color === "default"
                   ? "text-gray-200"
                   : color === "blue"

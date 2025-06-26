@@ -17,7 +17,10 @@ import {
   Ban,
   Filter,
   Search,
-  ImageIcon
+  ImageIcon,
+  Star,
+  X as XIcon,
+  Loader2
 } from 'lucide-react';
 import Table from '@/components/Table';
 import { Button } from '@/components/ui/Button';
@@ -26,8 +29,10 @@ import { useCategories } from '@/hooks/useCategories';
 import { TableInstance } from '@/components/Table';
 import { formatDate } from '@/lib/utils';
 import { Pagination } from '@/components/ui/Pagination';
-import { CommonFilters, type FilterState, type FilterConfig } from '@/components/ui/CommonFilters';
+import { CommonFilters, type FilterState, type FilterConfig, type RangeFilter, type DateRangeFilter } from '@/components/ui/CommonFilters';
 import { Product, ProductsResponse } from '@/services/products';
+import { TableWrapper } from '@/components/ui/TableWrapper';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/Popover';
 
 interface PaginationInfo {
   total: number;
@@ -152,6 +157,10 @@ export default function ProductsPage() {
   const [isLoadingOperation, setIsLoadingOperation] = useState(false);
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
   const [filterConfig, setFilterConfig] = useState<FilterConfig>(defaultFilterConfig);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [isFeaturedFilterActive, setIsFeaturedFilterActive] = useState(false);
+  const [isPublishedFilterActive, setIsPublishedFilterActive] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Fetch categories for the dropdown
   const { categories, isLoading: loadingCategories } = useCategories();
@@ -499,6 +508,51 @@ export default function ProductsPage() {
     setSelectedProducts([]);
   };
 
+  const handleToggleFeatured = () => {
+    setIsFeaturedFilterActive(!isFeaturedFilterActive);
+    setFilters(prev => ({
+      ...prev,
+      isFeatured: isFeaturedFilterActive ? [] : ['true'],
+    }));
+    setPage(1);
+    mutate();
+  };
+
+  const handleTogglePublish = () => {
+    setIsPublishedFilterActive(!isPublishedFilterActive);
+    setFilters(prev => ({
+      ...prev,
+      isPublished: isPublishedFilterActive ? [] : ['true'],
+    }));
+    setPage(1);
+    mutate();
+  };
+
+  const handleDeleteSelected = () => {
+    if (!confirm('Are you sure you want to delete selected products?')) return;
+    handleBulkDelete();
+  };
+
+  const handleFilterChange = (newFilters: FilterState) => {
+    console.log('Updating filters:', newFilters);
+    setFilters(newFilters);
+    setPage(1);
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    
+    // Update filters with the search term
+    setFilters(prev => ({
+      ...prev,
+      search: value
+    }));
+    
+    // Reset to first page when search changes
+    setPage(1);
+  };
+
   const columns = [
     {
       header: ({ table }: { table: TableInstance }) => (
@@ -520,6 +574,7 @@ export default function ProductsPage() {
           />
         );
       },
+      width: '60px',
     },
     {
       header: () => (
@@ -543,7 +598,7 @@ export default function ProductsPage() {
       ),
       cell: ({ row }: { row: Product }) => (
         <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 overflow-hidden rounded-lg">
+          <div className="relative h-12 w-12 overflow-hidden rounded-lg flex-shrink-0">
             {row.mediaUrl && row.mediaUrl.trim() !== '' ? (
               <Image
                 src={row.mediaUrl}
@@ -557,20 +612,21 @@ export default function ProductsPage() {
               </div>
             )}
           </div>
-          <div>
-            <div className="font-medium">{row.name}</div>
+          <div className="min-w-0">
+            <div className="font-medium truncate">{row.name}</div>
             <div className="text-sm text-gray-500">
               ${row.price.toFixed(2)}
             </div>
           </div>
         </div>
       ),
+      width: '30%',
     },
     {
       header: () => (
         <button
           onClick={() => handleSort('slug')}
-          className="flex items-center gap-1 hover:text-blue-600"
+          className="flex items-center gap-1 hover:text-blue-600 hidden sm:flex"
         >
           Slug
           <span className="inline-flex">
@@ -587,16 +643,17 @@ export default function ProductsPage() {
         </button>
       ),
       cell: ({ row }: { row: Product }) => (
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-gray-600 truncate max-w-xs block hidden sm:block">
           {row.slug}
         </span>
       ),
+      width: '30%',
     },
     {
       header: () => (
         <button
           onClick={() => handleSort('category')}
-          className="flex items-center gap-1 hover:text-blue-600"
+          className="flex items-center gap-1 hover:text-blue-600 hidden md:flex"
         >
           Category
           <span className="inline-flex">
@@ -613,12 +670,13 @@ export default function ProductsPage() {
         </button>
       ),
       cell: ({ row }: { row: Product }) => (
-        <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800">
+        <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 hidden md:inline-flex">
           {typeof row.category === 'object' ? 
             (row.category as any)?.name || 'Unknown' : 
             row.category}
         </span>
       ),
+      width: '15%',
     },
     {
       header: () => (
@@ -650,6 +708,7 @@ export default function ProductsPage() {
           {row.isFeatured ? 'Featured' : 'Not Featured'}
         </span>
       ),
+      width: '10%',
     },
     {
       header: () => (
@@ -681,12 +740,13 @@ export default function ProductsPage() {
           {row.isPublished ? 'Published' : 'Draft'}
         </span>
       ),
+      width: '10%',
     },
     {
       header: () => (
         <button
           onClick={() => handleSort('createdAt')}
-          className="flex items-center gap-1 hover:text-blue-600"
+          className="flex items-center gap-1 hover:text-blue-600 hidden md:flex"
         >
           Created At
           <span className="inline-flex">
@@ -703,10 +763,11 @@ export default function ProductsPage() {
         </button>
       ),
       cell: ({ row }: { row: Product }) => (
-        <span className="text-sm text-gray-500">
+        <span className="text-sm text-gray-500 hidden md:inline">
           {formatDate(row.createdAt)}
         </span>
       ),
+      width: '15%',
     },
     {
       header: 'Actions',
@@ -717,6 +778,7 @@ export default function ProductsPage() {
             size="sm"
             onClick={() => router.push(`/products/${row.id}/edit`)}
             disabled={isLoadingOperation}
+            aria-label="Edit product"
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -725,11 +787,13 @@ export default function ProductsPage() {
             size="sm"
             onClick={() => handleDelete(row.id)}
             disabled={isLoadingOperation}
+            aria-label="Delete product"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       ),
+      width: '100px',
     },
   ];
 
@@ -755,73 +819,147 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Products</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            disabled={isLoadingOperation}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-          <Button onClick={() => router.push('/products/new')} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      {/* Header and actions */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Products</h1>
+        <div className="flex w-full sm:w-auto items-center justify-between gap-3">
+          {/* Bulk Actions Group */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Mark Featured Button with Tooltip */}
+            {selectedProducts.length === 0 ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled
+                      aria-label={isFeaturedFilterActive ? 'Remove Featured' : 'Mark Featured'}
+                    >
+                      <Star className="h-4 w-4 mr-2" />
+                      {isFeaturedFilterActive ? 'Remove Featured' : 'Mark Featured'}
+                    </Button>
+                  </span>
+                </PopoverTrigger>
+                <PopoverContent sideOffset={8} className="w-auto px-3 py-2 text-sm text-gray-700">
+                  Select at least one product to use this action.
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleFeatured}
+                disabled={isLoadingOperation}
+                aria-label={isLoadingOperation ? 'Processing...' : (isFeaturedFilterActive ? 'Remove Featured' : 'Mark Featured')}
+              >
+                {isLoadingOperation ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Star className="h-4 w-4 mr-2" />
+                )}
+                {isLoadingOperation ? 'Processing...' : (isFeaturedFilterActive ? 'Remove Featured' : 'Mark Featured')}
+              </Button>
+            )}
 
-      {/* Filters */}
-      <CommonFilters
-        config={filterConfig}
-        filters={filters}
-        onChange={setFilters}
-        onReset={resetFilters}
-      />
+            {/* Publish/Unpublish Button with Tooltip */}
+            {selectedProducts.length === 0 ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled
+                      aria-label={isPublishedFilterActive ? 'Unpublish' : 'Publish'}
+                    >
+                      {isPublishedFilterActive ? <Ban className="h-4 w-4 mr-2" /> : <CheckSquare className="h-4 w-4 mr-2" />}
+                      {isPublishedFilterActive ? 'Unpublish' : 'Publish'}
+                    </Button>
+                  </span>
+                </PopoverTrigger>
+                <PopoverContent sideOffset={8} className="w-auto px-3 py-2 text-sm text-gray-700">
+                  Select at least one product to use this action.
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTogglePublish}
+                disabled={isLoadingOperation}
+                aria-label={isLoadingOperation ? 'Processing...' : (isPublishedFilterActive ? 'Unpublish' : 'Publish')}
+              >
+                {isLoadingOperation ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  isPublishedFilterActive ? <Ban className="h-4 w-4 mr-2" /> : <CheckSquare className="h-4 w-4 mr-2" />
+                )}
+                {isLoadingOperation ? 'Processing...' : (isPublishedFilterActive ? 'Unpublish' : 'Publish')}
+              </Button>
+            )}
 
-      {/* Bulk Actions */}
-      {selectedProducts.length > 0 && (
-        <div className="flex items-center gap-4 py-4">
-          <span className="text-sm text-gray-600">
-            {selectedProducts.length} items selected
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleBulkStatusChange('in_stock')}
-              disabled={isLoadingOperation}
-            >
-              <CheckSquare className="h-4 w-4 mr-2" />
-              Mark In Stock
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleBulkStatusChange('out_of_stock')}
-              disabled={isLoadingOperation}
-            >
-              <Ban className="h-4 w-4 mr-2" />
-              Mark Out of Stock
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBulkDelete}
-              disabled={isLoadingOperation}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Selected
+            {/* Delete Button with Tooltip */}
+            {selectedProducts.length === 0 ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <span>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled
+                      aria-label="Delete selected products"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  </span>
+                </PopoverTrigger>
+                <PopoverContent sideOffset={8} className="w-auto px-3 py-2 text-sm text-gray-700">
+                  Select at least one product to use this action.
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteSelected}
+                disabled={isLoadingOperation}
+                aria-label={isLoadingOperation ? 'Processing...' : 'Delete'}
+              >
+                {isLoadingOperation ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                {isLoadingOperation ? 'Processing...' : 'Delete'}
+              </Button>
+            )}
+          </div>
+          {/* Divider for separation */}
+          <div className="hidden sm:block h-6 border-l border-gray-300 mx-2" />
+          {/* Add Product Button Group */}
+          <div className="flex items-center">
+            <Button variant="default" size="sm" onClick={() => router.push('/products/create')}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Product
             </Button>
           </div>
         </div>
-      )}
+      </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white">
+      {/* Remove custom search bar, filter button, and filter chips */}
+      {/* Place a single CommonFilters component above the table */}
+      <CommonFilters
+        filters={filters}
+        onChange={setFilters}
+        onReset={resetFilters}
+        config={filterConfig}
+      />
+
+      {/* Products table with wrapper for horizontal scrolling */}
+      <TableWrapper mobileCardLayout>
         <Table
           data={data?.products ?? []}
           columns={columns}
@@ -830,46 +968,47 @@ export default function ProductsPage() {
             selectedRows: selectedProducts,
             onSelectedRowsChange: setSelectedProducts,
           }}
+          onAdd={() => router.push('/products/create')}
         />
+      </TableWrapper>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-4">
-            <p className="text-sm text-gray-700">
-              Showing{' '}
-              <span className="font-medium">
-                {data?.pagination?.total ? (page - 1) * pageSize + 1 : 0}
-              </span>{' '}
-              to{' '}
-              <span className="font-medium">
-                {data?.pagination?.total
-                  ? Math.min(page * pageSize, data.pagination.total)
-                  : 0}
-              </span>{' '}
-              of{' '}
-              <span className="font-medium">{data?.pagination?.total || 0}</span>{' '}
-              results
-            </p>
+      {/* Pagination */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-lg border border-gray-200">
+        <div className="flex flex-wrap items-center gap-4 mb-4 sm:mb-0">
+          <p className="text-sm text-gray-700">
+            Showing{' '}
+            <span className="font-medium">
+              {data?.pagination?.total ? (page - 1) * pageSize + 1 : 0}
+            </span>{' '}
+            to{' '}
+            <span className="font-medium">
+              {data?.pagination?.total
+                ? Math.min(page * pageSize, data.pagination.total)
+                : 0}
+            </span>{' '}
+            of{' '}
+            <span className="font-medium">{data?.pagination?.total || 0}</span>{' '}
+            results
+          </p>
 
-            <select
-              value={pageSize}
-              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-              className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value={10}>10 per page</option>
-              <option value={25}>25 per page</option>
-              <option value={50}>50 per page</option>
-              <option value={100}>100 per page</option>
-            </select>
-          </div>
-
-          <Pagination
-            currentPage={page}
-            pageSize={pageSize}
-            totalItems={data?.pagination?.total || 0}
-            onPageChange={handlePageChange}
-          />
+          <select
+            value={pageSize}
+            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+            className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value={10}>10 per page</option>
+            <option value={25}>25 per page</option>
+            <option value={50}>50 per page</option>
+            <option value={100}>100 per page</option>
+          </select>
         </div>
+
+        <Pagination
+          currentPage={page}
+          pageSize={pageSize}
+          totalItems={data?.pagination?.total || 0}
+          onPageChange={handlePageChange}
+        />
       </div>
     </div>
   );
