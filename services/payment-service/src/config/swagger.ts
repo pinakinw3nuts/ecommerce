@@ -2,7 +2,7 @@ import { FastifySwaggerUiOptions } from '@fastify/swagger-ui';
 import { config } from './env';
 
 export const swaggerConfig = {
-  mode: 'dynamic',
+  mode: 'dynamic' as const,
   openapi: {
     info: {
       title: 'Payment Service API',
@@ -15,21 +15,41 @@ export const swaggerConfig = {
     components: {
       securitySchemes: {
         bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
+          type: 'http' as const,
+          scheme: 'bearer' as const,
           bearerFormat: 'JWT',
           description: 'Enter the token with the `Bearer: ` prefix, e.g. "Bearer abcde12345".'
         }
       }
-    }
+    },
+    tags: [
+      { name: 'payments', description: 'Customer payment related endpoints' },
+      { name: 'payment-methods', description: 'Customer payment method endpoints' },
+      { name: 'payment-gateways', description: 'Payment gateway management endpoints' },
+      { name: 'webhooks', description: 'External service webhook endpoints' },
+      { name: 'admin', description: 'General admin endpoints' },
+      { name: 'admin-payments', description: 'Admin payment management' },
+      { name: 'admin-payment-methods', description: 'Admin payment method management' },
+      { name: 'health', description: 'Health check endpoints' }
+    ],
+    security: [
+      { bearerAuth: [] }
+    ]
   }
-} as const;
+};
 
 export const swaggerUiOptions: FastifySwaggerUiOptions = {
   routePrefix: '/documentation',
   uiConfig: {
     docExpansion: 'list',
-    deepLinking: false
+    deepLinking: true,
+    displayRequestDuration: true,
+    filter: true,
+    showExtensions: true,
+    showCommonExtensions: true,
+    tagsSorter: 'alpha',
+    operationsSorter: 'alpha',
+    persistAuthorization: true
   },
   uiHooks: {
     onRequest: function (_request, _reply, next) {

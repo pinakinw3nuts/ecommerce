@@ -45,3 +45,19 @@ export function formatDate(date: any): string {
     return 'Invalid date';
   }
 }
+
+export function buildQueryString(params: Record<string, any>): string {
+  const searchParams = new URLSearchParams();
+  
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      if (Array.isArray(value)) {
+        value.forEach(v => searchParams.append(key, v));
+      } else {
+        searchParams.append(key, value.toString());
+      }
+    }
+  });
+  
+  return searchParams.toString();
+}

@@ -10,20 +10,26 @@ import logger from './utils/logger'
 import { paymentRoutes } from './routes/payment.routes'
 import { webhookRoutes } from './routes/webhook.routes'
 import { paymentMethodRoutes } from './routes/payment-method.routes'
+import { adminRoutes } from './routes/admin.routes'
+import { paymentGatewayRoutes } from './routes/payment-gateway.routes'
 import { PaymentService } from './services/payment.service'
+import { PaymentGatewayService } from './services/payment-gateway.service'
 import { StripeService } from './services/stripe.service'
 import { RazorpayService } from './services/razorpay.service'
 import { PaypalService } from './services/paypal.service'
 import { Payment } from './entities/payment.entity'
 import { PaymentMethod } from './entities/payment-method.entity'
+import { PaymentGateway } from './entities/payment-gateway.entity'
 import { TypeormPlugin } from './plugins/typeorm'
-import { swaggerUiOptions } from './config/swagger'
+import { swaggerConfig, swaggerUiOptions } from './config/swagger'
+import { authMiddleware } from './middleware/auth.guard'
 
 // Extend FastifyInstance type
 declare module 'fastify' {
   interface FastifyInstance {
     db: DataSource
     paymentService: PaymentService
+    paymentGatewayService: PaymentGatewayService
     stripeService: StripeService
     razorpayService: RazorpayService
     paypalService: PaypalService
@@ -57,35 +63,51 @@ export async function buildApp(): Promise<FastifyInstance> {
     })
 
     // API Documentation
-    await server.register(fastifySwagger, {
-      openapi: {
-        info: {
-          title: 'Payment Service API',
-          description: 'Payment processing service API documentation',
-          version: '1.0.0'
-        },
-        servers: [
-          {
-            url: `http://localhost:${config.server.port}`,
-            description: 'Development server'
-          }
-        ],
-        components: {
-          securitySchemes: {
-            bearerAuth: {
-              type: 'http',
-              scheme: 'bearer',
-              bearerFormat: 'JWT'
+    await server.register(fastifySwagger, swaggerConfig)
+    await server.register(fastifySwaggerUi, swaggerUiOptions)
+
+    // Add health check endpoint that doesn't require authentication
+    server.get('/health', {
+      schema: {
+        tags: ['health'],
+        description: 'Health check endpoint',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: { type: 'string' },
+              timestamp: { type: 'string', format: 'date-time' },
+              version: { type: 'string' }
             }
           }
-        },
-        tags: [
-          { name: 'payments', description: 'Payment related endpoints' },
-          { name: 'webhooks', description: 'Webhook endpoints' }
-        ]
+        }
       }
-    })
-    await server.register(fastifySwaggerUi, swaggerUiOptions)
+    }, async (_, reply) => {
+      return reply.send({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        version: '1.0.0'
+      });
+    });
+
+    // Register global auth middleware only for API routes, not for documentation or webhooks
+    server.addHook('preHandler', (request, reply, done) => {
+      // Skip auth middleware for:
+      // 1. Swagger documentation routes
+      // 2. Health check endpoint
+      // 3. Webhook endpoints
+      if (
+        request.url.startsWith('/documentation') || 
+        request.url === '/health' ||
+        request.url.startsWith('/api/v1/stripe') ||
+        request.url.startsWith('/api/v1/paypal') ||
+        request.url.startsWith('/api/v1/razorpay')
+      ) {
+        done();
+      } else {
+        authMiddleware(request, reply, done);
+      }
+    });
 
     // Initialize services
     const stripeService = new StripeService(config.stripe.secretKey)
@@ -104,10 +126,17 @@ export async function buildApp(): Promise<FastifyInstance> {
     )
     server.decorate('paymentService', paymentService)
 
+    const paymentGatewayService = new PaymentGatewayService(
+      server.db.getRepository(PaymentGateway)
+    )
+    server.decorate('paymentGatewayService', paymentGatewayService)
+
     // Register routes
     await server.register(paymentRoutes, { prefix: '/api/v1' })
     await server.register(webhookRoutes, { prefix: '/api/v1' })
     await server.register(paymentMethodRoutes, { prefix: '/api/v1' })
+    await server.register(adminRoutes, { prefix: '/api/v1' })
+    await server.register(paymentGatewayRoutes, { prefix: '/api/v1' })
 
     // Global error handler
     server.setErrorHandler((error, request, reply) => {

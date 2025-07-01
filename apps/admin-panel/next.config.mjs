@@ -2,6 +2,8 @@
 const nextConfig = {
   env: {
     PORT: '3200',
+    NEXT_PUBLIC_API_BASE_URL: '/',
+    NEXT_PUBLIC_PAYMENT_SERVICE_URL: 'http://localhost:3007',
   },
   output: 'standalone',
   typescript: {

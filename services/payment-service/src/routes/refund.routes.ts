@@ -1,7 +1,6 @@
 import { FastifyInstance, RouteShorthandOptions } from 'fastify'
 import { RefundService } from '../services/refund.service'
 import { validateRequest } from '../utils/validateRequest'
-import { authGuard } from '../middleware/auth.guard'
 import { z } from 'zod'
 import { logger } from '../utils/logger'
 
@@ -29,7 +28,6 @@ export async function refundRoutes(
 ) {
   // POST /refunds - Create refund request (requires authentication)
   const createRefundOpts: RouteShorthandOptions = {
-    preHandler: [authGuard],
     schema: {
       body: createRefundSchema
     }
@@ -104,7 +102,7 @@ export async function refundRoutes(
   })
 
   // GET /refunds/:id - Get refund by ID (requires authentication)
-  fastify.get<RefundRouteGeneric>('/refunds/:id', { preHandler: [authGuard] }, async (request, reply) => {
+  fastify.get<RefundRouteGeneric>('/refunds/:id', async (request, reply) => {
     try {
       // Ensure request is authenticated
       if (!request.user) {

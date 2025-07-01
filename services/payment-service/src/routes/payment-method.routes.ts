@@ -1,6 +1,5 @@
 import { FastifyInstance } from 'fastify';
 import { PaymentMethodController } from '../controllers/payment-method.controller';
-import { authGuard } from '../middleware/auth.guard';
 import { PaymentMethodType, PaymentMethodStatus } from '../entities/payment-method.entity';
 
 const paymentMethodBodySchema = {
@@ -57,7 +56,6 @@ export async function paymentMethodRoutes(fastify: FastifyInstance) {
   const controller = new PaymentMethodController(fastify.paymentService);
 
   fastify.post('/payment-methods', {
-    preHandler: [authGuard],
     schema: {
       tags: ['payment-methods'],
       description: 'Add a new payment method for the authenticated user',
@@ -72,7 +70,6 @@ export async function paymentMethodRoutes(fastify: FastifyInstance) {
   }, controller.create.bind(controller));
 
   fastify.get('/payment-methods', {
-    preHandler: [authGuard],
     schema: {
       tags: ['payment-methods'],
       description: 'List all payment methods for the authenticated user',
@@ -86,7 +83,6 @@ export async function paymentMethodRoutes(fastify: FastifyInstance) {
   }, controller.list.bind(controller));
 
   fastify.get('/payment-methods/:id', {
-    preHandler: [authGuard],
     schema: {
       tags: ['payment-methods'],
       description: 'Get a payment method by ID',
@@ -110,7 +106,6 @@ export async function paymentMethodRoutes(fastify: FastifyInstance) {
   }, controller.get.bind(controller));
 
   fastify.put('/payment-methods/:id', {
-    preHandler: [authGuard],
     schema: {
       tags: ['payment-methods'],
       description: 'Update a payment method',
@@ -135,7 +130,6 @@ export async function paymentMethodRoutes(fastify: FastifyInstance) {
   }, controller.update.bind(controller));
 
   fastify.delete('/payment-methods/:id', {
-    preHandler: [authGuard],
     schema: {
       tags: ['payment-methods'],
       description: 'Delete a payment method',

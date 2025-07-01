@@ -43,6 +43,7 @@ interface TableProps<T> {
     onSelectedRowsChange: (selectedRows: string[]) => void;
   };
   onAdd?: () => void;
+  emptyState?: React.ReactNode;
 }
 
 export default function Table<T extends { id: string }>({
@@ -53,6 +54,7 @@ export default function Table<T extends { id: string }>({
   onSort,
   selection,
   onAdd,
+  emptyState,
 }: TableProps<T>) {
   const [sortConfig, setSortConfig] = useState<{
     key: keyof T | null;
@@ -167,17 +169,17 @@ export default function Table<T extends { id: string }>({
                 colSpan={columns.length}
                 className="px-6 py-12 whitespace-nowrap text-center text-gray-500"
               >
-                <div className="flex flex-col items-center justify-center gap-4">
-                  {/* Illustration (emoji for simplicity) */}
-                  <span className="text-6xl">🛒</span>
-                  <div className="text-lg font-semibold text-gray-700">No products found</div>
-                  <div className="text-sm text-gray-500 mb-2">Get started by adding your first product.</div>
-                  {typeof onAdd === 'function' && (
-                    <Button variant="default" size="sm" onClick={onAdd}>
-                      + Add Product
-                    </Button>
-                  )}
-                </div>
+                {emptyState || (
+                  <div className="flex flex-col items-center justify-center gap-4">
+                    <div className="text-lg font-semibold text-gray-700">No data found</div>
+                    <div className="text-sm text-gray-500">No items match your criteria.</div>
+                    {typeof onAdd === 'function' && (
+                      <Button variant="default" size="sm" onClick={onAdd}>
+                        + Add New
+                      </Button>
+                    )}
+                  </div>
+                )}
               </td>
             </tr>
           ) : (

@@ -106,11 +106,7 @@ export default function ShippingMethodsPage() {
     isActive: isActiveFilter,
     minRate: minRate,
     maxRate: maxRate
-  };
-  
-  // Log filters to debug
-  console.log('Current filters state:', debouncedFilters);
-  console.log('API filters sent to backend:', apiFilters);
+  }; 
 
   const apiPagination: PaginationOptions = {
     page,

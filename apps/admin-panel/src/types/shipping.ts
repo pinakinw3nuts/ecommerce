@@ -1,3 +1,10 @@
+export interface PaginationResponse {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export interface PaginationOptions {
   page: number;
   limit: number;
@@ -135,4 +142,39 @@ export interface ShippingRateFilters {
 export interface ShippingRatesResponse {
   rates: ShippingRate[];
   pagination: PaginationData;
+}
+
+// Shipping carrier type enum
+export enum ShippingCarrierType {
+  DOMESTIC = 'domestic',
+  INTERNATIONAL = 'international',
+  BOTH = 'both',
+  CUSTOM = 'custom'
+}
+
+// Shipping carrier interface
+export interface ShippingCarrier {
+  id: string;
+  name: string;
+  code: string;
+  type: ShippingCarrierType;
+  description: string;
+  logo: string | null;
+  isEnabled: boolean;
+  supportedCountries: string[];
+  minimumWeight: number | null;
+  maximumWeight: number | null;
+  excludedRegions: string[] | null;
+  handlingInstructions: string | null;
+  handlingFee: number | null;
+  handlingFeeType: 'fixed' | 'percentage' | null;
+  estimatedDeliveryTime: string | null;
+  settings: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShippingCarriersResponse {
+  items: ShippingCarrier[];
+  pagination: PaginationResponse;
 } 

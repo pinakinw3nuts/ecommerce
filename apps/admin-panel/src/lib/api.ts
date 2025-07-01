@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
+import { PaginationResponse } from '@/types/payment';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -9,6 +10,13 @@ const api = axios.create({
   timeout: 10000, // 10 seconds
   withCredentials: true, // Include cookies in requests
 });
+
+/**
+ * Get the API base URL from environment variables
+ */
+export function getApiUrl(): string {
+  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+}
 
 // Request interceptor for handling requests
 api.interceptors.request.use(
@@ -57,7 +65,9 @@ api.interceptors.response.use(
 
 // Type definitions for API responses
 export interface ApiResponse<T = any> {
-  data: T;
+  data?: T;
+  items?: T extends any[] ? T : never;
+  pagination?: PaginationResponse;
   message?: string;
   error?: string;
 }
@@ -65,27 +75,27 @@ export interface ApiResponse<T = any> {
 // API wrapper functions with type safety
 export const apiClient = {
   get: async <T>(url: string, config = {}) => {
-    const response = await api.get<any, ApiResponse<T>>(url, config);
+    const response = await api.get<any, T>(url, config);
     return response;
   },
 
   post: async <T>(url: string, data = {}, config = {}) => {
-    const response = await api.post<any, ApiResponse<T>>(url, data, config);
+    const response = await api.post<any, T>(url, data, config);
     return response;
   },
 
   put: async <T>(url: string, data = {}, config = {}) => {
-    const response = await api.put<any, ApiResponse<T>>(url, data, config);
+    const response = await api.put<any, T>(url, data, config);
     return response;
   },
 
   delete: async <T>(url: string, config = {}) => {
-    const response = await api.delete<any, ApiResponse<T>>(url, config);
+    const response = await api.delete<any, T>(url, config);
     return response;
   },
 
   patch: async <T>(url: string, data = {}, config = {}) => {
-    const response = await api.patch<any, ApiResponse<T>>(url, data, config);
+    const response = await api.patch<any, T>(url, data, config);
     return response;
   },
 };

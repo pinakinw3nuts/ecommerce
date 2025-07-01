@@ -1,6 +1,7 @@
 'use client';
 
 import { jwtDecode } from 'jwt-decode';
+import Cookies from 'js-cookie';
 
 interface DecodedToken {
   userId: string;
@@ -12,6 +13,26 @@ interface DecodedToken {
 // We'll use a memory cache for the decoded token to avoid parsing it repeatedly
 let cachedDecodedToken: DecodedToken | null = null;
 let cachedTokenString: string | null = null;
+
+/**
+ * Get the auth token for client-side API calls
+ * WARNING: This function can ONLY be used in client components, not in API routes
+ */
+export async function getAuthToken(): Promise<string> {
+  try {
+    // For client-side API calls, we can use js-cookie
+    const token = Cookies.get('auth_token');
+    
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+    
+    return token;
+  } catch (error) {
+    console.error('Error getting auth token:', error);
+    return '';
+  }
+}
 
 /**
  * Get the decoded token from the memory cache or parse it from the API response

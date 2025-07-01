@@ -1,8 +1,7 @@
 import { FastifyInstance, RouteShorthandOptions } from 'fastify'
 import { PaymentService } from '../services/payment.service'
-import { PaymentStatus } from '../entities/payment.entity'
+import { PaymentStatus, SupportedPaymentProvider } from '../entities/payment.entity'
 import { validateRequest } from '../utils/validateRequest'
-import { authGuard, AuthRequest } from '../middleware/auth.guard'
 import { z } from 'zod'
 import { logger } from '../utils/logger'
 
@@ -75,7 +74,6 @@ export async function paymentRoutes(fastify: FastifyInstance) {
 
   // POST /payments - Create payment (requires authentication)
   const createPaymentOpts: RouteShorthandOptions = {
-    preHandler: [authGuard],
     schema: {
       tags: ['payments'],
       description: 'Create a new payment',
@@ -148,10 +146,30 @@ export async function paymentRoutes(fastify: FastifyInstance) {
         'Creating new payment'
       )
       
-      const payment = await paymentService.createPayment({
-        ...payload,
-        userId: request.user.userId // Use authenticated user's ID
-      })
+      // Create payment params object without undefined description
+      const paymentParams: {
+        orderId: string;
+        userId: string;
+        amount: number;
+        currency: string;
+        paymentMethodId: string;
+        provider?: SupportedPaymentProvider;
+        description?: string;
+      } = {
+        orderId: payload.orderId,
+        userId: request.user.userId,
+        amount: payload.amount,
+        currency: payload.currency,
+        paymentMethodId: payload.paymentMethodId,
+        provider: payload.provider as SupportedPaymentProvider
+      };
+      
+      // Only add description if it exists
+      if (payload.description) {
+        paymentParams.description = payload.description;
+      }
+      
+      const payment = await paymentService.createPayment(paymentParams);
       
       paymentLogger.info(
         { paymentId: payment.id, status: payment.status },
@@ -185,7 +203,6 @@ export async function paymentRoutes(fastify: FastifyInstance) {
 
   // PUT /payments/:id/status - Update payment status (requires authentication)
   const updateStatusOpts: RouteShorthandOptions = {
-    preHandler: [authGuard],
     schema: {
       tags: ['payments'],
       description: 'Update payment status',
@@ -558,7 +575,6 @@ export async function paymentRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: z.infer<typeof processPaymentSchema>;
   }>('/process', {
-    preHandler: [authGuard],
     schema: {
       tags: ['payments'],
       description: 'Process a payment with payment provider',
@@ -629,10 +645,8 @@ export async function paymentRoutes(fastify: FastifyInstance) {
     const routeLogger = logger.child({ handler: 'processPayment' })
     
     try {
-      // Type assertion for authorized request
-      const authRequest = request as AuthRequest;
-      
-      if (!authRequest.user) {
+      // Ensure request is authenticated
+      if (!request.user) {
         return reply.status(401).send({
           success: false,
           error: 'Unauthorized',
@@ -642,7 +656,7 @@ export async function paymentRoutes(fastify: FastifyInstance) {
       
       const paymentData = {
         ...request.body,
-        userId: authRequest.user.userId // Use authenticated user's ID
+        userId: request.user.userId // Use authenticated user's ID
       }
       
       // Add proper type handling or implement the method in PaymentService

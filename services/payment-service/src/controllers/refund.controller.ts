@@ -1,7 +1,6 @@
 import { FastifyRequest, FastifyReply, FastifyInstance, RouteShorthandOptions } from 'fastify'
 import { RefundService } from '../services/refund.service'
 import { validateRequest } from '../utils/validateRequest'
-import { authGuard } from '../middleware/auth.guard'
 import { z } from 'zod'
 import { logger } from '../utils/logger'
 
@@ -29,9 +28,8 @@ export class RefundController {
   constructor(private readonly refundService: RefundService) {}
 
   async registerRoutes(fastify: FastifyInstance) {
-    // Create refund (protected by authGuard)
+    // Create refund (protected by global authMiddleware)
     const createRefundOpts: RouteShorthandOptions = {
-      preHandler: [authGuard],
       schema: {
         body: createRefundSchema
       }

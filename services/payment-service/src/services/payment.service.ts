@@ -318,6 +318,23 @@ export class PaymentService {
     );
   }
 
+  // Handle PayPal webhook events
+  async handlePaypalWebhook(rawBody: string, webhookId: string, webhookSignature: string) {
+    return this.paypalService.handleWebhookEvent(
+      rawBody,
+      webhookId,
+      webhookSignature
+    );
+  }
+
+  // Handle Razorpay webhook events
+  async handleRazorpayWebhook(rawBody: string, signature: string) {
+    return this.razorpayService.handleWebhookEvent(
+      rawBody,
+      signature
+    );
+  }
+
   // Payment Method CRUD
   async createPaymentMethod(userId: string, data: {
     type: PaymentMethodType;
@@ -396,5 +413,251 @@ export class PaymentService {
       await this.stripeService.deletePaymentMethod(paymentMethod.providerMethodId);
     }
     return this.paymentMethodRepo.remove(paymentMethod);
+  }
+
+  // Get all payments with filtering and pagination for admin
+  async getAllPayments(options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    orderId?: string;
+    status?: string;
+    provider?: string;
+    fromDate?: string;
+    toDate?: string;
+    minAmount?: number;
+    maxAmount?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) {
+    const {
+      page = 1,
+      pageSize = 10,
+      search,
+      orderId,
+      status,
+      provider,
+      fromDate,
+      toDate,
+      minAmount,
+      maxAmount,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = options;
+
+    // Create query builder
+    const queryBuilder = this.paymentRepo
+      .createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.paymentMethod', 'paymentMethod')
+      .leftJoinAndSelect('payment.refunds', 'refund');
+
+    // Apply filters
+    if (orderId) {
+      // Direct order ID search (exact match)
+      queryBuilder.andWhere('payment.orderId = :orderId', { orderId });
+    } else if (search) {
+      // General search (partial match)
+      queryBuilder.andWhere(
+        '(payment.orderId LIKE :search OR payment.transactionId LIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
+
+    // Handle status filter - support multiple statuses
+    if (status) {
+      // Check if status contains multiple values
+      if (status.includes(',')) {
+        const statusValues = status.split(',').map(s => s.trim()).filter(Boolean);
+        if (statusValues.length > 0) {
+          queryBuilder.andWhere('payment.status IN (:...statusValues)', { statusValues });
+        }
+      } else {
+        // Single status value
+        queryBuilder.andWhere('payment.status = :status', { status });
+      }
+    }
+
+    // Handle provider filter - support multiple providers
+    if (provider) {
+      // Check if provider contains multiple values
+      if (provider.includes(',')) {
+        const providerValues = provider.split(',').map(p => p.trim()).filter(Boolean);
+        if (providerValues.length > 0) {
+          queryBuilder.andWhere('payment.provider IN (:...providerValues)', { providerValues });
+        }
+      } else {
+        // Single provider value
+        queryBuilder.andWhere('payment.provider = :provider', { provider });
+      }
+    }
+
+    if (fromDate) {
+      queryBuilder.andWhere('payment.createdAt >= :fromDate', { 
+        fromDate: new Date(fromDate) 
+      });
+    }
+
+    if (toDate) {
+      queryBuilder.andWhere('payment.createdAt <= :toDate', { 
+        toDate: new Date(toDate) 
+      });
+    }
+
+    if (minAmount !== undefined) {
+      queryBuilder.andWhere('payment.amount >= :minAmount', { minAmount });
+    }
+
+    if (maxAmount !== undefined) {
+      queryBuilder.andWhere('payment.amount <= :maxAmount', { maxAmount });
+    }
+
+    // Apply sorting
+    try {
+      // Validate sortBy to prevent SQL injection
+      const validSortColumns = [
+        'id', 'orderId', 'userId', 'provider', 'status', 
+        'amount', 'currency', 'createdAt', 'updatedAt', 'refundedAmount'
+      ];
+      
+      // Default to createdAt if sortBy is not valid
+      const actualSortBy = validSortColumns.includes(sortBy) ? sortBy : 'createdAt';
+      
+      // Apply sorting
+      queryBuilder.orderBy(`payment.${actualSortBy}`, sortOrder.toUpperCase() as 'ASC' | 'DESC');
+    } catch (error) {
+      // If there's an error with sorting, fall back to default sort
+      console.error('Error applying sort:', error);
+      queryBuilder.orderBy('payment.createdAt', 'DESC');
+    }
+
+    // Apply pagination
+    const skip = (page - 1) * pageSize;
+    queryBuilder.skip(skip).take(pageSize);
+
+    // Execute query
+    const [payments, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      items: payments,
+      pagination: {
+        total,
+        currentPage: page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize)
+      }
+    };
+  }
+
+  // Get all payment methods with filtering and pagination for admin
+  async getAllPaymentMethods(options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: string;
+    provider?: string;
+    type?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) {
+    const {
+      page = 1,
+      pageSize = 10,
+      search,
+      status,
+      provider,
+      type,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = options;
+
+    // Create query builder
+    const queryBuilder = this.paymentMethodRepo
+      .createQueryBuilder('paymentMethod');
+
+    // Apply filters
+    if (search) {
+      queryBuilder.andWhere(
+        '(paymentMethod.brand LIKE :search OR paymentMethod.last4 LIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
+
+    // Handle status filter - support multiple statuses
+    if (status) {
+      // Check if status contains multiple values
+      if (status.includes(',')) {
+        const statusValues = status.split(',').map(s => s.trim()).filter(Boolean);
+        if (statusValues.length > 0) {
+          queryBuilder.andWhere('paymentMethod.status IN (:...statusValues)', { statusValues });
+        }
+      } else {
+        // Single status value
+        queryBuilder.andWhere('paymentMethod.status = :status', { status });
+      }
+    }
+
+    // Handle provider filter - support multiple providers
+    if (provider) {
+      // Check if provider contains multiple values
+      if (provider.includes(',')) {
+        const providerValues = provider.split(',').map(p => p.trim()).filter(Boolean);
+        if (providerValues.length > 0) {
+          queryBuilder.andWhere('paymentMethod.provider IN (:...providerValues)', { providerValues });
+        }
+      } else {
+        // Single provider value
+        queryBuilder.andWhere('paymentMethod.provider = :provider', { provider });
+      }
+    }
+
+    // Handle type filter - support multiple types
+    if (type) {
+      // Check if type contains multiple values
+      if (type.includes(',')) {
+        const typeValues = type.split(',').map(t => t.trim()).filter(Boolean);
+        if (typeValues.length > 0) {
+          queryBuilder.andWhere('paymentMethod.type IN (:...typeValues)', { typeValues });
+        }
+      } else {
+        // Single type value
+        queryBuilder.andWhere('paymentMethod.type = :type', { type });
+      }
+    }
+
+    // Apply sorting
+    try {
+      // Validate sortBy to prevent SQL injection
+      const validSortColumns = [
+        'id', 'userId', 'type', 'provider', 'brand', 'last4', 
+        'expiryMonth', 'expiryYear', 'status', 'isDefault', 'createdAt', 'updatedAt'
+      ];
+      
+      // Default to createdAt if sortBy is not valid
+      const actualSortBy = validSortColumns.includes(sortBy) ? sortBy : 'createdAt';
+      
+      // Apply sorting
+      queryBuilder.orderBy(`paymentMethod.${actualSortBy}`, sortOrder.toUpperCase() as 'ASC' | 'DESC');
+    } catch (error) {
+      // If there's an error with sorting, fall back to default sort
+      console.error('Error applying sort:', error);
+      queryBuilder.orderBy('paymentMethod.createdAt', 'DESC');
+    }
+
+    // Apply pagination
+    const skip = (page - 1) * pageSize;
+    queryBuilder.skip(skip).take(pageSize);
+
+    // Execute query
+    const [paymentMethods, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      items: paymentMethods,
+      pagination: {
+        total,
+        currentPage: page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize)
+      }
+    };
   }
 } 

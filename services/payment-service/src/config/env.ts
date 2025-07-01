@@ -21,6 +21,16 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string(),
   STRIPE_WEBHOOK_SECRET: z.string(),
   
+  // Razorpay
+  RAZORPAY_KEY_ID: z.string().default(''),
+  RAZORPAY_KEY_SECRET: z.string().default(''),
+  RAZORPAY_WEBHOOK_SECRET: z.string().default('razorpay_webhook_secret_placeholder'),
+  
+  // PayPal
+  PAYPAL_CLIENT_ID: z.string().default(''),
+  PAYPAL_CLIENT_SECRET: z.string().default(''),
+  PAYPAL_WEBHOOK_ID: z.string().default('paypal_webhook_id_placeholder'),
+  
   // CORS
   CORS_ORIGIN: z.string().default('*'),
   
@@ -48,6 +58,16 @@ export const config = {
   stripe: {
     secretKey: env.STRIPE_SECRET_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET
+  },
+  razorpay: {
+    key: env.RAZORPAY_KEY_ID,
+    secret: env.RAZORPAY_KEY_SECRET,
+    webhookSecret: env.RAZORPAY_WEBHOOK_SECRET
+  },
+  paypal: {
+    clientId: env.PAYPAL_CLIENT_ID,
+    clientSecret: env.PAYPAL_CLIENT_SECRET,
+    webhookId: env.PAYPAL_WEBHOOK_ID
   },
   cors: {
     origin: env.CORS_ORIGIN

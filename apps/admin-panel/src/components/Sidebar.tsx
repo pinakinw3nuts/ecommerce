@@ -55,7 +55,16 @@ const navigation: NavigationItem[] = [
   },
   { name: 'Inventory', href: '/inventory', icon: PackageSearch },
   { name: 'Orders', href: '/orders', icon: ShoppingBag },
-  { name: 'Payments', href: '/payments', icon: CreditCard },
+  {
+    name: 'Payments',
+    href: '/payments',
+    icon: CreditCard,
+    submenu: [
+      { name: 'All Payments', href: '/payments', icon: CreditCard },
+      { name: 'Payment Methods', href: '/payments/methods', icon: CreditCard },
+      { name: 'Payment Gateways', href: '/payments/methods/gateways', icon: Settings },
+    ],
+  },
   { name: 'Offers', href: '/offers', icon: Ticket },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   {
@@ -64,6 +73,7 @@ const navigation: NavigationItem[] = [
     icon: Truck,
     submenu: [
       { name: 'Shipping Methods', href: '/shipping/methods', icon: Truck },
+      { name: 'Shipping Carriers', href: '/shipping/carriers', icon: Truck },
       { name: 'Shipping Zones', href: '/shipping/zones', icon: BookmarkIcon },
       { name: 'Shipping Rates', href: '/shipping/rates', icon: Sliders },
     ],
