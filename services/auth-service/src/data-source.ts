@@ -10,8 +10,8 @@ const {
   DB_HOST = 'localhost',
   DB_PORT = '5432',
   DB_USER = 'postgres',
-  DB_PASSWORD = 'admin@123',
-  DB_NAME = 'ecom',
+  DB_PASSWORD = 'test123',
+  DB_NAME = 'ecommerce1',
   NODE_ENV = 'development'
 } = process.env;
 
