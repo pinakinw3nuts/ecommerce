@@ -303,9 +303,15 @@ export class ProductService {
     const skip = (page - 1) * limit;
 
     // Build filtered ID subquery to keep pagination accurate even with joins
+    // Note: Postgres requires ORDER BY expressions to appear in the select list when using DISTINCT
+    const sortBy = sort.sortBy || 'createdAt';
+    const sortOrder = sort.sortOrder || ('DESC' as const);
+    const sortColumn = `product.${sortBy}`;
+
     const idQb = this.productRepo.createQueryBuilder('product')
       .select('product.id', 'id')
-      .distinct(true);
+      .distinct(true)
+      .addSelect(sortColumn, 'sort_col');
 
     // Simple boolean filters
     if (filters.isPublished !== undefined) {
@@ -351,10 +357,7 @@ export class ProductService {
       idQb.andWhere('product.id <> :excludeId', { excludeId: filters.excludeProductId });
     }
 
-    // Sorting
-    const sortBy = sort.sortBy || 'createdAt';
-    const sortOrder = sort.sortOrder || ('DESC' as const);
-    const sortColumn = `product.${sortBy}`;
+    // Sorting for ID subquery
     idQb.orderBy(sortColumn, sortOrder).skip(skip).take(limit);
 
     // Execute ID subquery
