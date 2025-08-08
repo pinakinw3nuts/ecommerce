@@ -115,7 +115,13 @@ const productQuerySchema = z.object({
 
 export default async function productRoutes(fastify: FastifyInstance) {
   // Test endpoint
-  fastify.get('/test', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/test', {
+    schema: {
+      tags: ['Products'],
+      summary: 'Products test endpoint',
+      response: { 200: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, timestamp: { type: 'string' } } } }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     return reply.send({
       success: true,
       message: 'Product routes are working',
@@ -124,7 +130,13 @@ export default async function productRoutes(fastify: FastifyInstance) {
   });
 
   // GET /api/products - List products with filtering, sorting, and pagination
-  fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/', {
+    schema: {
+      tags: ['Products'],
+      summary: 'List products',
+      response: { 200: { type: 'object', additionalProperties: true } }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Parse query parameters using Zod schema
       const queryParams = productQuerySchema.parse(request.query);
@@ -175,13 +187,20 @@ export default async function productRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({
         success: false,
         message: 'Failed to list products',
-        error: 'INTERNAL_ERROR'
+        error: 'INTERNAL_ERROR',
+        details: (error as Error).message
       });
     }
   });
 
   // GET /api/products/featured - Get featured products
-  fastify.get('/featured', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/featured', {
+    schema: {
+      tags: ['Products'],
+      summary: 'Get featured products',
+      response: { 200: { type: 'object', additionalProperties: true } }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as { limit?: string };
       const limit = query.limit ? parseInt(query.limit) : 10;

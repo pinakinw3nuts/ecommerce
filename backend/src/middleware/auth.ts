@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { logger } from '../utils/logger';
 
 interface UserInfo {
-  id: string;
+  userId: string;
   email: string;
   role: string;
   [key: string]: any;
@@ -18,6 +18,7 @@ export async function authMiddleware(
       '/docs',
       '/api/auth/login',
       '/api/auth/register',
+      '/api/auth/refresh-token',
       '/api/auth/forgot-password',
       '/api/auth/reset-password',
     ];
@@ -27,11 +28,14 @@ export async function authMiddleware(
       request.url.startsWith(route)
     );
     
-    // Allow GET requests to products, categories, brands (read-only access)
+    // Allow GET requests to products, categories, brands, shipping, payments gateways, cms (read-only access)
     const isPublicGetRoute = request.method === 'GET' && (
       request.url.startsWith('/api/products') ||
       request.url.startsWith('/api/categories') ||
-      request.url.startsWith('/api/brands')
+      request.url.startsWith('/api/brands') ||
+      request.url.startsWith('/api/shipping') ||
+      request.url.startsWith('/api/payments/gateways') ||
+      request.url.startsWith('/api/cms')
     );
     
     if (isPublicRoute || isPublicGetRoute) {
@@ -40,7 +44,7 @@ export async function authMiddleware(
     
     await request.jwtVerify();
     const userInfo = request.user as UserInfo;
-    logger.debug({ userId: userInfo?.id }, 'User authenticated');
+    logger.debug({ userId: userInfo?.userId }, 'User authenticated');
   } catch (error) {
     logger.warn('Authentication failed', { error: (error as Error).message });
     return reply.status(401).send({

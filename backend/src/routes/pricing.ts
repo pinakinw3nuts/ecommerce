@@ -1,5 +1,4 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { PricingService, PriceCalculationOptions } from '../services/pricing.service';
 import { requireUser, requireAdmin } from '../middleware/auth';
 import { logger } from '../utils/logger';
@@ -7,31 +6,45 @@ import { logger } from '../utils/logger';
 const pricingService = new PricingService();
 const pricingLogger = logger.child({ service: 'PricingRoutes' });
 
-// Zod schemas for request validation
-const PriceCalculationQuerySchema = z.object({
-  currency: z.string().optional(),
-  customerGroupIds: z.string().optional().transform(val => val ? val.split(',') : []),
-  formatPrice: z.string().optional().transform(val => val === 'true'),
-  locale: z.string().optional(),
-  decimals: z.string().optional().transform(val => val ? parseInt(val) : 2),
-  quantity: z.string().optional().transform(val => val ? parseInt(val) : 1)
-});
+// JSON schemas for request validation
+const PriceCalculationQuerySchema = {
+  type: 'object',
+  properties: {
+    currency: { type: 'string' },
+    customerGroupIds: { type: 'string' },
+    formatPrice: { type: 'string' },
+    locale: { type: 'string' },
+    decimals: { type: 'string' },
+    quantity: { type: 'string' }
+  }
+};
 
-const BulkPriceCalculationSchema = z.object({
-  productIds: z.array(z.string()),
-  quantity: z.number().optional().default(1),
-  options: z.object({
-    currency: z.string().optional(),
-    customerGroupIds: z.array(z.string()).optional(),
-    formatPrice: z.boolean().optional(),
-    locale: z.string().optional(),
-    decimals: z.number().optional()
-  }).optional()
-});
+const BulkPriceCalculationSchema = {
+  type: 'object',
+  required: ['productIds'],
+  properties: {
+    productIds: { type: 'array', items: { type: 'string' } },
+    quantity: { type: 'number', default: 1 },
+    options: {
+      type: 'object',
+      properties: {
+        currency: { type: 'string' },
+        customerGroupIds: { type: 'array', items: { type: 'string' } },
+        formatPrice: { type: 'boolean' },
+        locale: { type: 'string' },
+        decimals: { type: 'number' }
+      }
+    }
+  }
+};
 
-const CurrencyUpdateSchema = z.object({
-  rate: z.number().positive()
-});
+const CurrencyUpdateSchema = {
+  type: 'object',
+  required: ['rate'],
+  properties: {
+    rate: { type: 'number', minimum: 0.01 }
+  }
+};
 
 export async function pricingRoutes(fastify: FastifyInstance) {
   // Public routes (no authentication required)
@@ -41,25 +54,37 @@ export async function pricingRoutes(fastify: FastifyInstance) {
     schema: {
       tags: ['pricing'],
       summary: 'Get product price',
-      params: z.object({
-        id: z.string().uuid()
-      }),
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' }
+        }
+      },
       querystring: PriceCalculationQuerySchema,
       response: {
-        200: z.object({
-          price: z.union([z.number(), z.string()]),
-          originalPrice: z.number(),
-          currency: z.string(),
-          onSale: z.boolean(),
-          priceListId: z.string().optional(),
-          customerGroupId: z.string().optional(),
-          appliedTier: z.object({
-            quantity: z.number(),
-            price: z.number(),
-            discount: z.number().optional()
-          }).optional(),
-          discountPercentage: z.number().optional()
-        })
+        200: {
+          type: 'object',
+          required: ['price', 'originalPrice', 'currency', 'onSale', 'priceListId', 'customerGroupId', 'appliedTier', 'discountPercentage'],
+          properties: {
+            price: { type: ['number', 'string'] },
+            originalPrice: { type: 'number' },
+            currency: { type: 'string' },
+            onSale: { type: 'boolean' },
+            priceListId: { type: 'string', nullable: true },
+            customerGroupId: { type: 'string', nullable: true },
+            appliedTier: {
+              type: 'object',
+              properties: {
+                quantity: { type: 'number' },
+                price: { type: 'number' },
+                discount: { type: 'number', nullable: true }
+              },
+              nullable: true
+            },
+            discountPercentage: { type: 'number', nullable: true }
+          }
+        }
       }
     }
   }, async (request: FastifyRequest<{
@@ -96,20 +121,33 @@ export async function pricingRoutes(fastify: FastifyInstance) {
       summary: 'Get prices for multiple products',
       body: BulkPriceCalculationSchema,
       response: {
-        200: z.record(z.string(), z.object({
-          price: z.union([z.number(), z.string()]),
-          originalPrice: z.number(),
-          currency: z.string(),
-          onSale: z.boolean(),
-          priceListId: z.string().optional(),
-          customerGroupId: z.string().optional(),
-          appliedTier: z.object({
-            quantity: z.number(),
-            price: z.number(),
-            discount: z.number().optional()
-          }).optional(),
-          discountPercentage: z.number().optional()
-        }))
+        200: {
+          type: 'object',
+          patternProperties: {
+            '^.*$': {
+              type: 'object',
+              required: ['price', 'originalPrice', 'currency', 'onSale', 'priceListId', 'customerGroupId', 'appliedTier', 'discountPercentage'],
+              properties: {
+                price: { type: ['number', 'string'] },
+                originalPrice: { type: 'number' },
+                currency: { type: 'string' },
+                onSale: { type: 'boolean' },
+                priceListId: { type: 'string', nullable: true },
+                customerGroupId: { type: 'string', nullable: true },
+                appliedTier: {
+                  type: 'object',
+                  properties: {
+                    quantity: { type: 'number' },
+                    price: { type: 'number' },
+                    discount: { type: 'number', nullable: true }
+                  },
+                  nullable: true
+                },
+                discountPercentage: { type: 'number', nullable: true }
+              }
+            }
+          }
+        }
       }
     }
   }, async (request: FastifyRequest<{
@@ -146,19 +184,26 @@ export async function pricingRoutes(fastify: FastifyInstance) {
       tags: ['pricing'],
       summary: 'Get active currencies',
       response: {
-        200: z.array(z.object({
-          code: z.string(),
-          name: z.string(),
-          symbol: z.string().nullable(),
-          exchangeRate: z.number(),
-          isDefault: z.boolean(),
-          isActive: z.boolean(),
-          decimalPlaces: z.number(),
-          format: z.string().nullable(),
-          rateLastUpdated: z.date().nullable(),
-          createdAt: z.date(),
-          updatedAt: z.date()
-        }))
+        200: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['code', 'name', 'symbol', 'exchangeRate', 'isDefault', 'isActive', 'decimalPlaces', 'format', 'rateLastUpdated', 'createdAt', 'updatedAt'],
+            properties: {
+              code: { type: 'string' },
+              name: { type: 'string' },
+              symbol: { type: 'string', nullable: true },
+              exchangeRate: { type: 'number' },
+              isDefault: { type: 'boolean' },
+              isActive: { type: 'boolean' },
+              decimalPlaces: { type: 'number' },
+              format: { type: 'string', nullable: true },
+              rateLastUpdated: { type: 'string', nullable: true },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' }
+            }
+          }
+        }
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -180,23 +225,32 @@ export async function pricingRoutes(fastify: FastifyInstance) {
     schema: {
       tags: ['pricing'],
       summary: 'Get currency by code',
-      params: z.object({
-        code: z.string()
-      }),
+      params: {
+        type: 'object',
+        required: ['code'],
+        properties: {
+          code: { type: 'string' }
+        }
+      },
       response: {
-        200: z.object({
-          code: z.string(),
-          name: z.string(),
-          symbol: z.string().nullable(),
-          exchangeRate: z.number(),
-          isDefault: z.boolean(),
-          isActive: z.boolean(),
-          decimalPlaces: z.number(),
-          format: z.string().nullable(),
-          rateLastUpdated: z.date().nullable(),
-          createdAt: z.date(),
-          updatedAt: z.date()
-        }).nullable()
+        200: {
+          type: 'object',
+          required: ['code', 'name', 'symbol', 'exchangeRate', 'isDefault', 'isActive', 'decimalPlaces', 'format', 'rateLastUpdated', 'createdAt', 'updatedAt'],
+          properties: {
+            code: { type: 'string' },
+            name: { type: 'string' },
+            symbol: { type: 'string', nullable: true },
+            exchangeRate: { type: 'number' },
+            isDefault: { type: 'boolean' },
+            isActive: { type: 'boolean' },
+            decimalPlaces: { type: 'number' },
+            format: { type: 'string', nullable: true },
+            rateLastUpdated: { type: 'string', nullable: true },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          },
+          nullable: true
+        }
       }
     }
   }, async (request: FastifyRequest<{
@@ -233,24 +287,32 @@ export async function pricingRoutes(fastify: FastifyInstance) {
     schema: {
       tags: ['pricing', 'admin'],
       summary: 'Update currency exchange rate',
-      params: z.object({
-        code: z.string()
-      }),
+      params: {
+        type: 'object',
+        required: ['code'],
+        properties: {
+          code: { type: 'string' }
+        }
+      },
       body: CurrencyUpdateSchema,
       response: {
-        200: z.object({
-          code: z.string(),
-          name: z.string(),
-          symbol: z.string().nullable(),
-          exchangeRate: z.number(),
-          isDefault: z.boolean(),
-          isActive: z.boolean(),
-          decimalPlaces: z.number(),
-          format: z.string().nullable(),
-          rateLastUpdated: z.date().nullable(),
-          createdAt: z.date(),
-          updatedAt: z.date()
-        })
+        200: {
+          type: 'object',
+          required: ['code', 'name', 'symbol', 'exchangeRate', 'isDefault', 'isActive', 'decimalPlaces', 'format', 'rateLastUpdated', 'createdAt', 'updatedAt'],
+          properties: {
+            code: { type: 'string' },
+            name: { type: 'string' },
+            symbol: { type: 'string', nullable: true },
+            exchangeRate: { type: 'number' },
+            isDefault: { type: 'boolean' },
+            isActive: { type: 'boolean' },
+            decimalPlaces: { type: 'number' },
+            format: { type: 'string', nullable: true },
+            rateLastUpdated: { type: 'string', nullable: true },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        }
       }
     }
   }, async (request: FastifyRequest<{
@@ -280,11 +342,15 @@ export async function pricingRoutes(fastify: FastifyInstance) {
       tags: ['pricing'],
       summary: 'Get exchange rates metadata',
       response: {
-        200: z.object({
-          lastUpdated: z.string(),
-          source: z.string(),
-          nextUpdate: z.string().optional()
-        })
+        200: {
+          type: 'object',
+          required: ['lastUpdated', 'source', 'nextUpdate'],
+          properties: {
+            lastUpdated: { type: 'string' },
+            source: { type: 'string' },
+            nextUpdate: { type: 'string', nullable: true }
+          }
+        }
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -309,12 +375,21 @@ export async function pricingRoutes(fastify: FastifyInstance) {
       tags: ['pricing', 'admin'],
       summary: 'Force refresh exchange rates',
       response: {
-        200: z.object({
-          updated: z.boolean(),
-          rates: z.record(z.string(), z.number()),
-          timestamp: z.string(),
-          source: z.string()
-        })
+        200: {
+          type: 'object',
+          required: ['updated', 'rates', 'timestamp', 'source'],
+          properties: {
+            updated: { type: 'boolean' },
+            rates: {
+              type: 'object',
+              patternProperties: {
+                '^.*$': { type: 'number' }
+              }
+            },
+            timestamp: { type: 'string' },
+            source: { type: 'string' }
+          }
+        }
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {

@@ -1,65 +1,112 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { ContentService } from '../services/content.service';
 import { requireUser, requireAdmin } from '../middleware/auth';
 import { ContentBlockType } from '../entities/ContentBlock';
 
 const contentService = new ContentService();
 
-// Zod schemas for request validation
-const CreateContentSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  slug: z.string().optional(),
-  type: z.nativeEnum(ContentBlockType),
-  content: z.record(z.any()),
-  isPublished: z.boolean().optional().default(false),
-  publishAt: z.string().datetime().optional(),
-  expiresAt: z.string().datetime().optional().nullable(),
-  metaTitle: z.string().optional(),
-  metaDescription: z.string().optional(),
-  metaKeywords: z.string().optional(),
-  ogImage: z.string().url().optional(),
-  metadata: z.record(z.any()).optional(),
-  sortOrder: z.number().optional().default(0),
-  parentId: z.string().uuid().optional(),
-  locale: z.string().optional().default('en'),
-  masterContentBlockId: z.string().uuid().optional()
-});
+// JSON schemas for request validation
+const CreateContentSchema = {
+  type: 'object',
+  required: ['title', 'type', 'content'],
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    slug: { type: 'string' },
+    type: { type: 'string', enum: ['BANNER', 'HERO', 'FEATURED_PRODUCTS', 'CATEGORY_GRID', 'TESTIMONIALS', 'NEWSLETTER', 'FOOTER', 'SIDEBAR', 'CUSTOM'] },
+    content: { type: 'object' },
+    isPublished: { type: 'boolean', default: false },
+    publishAt: { type: 'string', format: 'date-time' },
+    expiresAt: { type: 'string', format: 'date-time' },
+    metaTitle: { type: 'string' },
+    metaDescription: { type: 'string' },
+    metaKeywords: { type: 'string' },
+    ogImage: { type: 'string', format: 'uri' },
+    metadata: { type: 'object' },
+    sortOrder: { type: 'number', default: 0 },
+    parentId: { type: 'string', format: 'uuid' },
+    locale: { type: 'string', default: 'en' },
+    masterContentBlockId: { type: 'string', format: 'uuid' }
+  }
+};
 
-const UpdateContentSchema = z.object({
-  title: z.string().min(1, 'Title is required').optional(),
-  slug: z.string().optional(),
-  type: z.nativeEnum(ContentBlockType).optional(),
-  content: z.record(z.any()).optional(),
-  isPublished: z.boolean().optional(),
-  publishAt: z.string().datetime().optional().nullable(),
-  expiresAt: z.string().datetime().optional().nullable(),
-  metaTitle: z.string().optional().nullable(),
-  metaDescription: z.string().optional().nullable(),
-  metaKeywords: z.string().optional().nullable(),
-  ogImage: z.string().url().optional().nullable(),
-  metadata: z.record(z.any()).optional(),
-  sortOrder: z.number().optional(),
-  parentId: z.string().uuid().optional().nullable(),
-  locale: z.string().optional(),
-  masterContentBlockId: z.string().uuid().optional().nullable(),
-  changeDescription: z.string().optional()
-});
+const UpdateContentSchema = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    slug: { type: 'string' },
+    type: { type: 'string', enum: ['BANNER', 'HERO', 'FEATURED_PRODUCTS', 'CATEGORY_GRID', 'TESTIMONIALS', 'NEWSLETTER', 'FOOTER', 'SIDEBAR', 'CUSTOM'] },
+    content: { type: 'object' },
+    isPublished: { type: 'boolean' },
+    publishAt: { type: 'string', format: 'date-time' },
+    expiresAt: { type: 'string', format: 'date-time' },
+    metaTitle: { type: 'string' },
+    metaDescription: { type: 'string' },
+    metaKeywords: { type: 'string' },
+    ogImage: { type: 'string', format: 'uri' },
+    metadata: { type: 'object' },
+    sortOrder: { type: 'number' },
+    parentId: { type: 'string', format: 'uuid' },
+    locale: { type: 'string' },
+    masterContentBlockId: { type: 'string', format: 'uuid' },
+    changeDescription: { type: 'string' }
+  }
+};
 
-const UpdatePublicationStatusSchema = z.object({
-  isPublished: z.boolean()
-});
+const UpdatePublicationStatusSchema = {
+  type: 'object',
+  required: ['isPublished'],
+  properties: {
+    isPublished: { type: 'boolean' }
+  }
+};
 
-const ContentListQuerySchema = z.object({
-  page: z.string().transform(val => parseInt(val, 10)).default('1'),
-  limit: z.string().transform(val => parseInt(val, 10)).default('10'),
-  sortBy: z.string().optional().default('createdAt'),
-  sortOrder: z.enum(['ASC', 'DESC']).optional().default('DESC'),
-  type: z.nativeEnum(ContentBlockType).optional(),
-  isPublished: z.string().transform(val => val === 'true').optional(),
-  searchTerm: z.string().optional(),
-  locale: z.string().optional()
-});
+const ContentListQuerySchema = {
+  type: 'object',
+  properties: {
+    page: { type: 'string', default: '1' },
+    limit: { type: 'string', default: '10' },
+    sortBy: { type: 'string', default: 'createdAt' },
+    sortOrder: { type: 'string', enum: ['ASC', 'DESC'], default: 'DESC' },
+    type: { type: 'string', enum: ['BANNER', 'HERO', 'FEATURED_PRODUCTS', 'CATEGORY_GRID', 'TESTIMONIALS', 'NEWSLETTER', 'FOOTER', 'SIDEBAR', 'CUSTOM'] },
+    isPublished: { type: 'string' },
+    searchTerm: { type: 'string' },
+    locale: { type: 'string' }
+  }
+};
+
+// TS helper types for request typing
+type ContentListQuery = {
+  page?: string | number;
+  limit?: string | number;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+  type?: string;
+  isPublished?: string | boolean;
+  searchTerm?: string;
+  locale?: string;
+};
+
+type CreateContentBody = {
+  title: string;
+  slug?: string;
+  type?: string;
+  content?: Record<string, unknown>;
+  isPublished?: boolean;
+  publishAt?: string;
+  expiresAt?: string | null;
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string;
+  ogImage?: string;
+  metadata?: Record<string, unknown>;
+  sortOrder?: number;
+  parentId?: string;
+  locale?: string;
+  masterContentBlockId?: string;
+};
+
+type UpdateContentBody = Partial<CreateContentBody> & { changeDescription?: string };
+type UpdatePublicationBody = { isPublished: boolean };
 
 export async function cmsRoutes(fastify: FastifyInstance) {
   // Public routes (read-only)
@@ -172,23 +219,23 @@ export async function cmsRoutes(fastify: FastifyInstance) {
       description: 'Retrieve a list of published content blocks with filtering and pagination',
       querystring: ContentListQuerySchema
     }
-  }, async (request: FastifyRequest<{
-    Querystring: z.infer<typeof ContentListQuerySchema>;
-  }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Querystring: ContentListQuery }>, reply: FastifyReply) => {
     try {
-      const query = request.query;
+      const q = request.query;
+      const page = typeof q.page === 'string' ? parseInt(q.page, 10) : (q.page || 1);
+      const limit = typeof q.limit === 'string' ? parseInt(q.limit, 10) : (q.limit || 10);
       
       const [contentBlocks, total] = await contentService.getPublishedContentBlocks(
         {
-          page: query.page,
-          limit: query.limit,
-          sortBy: query.sortBy,
-          sortOrder: query.sortOrder
+          page,
+          limit,
+          sortBy: q.sortBy,
+          sortOrder: q.sortOrder
         },
         {
-          type: query.type,
-          searchTerm: query.searchTerm,
-          locale: query.locale
+          type: q.type as any,
+          searchTerm: q.searchTerm,
+          locale: q.locale
         }
       );
 
@@ -197,10 +244,10 @@ export async function cmsRoutes(fastify: FastifyInstance) {
         data: {
           contentBlocks,
           pagination: {
-            page: query.page,
-            limit: query.limit,
+            page,
+            limit,
             total,
-            pages: Math.ceil(total / query.limit)
+            pages: Math.ceil(total / limit)
           }
         }
       });
@@ -225,26 +272,37 @@ export async function cmsRoutes(fastify: FastifyInstance) {
       body: CreateContentSchema
     },
     preHandler: requireAdmin
-  }, async (request: FastifyRequest<{
-    Body: z.infer<typeof CreateContentSchema>;
-  }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: CreateContentBody }>, reply: FastifyReply) => {
     try {
       const contentData = request.body;
       const userId = (request.user as any)?.id;
 
       // Convert date strings to Date objects and ensure slug is provided
-      const processedData = {
+      const processedData: CreateContentBody = {
         ...contentData,
         slug: contentData.slug || contentData.title.toLowerCase().replace(/\s+/g, '-'),
-        publishAt: contentData.publishAt ? new Date(contentData.publishAt) : undefined,
-        expiresAt: contentData.expiresAt ? new Date(contentData.expiresAt) : undefined
+        publishAt: contentData.publishAt ? (new Date(contentData.publishAt) as any) : undefined,
+        expiresAt: contentData.expiresAt ? (new Date(contentData.expiresAt) as any) : undefined
       };
 
       const contentBlock = await contentService.createContentBlock({
-        ...processedData,
+        // Ensure required fields exist and correct types per service input
         title: processedData.title || 'Untitled Content Block',
-        type: processedData.type || ContentBlockType.PAGE,
+        slug: processedData.slug || (processedData.title || 'untitled').toLowerCase().replace(/\s+/g, '-'),
+        type: (processedData.type as any) || ContentBlockType.PAGE,
         content: processedData.content || {},
+        isPublished: !!processedData.isPublished,
+        publishAt: processedData.publishAt as any,
+        expiresAt: processedData.expiresAt as any,
+        metaTitle: processedData.metaTitle,
+        metaDescription: processedData.metaDescription,
+        metaKeywords: processedData.metaKeywords,
+        ogImage: processedData.ogImage,
+        metadata: processedData.metadata as any,
+        sortOrder: processedData.sortOrder,
+        parentId: processedData.parentId,
+        locale: processedData.locale,
+        masterContentBlockId: processedData.masterContentBlockId,
       }, userId);
 
       return reply.status(201).send({
@@ -277,26 +335,40 @@ export async function cmsRoutes(fastify: FastifyInstance) {
       body: UpdateContentSchema
     },
     preHandler: requireAdmin
-  }, async (request: FastifyRequest<{
-    Params: { id: string };
-    Body: z.infer<typeof UpdateContentSchema>;
-  }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Params: { id: string }; Body: UpdateContentBody }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
       const updateData = request.body;
       const userId = (request.user as any)?.id;
 
       // Convert date strings to Date objects
-      const processedData = {
+      const processedData: UpdateContentBody = {
         ...updateData,
-        publishAt: updateData.publishAt ? new Date(updateData.publishAt) : undefined,
-        expiresAt: updateData.expiresAt ? new Date(updateData.expiresAt) : undefined
+        publishAt: updateData.publishAt ? (new Date(updateData.publishAt) as any) : undefined,
+        expiresAt: updateData.expiresAt ? (new Date(updateData.expiresAt) as any) : undefined
       };
 
       const contentBlock = await contentService.updateContentBlock(
-        id, 
-        processedData, 
-        userId, 
+        id,
+        {
+          title: processedData.title,
+          slug: processedData.slug,
+          type: processedData.type as any,
+          content: processedData.content as any,
+          isPublished: processedData.isPublished as any,
+          publishAt: processedData.publishAt as any,
+          expiresAt: processedData.expiresAt as any,
+          metaTitle: processedData.metaTitle,
+          metaDescription: processedData.metaDescription,
+          metaKeywords: processedData.metaKeywords,
+          ogImage: processedData.ogImage,
+          metadata: processedData.metadata as any,
+          sortOrder: processedData.sortOrder,
+          parentId: processedData.parentId,
+          locale: processedData.locale,
+          masterContentBlockId: processedData.masterContentBlockId,
+        },
+        userId,
         updateData.changeDescription
       );
 
@@ -338,10 +410,7 @@ export async function cmsRoutes(fastify: FastifyInstance) {
       body: UpdatePublicationStatusSchema
     },
     preHandler: requireAdmin
-  }, async (request: FastifyRequest<{
-    Params: { id: string };
-    Body: z.infer<typeof UpdatePublicationStatusSchema>;
-  }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Params: { id: string }; Body: UpdatePublicationBody }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
       const { isPublished } = request.body;
@@ -425,24 +494,24 @@ export async function cmsRoutes(fastify: FastifyInstance) {
       querystring: ContentListQuerySchema
     },
     preHandler: requireAdmin
-  }, async (request: FastifyRequest<{
-    Querystring: z.infer<typeof ContentListQuerySchema>;
-  }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Querystring: ContentListQuery }>, reply: FastifyReply) => {
     try {
-      const query = request.query;
+      const q = request.query;
+      const page = typeof q.page === 'string' ? parseInt(q.page, 10) : (q.page || 1);
+      const limit = typeof q.limit === 'string' ? parseInt(q.limit, 10) : (q.limit || 10);
       
       const [contentBlocks, total] = await contentService.getContentBlocks(
         {
-          page: query.page,
-          limit: query.limit,
-          sortBy: query.sortBy,
-          sortOrder: query.sortOrder
+          page,
+          limit,
+          sortBy: q.sortBy,
+          sortOrder: q.sortOrder
         },
         {
-          type: query.type,
-          isPublished: query.isPublished,
-          searchTerm: query.searchTerm,
-          locale: query.locale
+          type: q.type as any,
+          isPublished: (typeof q.isPublished === 'string' ? q.isPublished === 'true' : q.isPublished) as any,
+          searchTerm: q.searchTerm,
+          locale: q.locale
         }
       );
 
@@ -451,10 +520,10 @@ export async function cmsRoutes(fastify: FastifyInstance) {
         data: {
           contentBlocks,
           pagination: {
-            page: query.page,
-            limit: query.limit,
+            page,
+            limit,
             total,
-            pages: Math.ceil(total / query.limit)
+            pages: Math.ceil(total / limit)
           }
         }
       });

@@ -183,7 +183,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
         isEmailVerified: false,
         is2faEnabled: false,
         phoneNumber: null,
-        country: null,
         avatar: null,
         googleId: null,
         lastLogin: null,
@@ -196,7 +195,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         preferences: null
       });
 
-      const savedUser = await userRepository.save(newUser) as User;
+      const savedUser = await userRepository.save(newUser as any) as User;
 
       // Generate JWT token
       const token = fastify.jwt.sign({
@@ -262,11 +261,12 @@ export default async function authRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Refresh token endpoint
+  // Refresh token endpoint - supports body token and HttpOnly cookie 'refreshToken'
   fastify.post('/refresh-token', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // TODO: Get refresh token from cookies when cookie support is added
-      const refreshToken = (request.body as any)?.refreshToken;
+      const cookieToken = (request.cookies as any)?.refreshToken;
+      const bodyToken = (request.body as any)?.refreshToken;
+      const refreshToken = cookieToken || bodyToken;
 
       if (!refreshToken) {
         return reply.status(401).send({
@@ -311,7 +311,14 @@ export default async function authRoutes(fastify: FastifyInstance) {
         expiresIn: '24h'
       });
 
-      // TODO: Set new cookie when cookie support is added
+      // Set new cookie (HttpOnly) if cookie-based flow is used
+      reply.setCookie('accessToken', newToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: false,
+        path: '/',
+        maxAge: 60 * 60 * 24 // 1 day
+      });
 
       return reply.send({
         success: true,

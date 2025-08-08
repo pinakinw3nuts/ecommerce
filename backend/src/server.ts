@@ -8,7 +8,7 @@ import staticFiles from '@fastify/static';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import jwt from '@fastify/jwt';
-// import cookie from '@fastify/cookie';
+import cookie from '@fastify/cookie';
 import path from 'path';
 
 import { config } from './config/env';
@@ -25,13 +25,13 @@ import ordersRoutes from './routes/orders';
 import usersRoutes from './routes/users';
 import notificationRoutes from './routes/notification';
 import inventoryRoutes from './routes/inventory';
-// import { reviewRoutes } from './routes/review';
-// import { shippingRoutes } from './routes/shipping';
-// import { paymentRoutes } from './routes/payment';
-// import { companyRoutes } from './routes/company';
-// import { cmsRoutes } from './routes/cms';
-// import { pricingRoutes } from './routes/pricing';
-// import { wishlistRoutes } from './routes/wishlist';
+import { reviewRoutes } from './routes/review';
+import { shippingRoutes } from './routes/shipping';
+import { paymentRoutes } from './routes/payment';
+import { companyRoutes } from './routes/company';
+import { cmsRoutes } from './routes/cms';
+import { pricingRoutes } from './routes/pricing';
+import { wishlistRoutes } from './routes/wishlist';
 
 // Import existing middleware
 import { authMiddleware } from './middleware/auth';
@@ -64,8 +64,9 @@ export async function createServer() {
   await server.register(jwt, {
     secret: config.jwt.secret,
   });
-  
-  // await server.register(cookie);
+  await server.register(cookie, {
+    hook: 'onRequest'
+  });
 
   // Swagger documentation
   await server.register(swagger, {
@@ -106,13 +107,13 @@ export async function createServer() {
     throw error;
   }
   
-  // await server.register(reviewRoutes, { prefix: '/api/reviews' });
-  // await server.register(shippingRoutes, { prefix: '/api/shipping' });
-  // await server.register(paymentRoutes, { prefix: '/api/payments' });
-  // await server.register(companyRoutes, { prefix: '/api/companies' });
-  // await server.register(cmsRoutes, { prefix: '/api/cms' });
-  // await server.register(pricingRoutes, { prefix: '/api/pricing' });
-  // await server.register(wishlistRoutes, { prefix: '/api/wishlist' });
+  await server.register(reviewRoutes, { prefix: '/api/reviews' });
+  await server.register(shippingRoutes, { prefix: '/api/shipping' });
+  await server.register(paymentRoutes, { prefix: '/api/payments' });
+  await server.register(companyRoutes, { prefix: '/api/companies' });
+  await server.register(cmsRoutes, { prefix: '/api/cms' });
+  await server.register(pricingRoutes, { prefix: '/api/pricing' });
+  await server.register(wishlistRoutes, { prefix: '/api/wishlist' });
 
   // Root route
   server.get('/', async (request, reply) => {
@@ -129,8 +130,11 @@ export async function createServer() {
 
 export async function startServer() {
   try {
+    console.log('🔄 Creating server...');
     const server = await createServer();
+    console.log('✅ Server created successfully');
 
+    console.log('🔄 Starting server...');
     // Start server
     await server.listen({
       port: config.port,
@@ -152,6 +156,7 @@ export async function startServer() {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
 
   } catch (error) {
+    console.error('❌ Detailed error:', error);
     logger.error('Failed to start server:', error);
     process.exit(1);
   }

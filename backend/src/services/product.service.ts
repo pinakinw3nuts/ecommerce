@@ -294,80 +294,132 @@ export class ProductService {
     pagination?: ProductPaginationOptions;
   }) {
     const { filters = {}, sort = {}, pagination = {} } = options || {};
-    
+
     logger.info('Listing products with options:', { filters, sort, pagination });
-    
-    // Create query builder for complex filtering
-    const queryBuilder = this.productRepo.createQueryBuilder('product')
-      .leftJoinAndSelect('product.category', 'category')
-      .leftJoinAndSelect('product.brand', 'brand')
-      .leftJoinAndSelect('product.variants', 'variants')
-      .leftJoinAndSelect('product.images', 'images')
-      .leftJoinAndSelect('product.tags', 'tags');
 
-    // Apply filters
-    if (filters.isPublished !== undefined) {
-      queryBuilder.andWhere('product.isPublished = :isPublished', { isPublished: filters.isPublished });
-    }
-    
-    if (filters.isFeatured !== undefined) {
-      queryBuilder.andWhere('product.isFeatured = :isFeatured', { isFeatured: filters.isFeatured });
-    }
-
-    // Search filter (name and description)
-    if (filters.search) {
-      queryBuilder.andWhere(
-        '(product.name ILIKE :search OR product.description ILIKE :search)',
-        { search: `%${filters.search}%` }
-      );
-      logger.info('Applied search filter:', { search: filters.search });
-    }
-
-    // Category filter
-    if (filters.categoryId) {
-      queryBuilder.andWhere('product.categoryId = :categoryId', { categoryId: filters.categoryId });
-      logger.info('Applied category filter:', { categoryId: filters.categoryId });
-    }
-
-    // Price range filters
-    if (filters.minPrice !== undefined) {
-      queryBuilder.andWhere('product.price >= :minPrice', { minPrice: filters.minPrice });
-      logger.info('Applied minPrice filter:', { minPrice: filters.minPrice });
-    }
-    
-    if (filters.maxPrice !== undefined) {
-      queryBuilder.andWhere('product.price <= :maxPrice', { maxPrice: filters.maxPrice });
-      logger.info('Applied maxPrice filter:', { maxPrice: filters.maxPrice });
-    }
-
-    // Tag filter
-    if (filters.tagIds && filters.tagIds.length > 0) {
-      queryBuilder.andWhere('tags.id IN (:...tagIds)', { tagIds: filters.tagIds });
-      logger.info('Applied tagIds filter:', { tagIds: filters.tagIds });
-    }
-
-    // Apply sorting
-    if (sort.sortBy && sort.sortOrder) {
-      queryBuilder.orderBy(`product.${sort.sortBy}`, sort.sortOrder);
-    } else {
-      queryBuilder.orderBy('product.createdAt', 'DESC');
-    }
-
-    // Apply pagination
+    // Pagination defaults
     const page = pagination.page || 1;
     const limit = pagination.limit || 20;
     const skip = (page - 1) * limit;
 
-    queryBuilder.skip(skip).take(limit);
+    // Build filtered ID subquery to keep pagination accurate even with joins
+    const idQb = this.productRepo.createQueryBuilder('product')
+      .select('product.id', 'id')
+      .distinct(true);
 
-    // Execute query
-    const [products, total] = await queryBuilder.getManyAndCount();
-    
-    logger.info('Products query result:', { 
-      totalFound: total, 
-      returnedCount: products.length, 
-      page, 
-      limit 
+    // Simple boolean filters
+    if (filters.isPublished !== undefined) {
+      idQb.andWhere('product.isPublished = :isPublished', { isPublished: filters.isPublished });
+    }
+    if (filters.isFeatured !== undefined) {
+      idQb.andWhere('product.isFeatured = :isFeatured', { isFeatured: filters.isFeatured });
+    }
+
+    // Category filter (single or multiple)
+    if (filters.categoryId) {
+      idQb.andWhere('product."categoryId" = :categoryId', { categoryId: filters.categoryId });
+    }
+    if (filters.categoryIds) {
+      const ids = filters.categoryIds.split(',').map(s => s.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        idQb.andWhere('product."categoryId" IN (:...categoryIds)', { categoryIds: ids });
+      }
+    }
+
+    // Price range filters
+    if (filters.minPrice !== undefined) {
+      idQb.andWhere('product.price >= :minPrice', { minPrice: filters.minPrice });
+    }
+    if (filters.maxPrice !== undefined) {
+      idQb.andWhere('product.price <= :maxPrice', { maxPrice: filters.maxPrice });
+    }
+
+    // Tag filter (join only if needed)
+    if (filters.tagIds && filters.tagIds.length > 0) {
+      idQb.innerJoin('product.tags', 'tag')
+        .andWhere('tag.id IN (:...tagIds)', { tagIds: filters.tagIds });
+    }
+
+    // Text search across name/description (and tags if already joined or join on demand)
+    if (filters.search && filters.search.trim().length > 0) {
+      const search = `%${filters.search.trim()}%`;
+      idQb.andWhere('(product.name ILIKE :search OR product.description ILIKE :search)', { search });
+    }
+
+    // Exclude a product ID if provided (useful for related/recommendations)
+    if (filters.excludeProductId) {
+      idQb.andWhere('product.id <> :excludeId', { excludeId: filters.excludeProductId });
+    }
+
+    // Sorting
+    const sortBy = sort.sortBy || 'createdAt';
+    const sortOrder = sort.sortOrder || ('DESC' as const);
+    const sortColumn = `product.${sortBy}`;
+    idQb.orderBy(sortColumn, sortOrder).skip(skip).take(limit);
+
+    // Execute ID subquery
+    const idRows = await idQb.getRawMany<{ id: string }>();
+    const ids = idRows.map(r => r.id);
+
+    // Total count (distinct products)
+    const countQb = this.productRepo.createQueryBuilder('product').select('product.id').distinct(true);
+    // Re-apply the same filters as idQb
+    if (filters.isPublished !== undefined) {
+      countQb.andWhere('product.isPublished = :isPublished', { isPublished: filters.isPublished });
+    }
+    if (filters.isFeatured !== undefined) {
+      countQb.andWhere('product.isFeatured = :isFeatured', { isFeatured: filters.isFeatured });
+    }
+    if (filters.categoryId) {
+      countQb.andWhere('product."categoryId" = :categoryId', { categoryId: filters.categoryId });
+    }
+    if (filters.categoryIds) {
+      const idsArr = filters.categoryIds.split(',').map(s => s.trim()).filter(Boolean);
+      if (idsArr.length > 0) {
+        countQb.andWhere('product."categoryId" IN (:...categoryIds)', { categoryIds: idsArr });
+      }
+    }
+    if (filters.minPrice !== undefined) {
+      countQb.andWhere('product.price >= :minPrice', { minPrice: filters.minPrice });
+    }
+    if (filters.maxPrice !== undefined) {
+      countQb.andWhere('product.price <= :maxPrice', { maxPrice: filters.maxPrice });
+    }
+    if (filters.tagIds && filters.tagIds.length > 0) {
+      countQb.innerJoin('product.tags', 'tag').andWhere('tag.id IN (:...tagIds)', { tagIds: filters.tagIds });
+    }
+    if (filters.search && filters.search.trim().length > 0) {
+      const search = `%${filters.search.trim()}%`;
+      countQb.andWhere('(product.name ILIKE :search OR product.description ILIKE :search)', { search });
+    }
+    if (filters.excludeProductId) {
+      countQb.andWhere('product.id <> :excludeId', { excludeId: filters.excludeProductId });
+    }
+    const total = await countQb.getCount();
+
+    if (ids.length === 0) {
+      return {
+        products: [],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      };
+    }
+
+    // Fetch the page of products by IDs (no heavy joins to avoid duplicate rows)
+    const products = await this.productRepo.createQueryBuilder('product')
+      .where('product.id IN (:...ids)', { ids })
+      .orderBy(sortColumn, sortOrder)
+      .getMany();
+
+    logger.info('Products query result:', {
+      totalFound: total,
+      returnedCount: products.length,
+      page,
+      limit
     });
 
     return {
@@ -382,12 +434,25 @@ export class ProductService {
   }
 
   async getFeaturedProducts(limit: number = 10) {
-    return await this.productRepo.find({
-      where: { isFeatured: true, isPublished: true },
-      relations: ['category', 'brand', 'variants', 'images'],
-      take: limit,
-      order: { createdAt: 'DESC' }
-    });
+    // Safe select without relations to avoid schema mismatches
+    return await this.productRepo.createQueryBuilder('product')
+      .select([
+        'product.id',
+        'product.name',
+        'product.slug',
+        'product.description',
+        'product.price',
+        'product.mediaUrl',
+        'product.isFeatured',
+        'product.isPublished',
+        'product.createdAt',
+        'product.updatedAt',
+      ])
+      .where('product.isFeatured = true')
+      .andWhere('product.isPublished = true')
+      .orderBy('product.createdAt', 'DESC')
+      .take(limit)
+      .getMany();
   }
 
   async getSaleProducts(limit: number = 10) {

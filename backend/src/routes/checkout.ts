@@ -58,7 +58,21 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireUser());
 
   // POST /api/checkout/validate-cart - Validate cart before checkout
-  fastify.post('/validate-cart', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/validate-cart', {
+    schema: {
+      tags: ['Checkout'],
+      summary: 'Validate cart before checkout',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object' }
+          }
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user as any;
       logger.info('Validating cart for checkout:', { userId: user.userId });
@@ -80,7 +94,21 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/checkout/calculate-shipping - Calculate shipping costs
-  fastify.post('/calculate-shipping', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/calculate-shipping', {
+    schema: {
+      tags: ['Checkout'],
+      summary: 'Calculate shipping costs',
+      body: {
+        type: 'object',
+        required: ['shippingAddress'],
+        properties: {
+          shippingAddress: { type: 'object' },
+          method: { type: 'string' }
+        }
+      },
+      response: { 200: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object' } } } }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user as any;
       const { shippingAddress, method } = calculateShippingSchema.parse(request.body);
@@ -138,7 +166,15 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/checkout/process-payment - Process payment (stub)
-  fastify.post('/process-payment', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/process-payment', {
+    schema: {
+      tags: ['Checkout'],
+      summary: 'Process payment (stub)',
+      description: 'This endpoint simulates a payment processing flow in development and does not capture real payments. To enable Stripe, wire PaymentService to Stripe Intents.',
+      body: { type: 'object', required: ['amount'], properties: { amount: { type: 'number' }, paymentMethod: { type: 'string' } } },
+      response: { 200: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object' } } }, 400: { type: 'object' } }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user as any;
       const { amount, paymentMethod } = z.object({
@@ -187,7 +223,14 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/checkout/place-order - Place order
-  fastify.post('/place-order', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/place-order', {
+    schema: {
+      tags: ['Checkout'],
+      summary: 'Place order',
+      body: { type: 'object' },
+      response: { 200: { type: 'object' }, 400: { type: 'object' } }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user as any;
       const orderData = placeOrderSchema.parse(request.body);

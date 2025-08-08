@@ -1,111 +1,193 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { CompanyService } from '../services/company.service';
 import { requireUser, requireAdmin } from '../middleware/auth';
 import { CompanyRole } from '../entities/CompanyRole';
 
 const companyService = new CompanyService();
 
+// TS interfaces for bodies
+type UpdateCompanyProfileBody = {
+  businessType?: string;
+  yearEstablished?: number;
+  industry?: string;
+  numberOfEmployees?: number;
+  description?: string;
+  logoUrl?: string;
+  socialProfiles?: Partial<Record<'linkedin'|'twitter'|'facebook'|'instagram', string>>;
+  taxInformation?: Partial<Record<'taxId'|'vatNumber'|'taxExemptionCertificate'|'taxClassification', string>>;
+  bankInformation?: Partial<Record<'accountName'|'accountNumber'|'bankName'|'routingNumber'|'swiftCode'|'iban', string>>;
+  additionalContacts?: Array<{ name: string; title: string; email: string; phone: string; isPrimary?: boolean; }>;
+  [key: string]: any;
+};
+
+type AddCompanyUserBody = {
+  userId: string;
+  role: CompanyRole | 'OWNER' | 'ADMIN' | 'MANAGER' | 'USER' | 'VIEWER';
+  title?: string;
+  department?: string;
+  permissions?: {
+    canManageUsers?: boolean;
+    canViewReports?: boolean;
+    canApproveOrders?: boolean;
+    orderApprovalLimit?: number;
+    canManageProducts?: boolean;
+  };
+};
+
+type UpdateCompanyUserBody = Partial<AddCompanyUserBody>;
+
+type UpdateCompanyCreditBody = { creditLimit: number; reasonForChange: string };
+
 // Request schemas
-const CreateCompanySchema = z.object({
-  name: z.string().min(2).max(100),
-  gstNumber: z.string().optional(),
-  country: z.string().min(2).max(50),
-  phoneNumber: z.string().optional(),
-  email: z.string().email().optional(),
-  website: z.string().url().optional(),
-  billingAddress: z.object({
-    street: z.string(),
-    city: z.string(),
-    state: z.string(),
-    postalCode: z.string(),
-    country: z.string()
-  }).optional(),
-  shippingAddress: z.object({
-    street: z.string(),
-    city: z.string(),
-    state: z.string(),
-    postalCode: z.string(),
-    country: z.string()
-  }).optional(),
-  creditLimit: z.number().min(0).optional(),
-  settings: z.object({
-    allowPurchaseOrders: z.boolean().optional(),
-    requirePOApproval: z.boolean().optional(),
-    invoiceTermDays: z.number().int().min(0).optional(),
-    taxExempt: z.boolean().optional(),
-    allowedPaymentMethods: z.array(z.string()).optional()
-  }).optional()
-});
+const CreateCompanySchema = {
+  type: 'object',
+  required: ['name', 'country'],
+  properties: {
+    name: { type: 'string', minLength: 2, maxLength: 100 },
+    gstNumber: { type: 'string' },
+    country: { type: 'string', minLength: 2, maxLength: 50 },
+    phoneNumber: { type: 'string' },
+    email: { type: 'string', format: 'email' },
+    website: { type: 'string', format: 'uri' },
+    billingAddress: {
+      type: 'object',
+      required: ['street', 'city', 'state', 'postalCode', 'country'],
+      properties: {
+        street: { type: 'string' },
+        city: { type: 'string' },
+        state: { type: 'string' },
+        postalCode: { type: 'string' },
+        country: { type: 'string' }
+      }
+    },
+    shippingAddress: {
+      type: 'object',
+      required: ['street', 'city', 'state', 'postalCode', 'country'],
+      properties: {
+        street: { type: 'string' },
+        city: { type: 'string' },
+        state: { type: 'string' },
+        postalCode: { type: 'string' },
+        country: { type: 'string' }
+      }
+    },
+    creditLimit: { type: 'number', minimum: 0 },
+    settings: {
+      type: 'object',
+      properties: {
+        allowPurchaseOrders: { type: 'boolean' },
+        requirePOApproval: { type: 'boolean' },
+        invoiceTermDays: { type: 'integer', minimum: 0 },
+        taxExempt: { type: 'boolean' },
+        allowedPaymentMethods: { type: 'array', items: { type: 'string' } }
+      }
+    }
+  }
+};
 
-const UpdateCompanyProfileSchema = z.object({
-  businessType: z.string().optional(),
-  yearEstablished: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
-  industry: z.string().optional(),
-  numberOfEmployees: z.number().int().min(1).optional(),
-  description: z.string().optional(),
-  logoUrl: z.string().url().optional(),
-  socialProfiles: z.object({
-    linkedin: z.string().url().optional(),
-    twitter: z.string().url().optional(),
-    facebook: z.string().url().optional(),
-    instagram: z.string().url().optional()
-  }).optional(),
-  taxInformation: z.object({
-    taxId: z.string().optional(),
-    vatNumber: z.string().optional(),
-    taxExemptionCertificate: z.string().optional(),
-    taxClassification: z.string().optional()
-  }).optional(),
-  bankInformation: z.object({
-    accountName: z.string().optional(),
-    accountNumber: z.string().optional(),
-    bankName: z.string().optional(),
-    routingNumber: z.string().optional(),
-    swiftCode: z.string().optional(),
-    iban: z.string().optional()
-  }).optional(),
-  additionalContacts: z.array(z.object({
-    name: z.string(),
-    title: z.string(),
-    email: z.string().email(),
-    phone: z.string(),
-    isPrimary: z.boolean().default(false)
-  })).optional()
-});
+const UpdateCompanyProfileSchema = {
+  type: 'object',
+  properties: {
+    businessType: { type: 'string' },
+    yearEstablished: { type: 'integer', minimum: 1800, maximum: 2024 },
+    industry: { type: 'string' },
+    numberOfEmployees: { type: 'integer', minimum: 1 },
+    description: { type: 'string' },
+    logoUrl: { type: 'string', format: 'uri' },
+    socialProfiles: {
+      type: 'object',
+      properties: {
+        linkedin: { type: 'string', format: 'uri' },
+        twitter: { type: 'string', format: 'uri' },
+        facebook: { type: 'string', format: 'uri' },
+        instagram: { type: 'string', format: 'uri' }
+      }
+    },
+    taxInformation: {
+      type: 'object',
+      properties: {
+        taxId: { type: 'string' },
+        vatNumber: { type: 'string' },
+        taxExemptionCertificate: { type: 'string' },
+        taxClassification: { type: 'string' }
+      }
+    },
+    bankInformation: {
+      type: 'object',
+      properties: {
+        accountName: { type: 'string' },
+        accountNumber: { type: 'string' },
+        bankName: { type: 'string' },
+        routingNumber: { type: 'string' },
+        swiftCode: { type: 'string' },
+        iban: { type: 'string' }
+      }
+    },
+    additionalContacts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['name', 'title', 'email', 'phone'],
+        properties: {
+          name: { type: 'string' },
+          title: { type: 'string' },
+          email: { type: 'string', format: 'email' },
+          phone: { type: 'string' },
+          isPrimary: { type: 'boolean', default: false }
+        }
+      }
+    }
+  }
+};
 
-const UpdateCompanyCreditSchema = z.object({
-  creditLimit: z.number().min(0),
-  reasonForChange: z.string().min(3).max(200)
-});
+const UpdateCompanyCreditSchema = {
+  type: 'object',
+  required: ['creditLimit', 'reasonForChange'],
+  properties: {
+    creditLimit: { type: 'number', minimum: 0 },
+    reasonForChange: { type: 'string', minLength: 3, maxLength: 200 }
+  }
+};
 
-const AddCompanyUserSchema = z.object({
-  userId: z.string().uuid(),
-  role: z.nativeEnum(CompanyRole),
-  title: z.string().optional(),
-  department: z.string().optional(),
-  permissions: z.object({
-    canManageUsers: z.boolean().optional(),
-    canViewReports: z.boolean().optional(),
-    canApproveOrders: z.boolean().optional(),
-    orderApprovalLimit: z.number().optional(),
-    canManageProducts: z.boolean().optional()
-  }).optional()
-});
+const AddCompanyUserSchema = {
+  type: 'object',
+  required: ['userId', 'role'],
+  properties: {
+    userId: { type: 'string', format: 'uuid' },
+    role: { type: 'string', enum: ['OWNER', 'ADMIN', 'MANAGER', 'USER', 'VIEWER'] },
+    title: { type: 'string' },
+    department: { type: 'string' },
+    permissions: {
+      type: 'object',
+      properties: {
+        canManageUsers: { type: 'boolean' },
+        canViewReports: { type: 'boolean' },
+        canApproveOrders: { type: 'boolean' },
+        orderApprovalLimit: { type: 'number' },
+        canManageProducts: { type: 'boolean' }
+      }
+    }
+  }
+};
 
-const UpdateCompanyUserSchema = z.object({
-  role: z.nativeEnum(CompanyRole).optional(),
-  title: z.string().optional(),
-  department: z.string().optional(),
-  permissions: z.object({
-    canManageUsers: z.boolean(),
-    canViewReports: z.boolean(),
-    canApproveOrders: z.boolean(),
-    orderApprovalLimit: z.number().optional(),
-    canManageProducts: z.boolean()
-  }).optional(),
-  isActive: z.boolean().optional()
-});
+const UpdateCompanyUserSchema = {
+  type: 'object',
+  properties: {
+    role: { type: 'string', enum: ['OWNER', 'ADMIN', 'MANAGER', 'USER', 'VIEWER'] },
+    title: { type: 'string' },
+    department: { type: 'string' },
+    permissions: {
+      type: 'object',
+      properties: {
+        canManageUsers: { type: 'boolean' },
+        canViewReports: { type: 'boolean' },
+        canApproveOrders: { type: 'boolean' },
+        orderApprovalLimit: { type: 'number' },
+        canManageProducts: { type: 'boolean' }
+      }
+    }
+  }
+};
 
 // Helper function to check if user has access to a company
 async function checkCompanyAccess(request: FastifyRequest, reply: FastifyReply) {
@@ -141,7 +223,36 @@ export async function companyRoutes(fastify: FastifyInstance) {
         body: CreateCompanySchema
       }
     }, async (request: FastifyRequest<{
-      Body: z.infer<typeof CreateCompanySchema>;
+      Body: {
+        name: string;
+        gstNumber?: string;
+        country: string;
+        phoneNumber?: string;
+        email?: string;
+        website?: string;
+        billingAddress?: {
+          street: string;
+          city: string;
+          state: string;
+          postalCode: string;
+          country: string;
+        };
+        shippingAddress?: {
+          street: string;
+          city: string;
+          state: string;
+          postalCode: string;
+          country: string;
+        };
+        creditLimit?: number;
+        settings?: {
+          allowPurchaseOrders?: boolean;
+          requirePOApproval?: boolean;
+          invoiceTermDays?: number;
+          taxExempt?: boolean;
+          allowedPaymentMethods?: string[];
+        };
+      };
     }>, reply: FastifyReply) => {
       try {
         const userId = (request.user as any).id;
@@ -263,14 +374,11 @@ export async function companyRoutes(fastify: FastifyInstance) {
         body: UpdateCompanyProfileSchema
       },
       preHandler: [checkCompanyAccess]
-    }, async (request: FastifyRequest<{
-      Params: { companyId: string };
-      Body: z.infer<typeof UpdateCompanyProfileSchema>;
-    }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Params: { companyId: string }; Body: UpdateCompanyProfileBody }>, reply: FastifyReply) => {
       try {
         const { companyId } = request.params;
         // Ensure required properties are provided for additional contacts
-        const additionalContacts = request.body.additionalContacts?.map((contact: any) => ({
+        const additionalContacts = (request.body.additionalContacts || []).map((contact) => ({
           name: contact.name || '',
           title: contact.title || '',
           email: contact.email || '',
@@ -360,10 +468,7 @@ export async function companyRoutes(fastify: FastifyInstance) {
         body: AddCompanyUserSchema
       },
       preHandler: [checkCompanyAccess]
-    }, async (request: FastifyRequest<{
-      Params: { companyId: string };
-      Body: z.infer<typeof AddCompanyUserSchema>;
-    }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Params: { companyId: string }; Body: AddCompanyUserBody }>, reply: FastifyReply) => {
       try {
         const { companyId } = request.params;
         
@@ -378,7 +483,7 @@ export async function companyRoutes(fastify: FastifyInstance) {
         
         const companyUser = await companyService.addCompanyUser(companyId, {
           userId: request.body.userId,
-          role: request.body.role,
+          role: request.body.role as any,
           title: request.body.title,
           department: request.body.department,
           permissions: request.body.permissions,
@@ -403,24 +508,22 @@ export async function companyRoutes(fastify: FastifyInstance) {
         body: UpdateCompanyUserSchema
       },
       preHandler: [checkCompanyAccess]
-    }, async (request: FastifyRequest<{
-      Params: { companyId: string; userId: string };
-      Body: z.infer<typeof UpdateCompanyUserSchema>;
-    }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Params: { companyId: string; userId: string }; Body: UpdateCompanyUserBody }>, reply: FastifyReply) => {
       try {
         const { companyId, userId } = request.params;
         
         // Ensure required properties are provided for permissions
         const permissions = request.body.permissions ? {
-          canManageUsers: request.body.permissions.canManageUsers || false,
-          canViewReports: request.body.permissions.canViewReports || false,
-          canApproveOrders: request.body.permissions.canApproveOrders || false,
+          canManageUsers: !!request.body.permissions.canManageUsers,
+          canViewReports: !!request.body.permissions.canViewReports,
+          canApproveOrders: !!request.body.permissions.canApproveOrders,
           orderApprovalLimit: request.body.permissions.orderApprovalLimit,
-          canManageProducts: request.body.permissions.canManageProducts || false,
+          canManageProducts: !!request.body.permissions.canManageProducts,
         } : undefined;
         
         const companyUser = await companyService.updateCompanyUser(companyId, userId, {
           ...request.body,
+          role: request.body.role as any,
           permissions,
         });
         
@@ -513,10 +616,7 @@ export async function companyRoutes(fastify: FastifyInstance) {
       schema: {
         body: UpdateCompanyCreditSchema
       }
-    }, async (request: FastifyRequest<{
-      Params: { companyId: string };
-      Body: z.infer<typeof UpdateCompanyCreditSchema>;
-    }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Params: { companyId: string }; Body: UpdateCompanyCreditBody }>, reply: FastifyReply) => {
       try {
         const { companyId } = request.params;
         const { creditLimit, reasonForChange } = request.body;

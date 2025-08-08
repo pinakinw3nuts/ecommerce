@@ -1,32 +1,42 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { ReviewService, ReviewSortOptions } from '../services/review.service';
 import { requireUser, requireAdmin } from '../middleware/auth';
 import { logger } from '../utils/logger';
 
 // Define review schema for validation
-const createReviewSchema = z.object({
-  productId: z.string().uuid(),
-  rating: z.number().min(1).max(5),
-  comment: z.string().max(1000).optional(),
-  isVerifiedPurchase: z.boolean().optional(),
-});
+const createReviewSchema = {
+  type: 'object',
+  required: ['productId', 'rating'],
+  properties: {
+    productId: { type: 'string', format: 'uuid' },
+    rating: { type: 'number', minimum: 1, maximum: 5 },
+    comment: { type: 'string', maxLength: 1000 },
+    isVerifiedPurchase: { type: 'boolean' }
+  }
+};
 
-const updateReviewSchema = z.object({
-  rating: z.number().min(1).max(5).optional(),
-  comment: z.string().max(1000).optional(),
-});
+const updateReviewSchema = {
+  type: 'object',
+  properties: {
+    rating: { type: 'number', minimum: 1, maximum: 5 },
+    comment: { type: 'string', maxLength: 1000 }
+  }
+};
 
-const reviewQuerySchema = z.object({
-  page: z.string().or(z.number()).transform(val => Number(val)).optional(),
-  limit: z.string().or(z.number()).transform(val => Number(val)).optional(),
-  sort: z.enum(['newest', 'oldest', 'highest', 'lowest']).optional(),
-  rating: z.string().or(z.number()).transform(val => Number(val)).optional(),
-  verified: z.union([
-    z.string().transform(val => val === 'true' ? true : val === 'false' ? false : undefined),
-    z.boolean().optional()
-  ]).optional(),
-});
+const reviewQuerySchema = {
+  type: 'object',
+  properties: {
+    page: { type: 'string', default: '1' },
+    limit: { type: 'string', default: '20' },
+    sort: { 
+      type: 'string', 
+      enum: ['newest', 'oldest', 'highest', 'lowest'],
+      default: 'newest'
+    },
+    rating: { type: 'string' },
+    verified: { type: 'string' }
+  }
+};
 
 // Helper function to format review response
 function formatReviewResponse(review: any) {

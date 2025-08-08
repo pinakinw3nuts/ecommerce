@@ -41,8 +41,8 @@ export class Product {
   @Index({ unique: true })
   slug!: string;
 
-  @Column('text')
-  description!: string;
+  @Column('text', { nullable: true })
+  description!: string | null;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price!: number;

@@ -1,93 +1,163 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { InventoryService } from '../services/inventory.service';
 import { MovementType } from '../entities/InventoryMovement';
 import { requireUser, requireAdmin } from '../middleware/auth';
 import { logger } from '../utils/logger';
 
 // Zod schemas for validation
-const createInventorySchema = z.object({
-  productId: z.string().uuid(),
-  variantId: z.string().uuid().optional(),
-  sku: z.string().max(20).optional(),
-  stock: z.number().int().min(0),
-  location: z.string().min(1).max(100),
-  threshold: z.number().int().min(0).optional(),
-  metadata: z.record(z.any()).optional(),
-});
+const createInventorySchema = {
+  type: 'object',
+  required: ['productId', 'stock', 'location'],
+  properties: {
+    productId: { type: 'string', format: 'uuid' },
+    variantId: { type: 'string', format: 'uuid' },
+    sku: { type: 'string', maxLength: 20 },
+    stock: { type: 'integer', minimum: 0 },
+    location: { type: 'string', minLength: 1, maxLength: 100 },
+    threshold: { type: 'integer', minimum: 0 },
+    metadata: { type: 'object' }
+  }
+};
 
-const updateInventorySchema = z.object({
-  stock: z.number().int().min(0).optional(),
-  threshold: z.number().int().min(0).optional(),
-  isActive: z.boolean().optional(),
-  metadata: z.record(z.any()).optional(),
-});
+const updateInventorySchema = {
+  type: 'object',
+  properties: {
+    stock: { type: 'integer', minimum: 0 },
+    threshold: { type: 'integer', minimum: 0 },
+    isActive: { type: 'boolean' },
+    metadata: { type: 'object' }
+  }
+};
 
-const adjustStockSchema = z.object({
-  quantity: z.number().int(),
-  type: z.nativeEnum(MovementType),
-  reason: z.string().min(1).max(255),
-  metadata: z.record(z.any()).optional(),
-});
+const adjustStockSchema = {
+  type: 'object',
+  required: ['quantity', 'type', 'reason'],
+  properties: {
+    quantity: { type: 'integer' },
+    type: { 
+      type: 'string', 
+      enum: ['IN', 'OUT', 'ADJUSTMENT', 'RESERVATION', 'RELEASE', 'TRANSFER'] 
+    },
+    reason: { type: 'string', minLength: 1, maxLength: 255 },
+    metadata: { type: 'object' }
+  }
+};
 
-const listInventorySchema = z.object({
-  page: z.string().transform(Number).default('1'),
-  limit: z.string().transform(Number).default('10'),
-  productId: z.string().uuid().optional(),
-  variantId: z.string().uuid().optional(),
-  sku: z.string().optional(),
-  location: z.string().optional(),
-  isLowStock: z.string().transform(val => val === 'true').optional(),
-  isActive: z.string().transform(val => val === 'true').optional(),
-  sortBy: z.string().default('createdAt'),
-  sortOrder: z.enum(['ASC', 'DESC']).default('DESC'),
-});
+const listInventorySchema = {
+  type: 'object',
+  properties: {
+    page: { type: 'string', default: '1' },
+    limit: { type: 'string', default: '10' },
+    productId: { type: 'string', format: 'uuid' },
+    variantId: { type: 'string', format: 'uuid' },
+    sku: { type: 'string' },
+    location: { type: 'string' },
+    isLowStock: { type: 'string' },
+    isActive: { type: 'string' },
+    sortBy: { type: 'string', default: 'createdAt' },
+    sortOrder: { type: 'string', enum: ['ASC', 'DESC'], default: 'DESC' }
+  }
+};
 
-const inventoryIdSchema = z.object({
-  id: z.string().uuid(),
-});
+const inventoryIdSchema = {
+  type: 'object',
+  required: ['id'],
+  properties: {
+    id: { type: 'string', format: 'uuid' }
+  }
+};
 
-const skuSchema = z.object({
-  sku: z.string().min(1).max(20),
-});
+const skuSchema = {
+  type: 'object',
+  required: ['sku'],
+  properties: {
+    sku: { type: 'string', minLength: 1, maxLength: 20 }
+  }
+};
 
-const reserveStockSchema = z.object({
-  quantity: z.number().int().min(1),
-  orderId: z.string().uuid().optional(),
-});
+const reserveStockSchema = {
+  type: 'object',
+  required: ['quantity'],
+  properties: {
+    quantity: { type: 'integer', minimum: 1 },
+    orderId: { type: 'string', format: 'uuid' }
+  }
+};
 
 interface CreateInventoryRequest {
-  Body: z.infer<typeof createInventorySchema>;
+  Body: {
+    productId: string;
+    variantId?: string;
+    sku?: string;
+    stock: number;
+    location: string;
+    threshold?: number;
+    metadata?: Record<string, any>;
+  };
 }
 
 interface UpdateInventoryRequest {
-  Params: z.infer<typeof inventoryIdSchema>;
-  Body: z.infer<typeof updateInventorySchema>;
+  Params: {
+    id: string;
+  };
+  Body: {
+    stock?: number;
+    threshold?: number;
+    isActive?: boolean;
+    metadata?: Record<string, any>;
+  };
 }
 
 interface AdjustStockRequest {
-  Params: z.infer<typeof inventoryIdSchema>;
-  Body: z.infer<typeof adjustStockSchema>;
+  Params: {
+    id: string;
+  };
+  Body: {
+    quantity: number;
+    type: string;
+    reason: string;
+    metadata?: Record<string, any>;
+  };
 }
 
 interface ListInventoryRequest {
-  Querystring: z.infer<typeof listInventorySchema>;
+  Querystring: {
+    page?: string;
+    limit?: string;
+    productId?: string;
+    variantId?: string;
+    sku?: string;
+    location?: string;
+    isLowStock?: string;
+    isActive?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  };
 }
 
 interface InventoryIdRequest {
-  Params: z.infer<typeof inventoryIdSchema>;
+  Params: {
+    id: string;
+  };
 }
 
 interface SkuRequest {
-  Params: z.infer<typeof skuSchema>;
+  Params: {
+    sku: string;
+  };
   Querystring: {
     location?: string;
   };
 }
 
 interface ReserveStockRequest {
-  Params: z.infer<typeof inventoryIdSchema>;
-  Body: z.infer<typeof reserveStockSchema>;
+  Params: {
+    id: string;
+  };
+  Body: {
+    quantity: number;
+    orderId?: string;
+  };
 }
 
 interface AuthenticatedUser {
@@ -233,9 +303,12 @@ export default async function inventoryRoutes(fastify: FastifyInstance) {
   fastify.get('/sku/:sku', {
     schema: {
       params: skuSchema,
-      querystring: z.object({
-        location: z.string().optional(),
-      }),
+      querystring: {
+        type: 'object',
+        properties: {
+          location: { type: 'string' }
+        }
+      },
     },
     preHandler: [requireUser()],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -518,11 +591,18 @@ export default async function inventoryRoutes(fastify: FastifyInstance) {
   // POST /api/inventory/bulk-sync - Bulk sync inventory items
   fastify.post('/bulk-sync', {
     schema: {
-      body: z.object({
-        items: z.array(createInventorySchema),
-        createMissing: z.boolean().default(true),
-        updateExisting: z.boolean().default(true),
-      }),
+      body: {
+        type: 'object',
+        required: ['items'],
+        properties: {
+          items: {
+            type: 'array',
+            items: createInventorySchema,
+          },
+          createMissing: { type: 'boolean', default: true },
+          updateExisting: { type: 'boolean', default: true },
+        },
+      },
     },
     preHandler: [requireAdmin()],
   }, async (request: FastifyRequest, reply: FastifyReply) => {

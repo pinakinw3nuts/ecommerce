@@ -1,5 +1,4 @@
 import { FastifyInstance } from 'fastify';
-import { z } from 'zod';
 import { ShippingService } from '../services/shipping.service';
 import { requireUser, requireAdmin } from '../middleware/auth';
 import { logger } from '../utils/logger';
@@ -10,21 +9,25 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   // Public routes
   fastify.get('/rates', {
     schema: {
-      querystring: z.object({
-        originCountry: z.string(),
-        originState: z.string().optional(),
-        originCity: z.string().optional(),
-        originPostalCode: z.string().optional(),
-        destinationCountry: z.string(),
-        destinationState: z.string().optional(),
-        destinationCity: z.string().optional(),
-        destinationPostalCode: z.string().optional(),
-        weight: z.string().transform(val => parseFloat(val)),
-        orderValue: z.string().transform(val => parseFloat(val)),
-        itemCount: z.string().transform(val => parseInt(val)),
-        insurance: z.string().optional().transform(val => val === 'true'),
-        signature: z.string().optional().transform(val => val === 'true')
-      })
+      querystring: {
+        type: 'object',
+        required: ['originCountry', 'destinationCountry', 'weight', 'orderValue', 'itemCount'],
+        properties: {
+          originCountry: { type: 'string' },
+          originState: { type: 'string' },
+          originCity: { type: 'string' },
+          originPostalCode: { type: 'string' },
+          destinationCountry: { type: 'string' },
+          destinationState: { type: 'string' },
+          destinationCity: { type: 'string' },
+          destinationPostalCode: { type: 'string' },
+          weight: { type: 'string' },
+          orderValue: { type: 'string' },
+          itemCount: { type: 'string' },
+          insurance: { type: 'string' },
+          signature: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -58,13 +61,13 @@ export async function shippingRoutes(fastify: FastifyInstance) {
           postalCode: destinationPostalCode
         },
         items: [{
-          weight,
+          weight: parseFloat(weight),
           category: undefined
         }],
-        orderValue,
-        itemCount,
-        insurance,
-        signature
+        orderValue: parseFloat(orderValue),
+        itemCount: parseInt(itemCount),
+        insurance: insurance === 'true',
+        signature: signature === 'true'
       };
 
       const rates = await shippingService.calculateRates(rateRequest);
@@ -93,9 +96,12 @@ export async function shippingRoutes(fastify: FastifyInstance) {
 
   fastify.get('/methods', {
     schema: {
-      querystring: z.object({
-        providerId: z.string().optional()
-      })
+      querystring: {
+        type: 'object',
+        properties: {
+          providerId: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -113,9 +119,13 @@ export async function shippingRoutes(fastify: FastifyInstance) {
 
   fastify.get('/tracking/:trackingNumber', {
     schema: {
-      params: z.object({
-        trackingNumber: z.string()
-      })
+      params: {
+        type: 'object',
+        required: ['trackingNumber'],
+        properties: {
+          trackingNumber: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -135,11 +145,14 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.get('/shipments', {
     preHandler: requireUser,
     schema: {
-      querystring: z.object({
-        orderId: z.string().optional(),
-        status: z.string().optional(),
-        providerId: z.string().optional()
-      })
+      querystring: {
+        type: 'object',
+        properties: {
+          orderId: { type: 'string' },
+          status: { type: 'string' },
+          providerId: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -158,9 +171,13 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.get('/shipments/:id', {
     preHandler: requireUser,
     schema: {
-      params: z.object({
-        id: z.string()
-      })
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -187,9 +204,13 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.get('/shipments/:id/tracking', {
     preHandler: requireUser,
     schema: {
-      params: z.object({
-        id: z.string()
-      })
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -209,19 +230,23 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.post('/admin/providers', {
     preHandler: requireAdmin,
     schema: {
-      body: z.object({
-        name: z.string(),
-        type: z.string(),
-        description: z.string().optional(),
-        logoUrl: z.string().optional(),
-        website: z.string().optional(),
-        credentials: z.record(z.any()).optional(),
-        settings: z.record(z.any()).optional(),
-        capabilities: z.record(z.any()).optional(),
-        baseRate: z.number().default(0),
-        handlingFee: z.number().default(0),
-        priority: z.number().default(0)
-      })
+      body: {
+        type: 'object',
+        required: ['name', 'type'],
+        properties: {
+          name: { type: 'string' },
+          type: { type: 'string' },
+          description: { type: 'string' },
+          logoUrl: { type: 'string' },
+          website: { type: 'string' },
+          credentials: { type: 'object' },
+          settings: { type: 'object' },
+          capabilities: { type: 'object' },
+          baseRate: { type: 'number', default: 0 },
+          handlingFee: { type: 'number', default: 0 },
+          priority: { type: 'number', default: 0 }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -239,11 +264,14 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.get('/admin/providers', {
     preHandler: requireAdmin,
     schema: {
-      querystring: z.object({
-        type: z.string().optional(),
-        status: z.string().optional(),
-        isActive: z.string().optional().transform(val => val === 'true')
-      })
+      querystring: {
+        type: 'object',
+        properties: {
+          type: { type: 'string' },
+          status: { type: 'string' },
+          isActive: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -262,9 +290,13 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.get('/admin/providers/:id', {
     preHandler: requireAdmin,
     schema: {
-      params: z.object({
-        id: z.string()
-      })
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -291,23 +323,30 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.post('/admin/zones', {
     preHandler: requireAdmin,
     schema: {
-      body: z.object({
-        name: z.string(),
-        type: z.string(),
-        country: z.string().optional(),
-        state: z.string().optional(),
-        city: z.string().optional(),
-        postalCode: z.string().optional(),
-        regions: z.array(z.string()).optional(),
-        coordinates: z.object({
-          lat: z.number(),
-          lng: z.number(),
-          radius: z.number()
-        }).optional(),
-        description: z.string().optional(),
-        priority: z.number().default(0),
-        restrictions: z.record(z.any()).optional()
-      })
+      body: {
+        type: 'object',
+        required: ['name', 'type'],
+        properties: {
+          name: { type: 'string' },
+          type: { type: 'string' },
+          country: { type: 'string' },
+          state: { type: 'string' },
+          city: { type: 'string' },
+          postalCode: { type: 'string' },
+          regions: { type: 'array', items: { type: 'string' } },
+          coordinates: {
+            type: 'object',
+            properties: {
+              lat: { type: 'number' },
+              lng: { type: 'number' },
+              radius: { type: 'number' }
+            }
+          },
+          description: { type: 'string' },
+          priority: { type: 'number', default: 0 },
+          restrictions: { type: 'object' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -325,11 +364,14 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.get('/admin/zones', {
     preHandler: requireAdmin,
     schema: {
-      querystring: z.object({
-        type: z.string().optional(),
-        country: z.string().optional(),
-        isActive: z.string().optional().transform(val => val === 'true')
-      })
+      querystring: {
+        type: 'object',
+        properties: {
+          type: { type: 'string' },
+          country: { type: 'string' },
+          isActive: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -348,28 +390,35 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.post('/admin/methods', {
     preHandler: requireAdmin,
     schema: {
-      body: z.object({
-        name: z.string(),
-        type: z.string(),
-        providerId: z.string(),
-        description: z.string().optional(),
-        iconUrl: z.string().optional(),
-        estimatedDays: z.number().default(1),
-        requiresSignature: z.boolean().default(false),
-        requiresInsurance: z.boolean().default(false),
-        isTrackable: z.boolean().default(false),
-        isInternational: z.boolean().default(false),
-        isLocalPickup: z.boolean().default(false),
-        maxWeight: z.number().optional(),
-        maxDimensions: z.object({
-          length: z.number(),
-          width: z.number(),
-          height: z.number()
-        }).optional(),
-        restrictions: z.record(z.any()).optional(),
-        features: z.record(z.any()).optional(),
-        priority: z.number().default(0)
-      })
+      body: {
+        type: 'object',
+        required: ['name', 'type', 'providerId'],
+        properties: {
+          name: { type: 'string' },
+          type: { type: 'string' },
+          providerId: { type: 'string' },
+          description: { type: 'string' },
+          iconUrl: { type: 'string' },
+          estimatedDays: { type: 'number', default: 1 },
+          requiresSignature: { type: 'boolean', default: false },
+          requiresInsurance: { type: 'boolean', default: false },
+          isTrackable: { type: 'boolean', default: false },
+          isInternational: { type: 'boolean', default: false },
+          isLocalPickup: { type: 'boolean', default: false },
+          maxWeight: { type: 'number' },
+          maxDimensions: {
+            type: 'object',
+            properties: {
+              length: { type: 'number' },
+              width: { type: 'number' },
+              height: { type: 'number' }
+            }
+          },
+          restrictions: { type: 'object' },
+          features: { type: 'object' },
+          priority: { type: 'number', default: 0 }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -387,12 +436,15 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.get('/admin/methods', {
     preHandler: requireAdmin,
     schema: {
-      querystring: z.object({
-        providerId: z.string().optional(),
-        type: z.string().optional(),
-        status: z.string().optional(),
-        isActive: z.string().optional().transform(val => val === 'true')
-      })
+      querystring: {
+        type: 'object',
+        properties: {
+          providerId: { type: 'string' },
+          type: { type: 'string' },
+          status: { type: 'string' },
+          isActive: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -411,36 +463,52 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.post('/admin/rates', {
     preHandler: requireAdmin,
     schema: {
-      body: z.object({
-        providerId: z.string(),
-        zoneId: z.string(),
-        methodId: z.string(),
-        rateType: z.string(),
-        baseRate: z.number().default(0),
-        additionalRate: z.number().default(0),
-        handlingFee: z.number().default(0),
-        insuranceFee: z.number().default(0),
-        signatureFee: z.number().default(0),
-        weightTiers: z.array(z.object({
-          min: z.number(),
-          max: z.number(),
-          rate: z.number()
-        })).optional(),
-        distanceTiers: z.array(z.object({
-          min: z.number(),
-          max: z.number(),
-          rate: z.number()
-        })).optional(),
-        minWeight: z.number().optional(),
-        maxWeight: z.number().optional(),
-        minDistance: z.number().optional(),
-        maxDistance: z.number().optional(),
-        minOrderValue: z.number().optional(),
-        maxOrderValue: z.number().optional(),
-        estimatedDays: z.number().default(1),
-        priority: z.number().default(0),
-        conditions: z.record(z.any()).optional()
-      })
+      body: {
+        type: 'object',
+        required: ['providerId', 'zoneId', 'methodId', 'rateType'],
+        properties: {
+          providerId: { type: 'string' },
+          zoneId: { type: 'string' },
+          methodId: { type: 'string' },
+          rateType: { type: 'string' },
+          baseRate: { type: 'number', default: 0 },
+          additionalRate: { type: 'number', default: 0 },
+          handlingFee: { type: 'number', default: 0 },
+          insuranceFee: { type: 'number', default: 0 },
+          signatureFee: { type: 'number', default: 0 },
+          weightTiers: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                min: { type: 'number' },
+                max: { type: 'number' },
+                rate: { type: 'number' }
+              }
+            }
+          },
+          distanceTiers: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                min: { type: 'number' },
+                max: { type: 'number' },
+                rate: { type: 'number' }
+              }
+            }
+          },
+          minWeight: { type: 'number' },
+          maxWeight: { type: 'number' },
+          minDistance: { type: 'number' },
+          maxDistance: { type: 'number' },
+          minOrderValue: { type: 'number' },
+          maxOrderValue: { type: 'number' },
+          estimatedDays: { type: 'number', default: 1 },
+          priority: { type: 'number', default: 0 },
+          conditions: { type: 'object' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -458,12 +526,15 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.get('/admin/rates', {
     preHandler: requireAdmin,
     schema: {
-      querystring: z.object({
-        providerId: z.string().optional(),
-        zoneId: z.string().optional(),
-        methodId: z.string().optional(),
-        isActive: z.string().optional().transform(val => val === 'true')
-      })
+      querystring: {
+        type: 'object',
+        properties: {
+          providerId: { type: 'string' },
+          zoneId: { type: 'string' },
+          methodId: { type: 'string' },
+          isActive: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -482,42 +553,57 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.post('/admin/shipments', {
     preHandler: requireAdmin,
     schema: {
-      body: z.object({
-        orderId: z.string(),
-        providerId: z.string(),
-        methodId: z.string(),
-        trackingNumber: z.string().optional(),
-        cost: z.number(),
-        weight: z.number(),
-        dimensions: z.object({
-          length: z.number(),
-          width: z.number(),
-          height: z.number()
-        }).optional(),
-        origin: z.object({
-          name: z.string(),
-          address: z.string(),
-          city: z.string(),
-          state: z.string(),
-          country: z.string(),
-          postalCode: z.string(),
-          phone: z.string().optional()
-        }),
-        destination: z.object({
-          name: z.string(),
-          address: z.string(),
-          city: z.string(),
-          state: z.string(),
-          country: z.string(),
-          postalCode: z.string(),
-          phone: z.string().optional()
-        }),
-        requiresSignature: z.boolean().optional(),
-        hasInsurance: z.boolean().optional(),
-        insuranceAmount: z.number().optional(),
-        packages: z.array(z.any()).optional(),
-        metadata: z.record(z.any()).optional()
-      })
+      body: {
+        type: 'object',
+        required: ['orderId', 'providerId', 'methodId'],
+        properties: {
+          orderId: { type: 'string' },
+          providerId: { type: 'string' },
+          methodId: { type: 'string' },
+          trackingNumber: { type: 'string' },
+          cost: { type: 'number' },
+          weight: { type: 'number' },
+          dimensions: {
+            type: 'object',
+            properties: {
+              length: { type: 'number' },
+              width: { type: 'number' },
+              height: { type: 'number' }
+            }
+          },
+          origin: {
+            type: 'object',
+            required: ['name', 'address', 'city', 'state', 'country', 'postalCode'],
+            properties: {
+              name: { type: 'string' },
+              address: { type: 'string' },
+              city: { type: 'string' },
+              state: { type: 'string' },
+              country: { type: 'string' },
+              postalCode: { type: 'string' },
+              phone: { type: 'string' }
+            }
+          },
+          destination: {
+            type: 'object',
+            required: ['name', 'address', 'city', 'state', 'country', 'postalCode'],
+            properties: {
+              name: { type: 'string' },
+              address: { type: 'string' },
+              city: { type: 'string' },
+              state: { type: 'string' },
+              country: { type: 'string' },
+              postalCode: { type: 'string' },
+              phone: { type: 'string' }
+            }
+          },
+          requiresSignature: { type: 'boolean' },
+          hasInsurance: { type: 'boolean' },
+          insuranceAmount: { type: 'number' },
+          packages: { type: 'array', items: { type: 'object' } },
+          metadata: { type: 'object' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -535,12 +621,20 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.put('/admin/shipments/:id/status', {
     preHandler: requireAdmin,
     schema: {
-      params: z.object({
-        id: z.string()
-      }),
-      body: z.object({
-        status: z.string()
-      })
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['status'],
+        properties: {
+          status: { type: 'string' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -561,25 +655,33 @@ export async function shippingRoutes(fastify: FastifyInstance) {
   fastify.post('/admin/shipments/:id/tracking', {
     preHandler: requireAdmin,
     schema: {
-      params: z.object({
-        id: z.string()
-      }),
-      body: z.object({
-        trackingNumber: z.string(),
-        status: z.string(),
-        location: z.string(),
-        description: z.string(),
-        timestamp: z.string().transform(val => new Date(val)),
-        city: z.string().optional(),
-        state: z.string().optional(),
-        country: z.string().optional(),
-        postalCode: z.string().optional(),
-        signedBy: z.string().optional(),
-        isDelivered: z.boolean().optional(),
-        isException: z.boolean().optional(),
-        exceptionDetails: z.record(z.any()).optional(),
-        metadata: z.record(z.any()).optional()
-      })
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['trackingNumber', 'status', 'location', 'description', 'timestamp'],
+        properties: {
+          trackingNumber: { type: 'string' },
+          status: { type: 'string' },
+          location: { type: 'string' },
+          description: { type: 'string' },
+          timestamp: { type: 'string' },
+          city: { type: 'string' },
+          state: { type: 'string' },
+          country: { type: 'string' },
+          postalCode: { type: 'string' },
+          signedBy: { type: 'string' },
+          isDelivered: { type: 'boolean' },
+          isException: { type: 'boolean' },
+          exceptionDetails: { type: 'object' },
+          metadata: { type: 'object' }
+        }
+      }
     }
   }, async (request, reply) => {
     try {

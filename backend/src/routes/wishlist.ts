@@ -1,5 +1,4 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { WishlistService, PaginationOptions } from '../services/wishlist.service';
 import { requireUser } from '../middleware/auth';
 import { logger } from '../utils/logger';
@@ -7,38 +6,45 @@ import { logger } from '../utils/logger';
 const wishlistService = new WishlistService();
 
 // Validation schemas
-const AddToWishlistSchema = z.object({
-  body: z.object({
-    productId: z.string().uuid(),
-    variantId: z.string().uuid().optional(),
-    productName: z.string().optional(),
-    productImage: z.string().url().optional(),
-    price: z.number().positive().optional(),
-    metadata: z.record(z.any()).optional()
-  })
-});
+const AddToWishlistSchema = {
+  type: 'object',
+  required: ['productId'],
+  properties: {
+    productId: { type: 'string', format: 'uuid' },
+    variantId: { type: 'string', format: 'uuid' },
+    productName: { type: 'string' },
+    productImage: { type: 'string', format: 'uri' },
+    price: { type: 'number', minimum: 0.01 },
+    metadata: { type: 'object' }
+  }
+};
 
-const WishlistQuerySchema = z.object({
-  query: z.object({
-    page: z.string().transform(val => parseInt(val, 10)).default('1'),
-    limit: z.string().transform(val => parseInt(val, 10)).default('20'),
-    sortBy: z.enum(['createdAt', 'productName', 'price']).optional(),
-    order: z.enum(['ASC', 'DESC']).optional()
-  })
-});
+const WishlistQuerySchema = {
+  type: 'object',
+  properties: {
+    page: { type: 'string', default: '1' },
+    limit: { type: 'string', default: '20' },
+    sortBy: { type: 'string', enum: ['createdAt', 'productName', 'price'] },
+    order: { type: 'string', enum: ['ASC', 'DESC'] }
+  }
+};
 
-const CheckWishlistSchema = z.object({
-  query: z.object({
-    productId: z.string().uuid(),
-    variantId: z.string().uuid().optional()
-  })
-});
+const CheckWishlistSchema = {
+  type: 'object',
+  required: ['productId'],
+  properties: {
+    productId: { type: 'string', format: 'uuid' },
+    variantId: { type: 'string', format: 'uuid' }
+  }
+};
 
-const WishlistItemParamsSchema = z.object({
-  params: z.object({
-    id: z.string().uuid()
-  })
-});
+const WishlistItemParamsSchema = {
+  type: 'object',
+  required: ['id'],
+  properties: {
+    id: { type: 'string', format: 'uuid' }
+  }
+};
 
 export async function wishlistRoutes(fastify: FastifyInstance) {
   // Add product to wishlist
@@ -47,18 +53,7 @@ export async function wishlistRoutes(fastify: FastifyInstance) {
       tags: ['Wishlist'],
       summary: 'Add a product to the wishlist',
       description: 'Add a product to the authenticated user\'s wishlist',
-      body: {
-        type: 'object',
-        required: ['productId'],
-        properties: {
-          productId: { type: 'string', format: 'uuid' },
-          variantId: { type: 'string', format: 'uuid' },
-          productName: { type: 'string' },
-          productImage: { type: 'string' },
-          price: { type: 'number' },
-          metadata: { type: 'object', additionalProperties: true }
-        }
-      },
+      body: AddToWishlistSchema,
       response: {
         201: {
           description: 'Product added to wishlist',
@@ -134,13 +129,7 @@ export async function wishlistRoutes(fastify: FastifyInstance) {
       tags: ['Wishlist'],
       summary: 'Remove a product from the wishlist',
       description: 'Remove a product from the authenticated user\'s wishlist',
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string', format: 'uuid' }
-        }
-      },
+      params: WishlistItemParamsSchema,
       response: {
         200: {
           description: 'Product removed from wishlist',
@@ -230,15 +219,7 @@ export async function wishlistRoutes(fastify: FastifyInstance) {
       tags: ['Wishlist'],
       summary: 'Get user\'s wishlist',
       description: 'Get the authenticated user\'s wishlist with pagination',
-      querystring: {
-        type: 'object',
-        properties: {
-          page: { type: 'string' },
-          limit: { type: 'string' },
-          sortBy: { type: 'string', enum: ['createdAt', 'productName', 'price'] },
-          order: { type: 'string', enum: ['ASC', 'DESC'] }
-        }
-      },
+      querystring: WishlistQuerySchema,
       response: {
         200: {
           description: 'Wishlist retrieved successfully',
@@ -329,14 +310,7 @@ export async function wishlistRoutes(fastify: FastifyInstance) {
       tags: ['Wishlist'],
       summary: 'Check if product is in wishlist',
       description: 'Check if a product is in the authenticated user\'s wishlist',
-      querystring: {
-        type: 'object',
-        required: ['productId'],
-        properties: {
-          productId: { type: 'string', format: 'uuid' },
-          variantId: { type: 'string', format: 'uuid' }
-        }
-      },
+      querystring: CheckWishlistSchema,
       response: {
         200: {
           description: 'Wishlist check completed',

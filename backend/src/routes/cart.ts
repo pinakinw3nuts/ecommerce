@@ -37,7 +37,13 @@ export default async function cartRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireUser());
 
   // GET /api/cart - Get user's cart
-  fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/', {
+    schema: {
+      tags: ['Cart'],
+      summary: 'Get current user cart',
+      response: { 200: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object' } } } }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user as any;
       logger.info('Getting cart for user:', { userId: user.userId });
@@ -59,7 +65,13 @@ export default async function cartRoutes(fastify: FastifyInstance) {
   });
 
   // GET /api/cart/summary - Get cart summary (item count and total)
-  fastify.get('/summary', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/summary', {
+    schema: {
+      tags: ['Cart'],
+      summary: 'Get cart summary',
+      response: { 200: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object' } } } }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user as any;
       logger.info('Getting cart summary for user:', { userId: user.userId });
@@ -81,7 +93,14 @@ export default async function cartRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/cart/items - Add item to cart
-  fastify.post('/items', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/items', {
+    schema: {
+      tags: ['Cart'],
+      summary: 'Add item to cart',
+      body: { type: 'object', required: ['productId','quantity'], properties: { productId: { type: 'string' }, variantId: { type: 'string' }, quantity: { type: 'number' } } },
+      response: { 201: { type: 'object' } }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user as any;
       const itemData = addItemSchema.parse(request.body);
@@ -137,7 +156,14 @@ export default async function cartRoutes(fastify: FastifyInstance) {
   });
 
   // PUT /api/cart/items/:id - Update cart item quantity
-  fastify.put('/items/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+  fastify.put('/items/:id', {
+    schema: {
+      tags: ['Cart'],
+      summary: 'Update cart item quantity',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      body: { type: 'object', required: ['quantity'], properties: { quantity: { type: 'number' } } }
+    }
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const user = request.user as any;
       const { id: cartItemId } = request.params;
@@ -200,7 +226,13 @@ export default async function cartRoutes(fastify: FastifyInstance) {
   });
 
   // DELETE /api/cart/items/:id - Remove item from cart
-  fastify.delete('/items/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+  fastify.delete('/items/:id', {
+    schema: {
+      tags: ['Cart'],
+      summary: 'Remove item from cart',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } }
+    }
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const user = request.user as any;
       const { id: cartItemId } = request.params;
@@ -242,7 +274,13 @@ export default async function cartRoutes(fastify: FastifyInstance) {
   });
 
   // DELETE /api/cart - Clear cart (remove all items)
-  fastify.delete('/', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.delete('/', {
+    schema: {
+      tags: ['Cart'],
+      summary: 'Clear cart',
+      response: { 200: { type: 'object' } }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user as any;
       logger.info('Clearing cart for user:', { userId: user.userId });

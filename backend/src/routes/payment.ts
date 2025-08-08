@@ -1,5 +1,4 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { PaymentService } from '../services/payment.service';
 import { requireUser, requireAdmin } from '../middleware/auth';
 import { PaymentStatus, PaymentProvider } from '../entities/Payment';
@@ -9,48 +8,119 @@ import { RefundStatus } from '../entities/Refund';
 const paymentService = new PaymentService();
 
 // Request schemas
-const CreatePaymentSchema = z.object({
-  orderId: z.string().uuid(),
-  amount: z.number().positive(),
-  currency: z.string().length(3),
-  paymentMethodId: z.string().uuid(),
-  provider: z.enum(['stripe', 'razorpay', 'paypal']).optional(),
-  description: z.string().optional()
-});
+const CreatePaymentSchema = {
+  type: 'object',
+  required: ['orderId', 'amount', 'currency', 'paymentMethodId'],
+  properties: {
+    orderId: { type: 'string', format: 'uuid' },
+    amount: { type: 'number', minimum: 0.01 },
+    currency: { type: 'string', minLength: 3, maxLength: 3 },
+    paymentMethodId: { type: 'string', format: 'uuid' },
+    provider: { type: 'string', enum: ['stripe', 'razorpay', 'paypal'] },
+    description: { type: 'string' }
+  }
+};
 
-const CreatePaymentMethodSchema = z.object({
-  type: z.nativeEnum(PaymentMethodType),
-  provider: z.string(),
-  card: z.object({
-    number: z.string().regex(/^\d{13,19}$/),
-    exp_month: z.number().min(1).max(12),
-    exp_year: z.number().min(new Date().getFullYear()),
-    cvc: z.string().regex(/^\d{3,4}$/)
-  }),
-  isDefault: z.boolean().optional(),
-  metadata: z.record(z.any()).optional()
-});
+const CreatePaymentMethodSchema = {
+  type: 'object',
+  required: ['type', 'provider', 'card'],
+  properties: {
+    type: { type: 'string', enum: ['CREDIT_CARD', 'DEBIT_CARD', 'BANK_TRANSFER', 'DIGITAL_WALLET'] },
+    provider: { type: 'string' },
+    card: {
+      type: 'object',
+      required: ['number', 'exp_month', 'exp_year', 'cvc'],
+      properties: {
+        number: { type: 'string', pattern: '^\\d{13,19}$' },
+        exp_month: { type: 'number', minimum: 1, maximum: 12 },
+        exp_year: { type: 'number', minimum: 2024 },
+        cvc: { type: 'string', pattern: '^\\d{3,4}$' }
+      }
+    },
+    isDefault: { type: 'boolean' },
+    metadata: { type: 'object' }
+  }
+};
 
-const UpdatePaymentMethodSchema = z.object({
-  status: z.nativeEnum(PaymentMethodStatus).optional(),
-  isDefault: z.boolean().optional(),
-  metadata: z.record(z.any()).optional()
-});
+const UpdatePaymentMethodSchema = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'EXPIRED', 'BLOCKED'] },
+    isDefault: { type: 'boolean' },
+    metadata: { type: 'object' }
+  }
+};
 
-const ProcessRefundSchema = z.object({
-  amount: z.number().positive(),
-  reason: z.string().min(1)
-});
+const ProcessRefundSchema = {
+  type: 'object',
+  required: ['amount', 'reason'],
+  properties: {
+    amount: { type: 'number', minimum: 0.01 },
+    reason: { type: 'string', minLength: 1 }
+  }
+};
 
-const UpdatePaymentStatusSchema = z.object({
-  status: z.nativeEnum(PaymentStatus),
-  metadata: z.record(z.any()).optional()
-});
+const UpdatePaymentStatusSchema = {
+  type: 'object',
+  required: ['status'],
+  properties: {
+    status: { type: 'string', enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED'] },
+    metadata: { type: 'object' }
+  }
+};
 
-const UpdateRefundStatusSchema = z.object({
-  status: z.nativeEnum(RefundStatus),
-  transactionId: z.string().optional()
-});
+const UpdateRefundStatusSchema = {
+  type: 'object',
+  required: ['status'],
+  properties: {
+    status: { type: 'string', enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED'] },
+    transactionId: { type: 'string' }
+  }
+};
+
+// TypeScript request body interfaces used for Fastify generics
+type CreatePaymentBody = {
+  orderId: string;
+  amount: number;
+  currency: string;
+  paymentMethodId: string;
+  provider?: string; // cast to provider enum at call site
+  description?: string;
+};
+
+type CreatePaymentMethodBody = {
+  type: PaymentMethodType | 'CREDIT_CARD' | 'DEBIT_CARD' | 'BANK_TRANSFER' | 'DIGITAL_WALLET';
+  provider: string;
+  card: {
+    number: string;
+    exp_month: number;
+    exp_year: number;
+    cvc: string;
+  };
+  isDefault?: boolean;
+  metadata?: Record<string, unknown>;
+};
+
+type UpdatePaymentMethodBody = {
+  status?: PaymentMethodStatus | 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'BLOCKED';
+  isDefault?: boolean;
+  metadata?: Record<string, unknown>;
+};
+
+type ProcessRefundBody = {
+  amount: number;
+  reason: string;
+};
+
+type UpdatePaymentStatusBody = {
+  status: PaymentStatus | 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
+  metadata?: Record<string, unknown>;
+};
+
+type UpdateRefundStatusBody = {
+  status: RefundStatus | 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  transactionId?: string;
+};
 
 // Public routes
 export async function paymentRoutes(fastify: FastifyInstance) {
@@ -91,9 +161,7 @@ export async function paymentRoutes(fastify: FastifyInstance) {
       schema: {
         body: CreatePaymentSchema
       }
-    }, async (request: FastifyRequest<{
-      Body: z.infer<typeof CreatePaymentSchema>;
-    }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Body: CreatePaymentBody }>, reply: FastifyReply) => {
       try {
         const { orderId, amount, currency, paymentMethodId, provider, description } = request.body;
         const userId = (request.user as any).id;
@@ -104,7 +172,8 @@ export async function paymentRoutes(fastify: FastifyInstance) {
           amount,
           currency,
           paymentMethodId,
-          provider,
+          // Cast provider to the service's expected enum/string union
+          provider: provider as any,
           description
         });
 
@@ -192,22 +261,21 @@ export async function paymentRoutes(fastify: FastifyInstance) {
       schema: {
         body: CreatePaymentMethodSchema
       }
-    }, async (request: FastifyRequest<{
-      Body: z.infer<typeof CreatePaymentMethodSchema>;
-    }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Body: CreatePaymentMethodBody }>, reply: FastifyReply) => {
       try {
         const userId = (request.user as any).id;
+        const body = request.body;
         const paymentMethod = await paymentService.createPaymentMethod(userId, {
-          type: request.body.type,
-          provider: request.body.provider,
+          type: body.type as any,
+          provider: body.provider,
           card: {
-            number: request.body.card?.number || '',
-            exp_month: request.body.card?.exp_month || 0,
-            exp_year: request.body.card?.exp_year || 0,
-            cvc: request.body.card?.cvc || '',
+            number: body.card.number,
+            exp_month: body.card.exp_month,
+            exp_year: body.card.exp_year,
+            cvc: body.card.cvc,
           },
-          isDefault: request.body.isDefault,
-          metadata: request.body.metadata,
+          isDefault: body.isDefault,
+          metadata: body.metadata,
         });
         
         return reply.status(201).send({ success: true, data: paymentMethod });
@@ -256,15 +324,20 @@ export async function paymentRoutes(fastify: FastifyInstance) {
       schema: {
         body: UpdatePaymentMethodSchema
       }
-    }, async (request: FastifyRequest<{
-      Params: { id: string };
-      Body: z.infer<typeof UpdatePaymentMethodSchema>;
-    }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Params: { id: string }; Body: UpdatePaymentMethodBody }>, reply: FastifyReply) => {
       try {
         const { id } = request.params;
         const userId = (request.user as any).id;
 
-        const paymentMethod = await paymentService.updatePaymentMethod(userId, id, request.body);
+        const updatePayload: Partial<{ status?: PaymentMethodStatus; isDefault?: boolean; metadata?: Record<string, any> }> = {
+          isDefault: request.body.isDefault,
+          metadata: request.body.metadata as any,
+        };
+        if (request.body.status) {
+          updatePayload.status = request.body.status as PaymentMethodStatus;
+        }
+
+        const paymentMethod = await paymentService.updatePaymentMethod(userId, id, updatePayload);
         
         return reply.send({ success: true, data: paymentMethod });
       } catch (error) {
@@ -299,10 +372,7 @@ export async function paymentRoutes(fastify: FastifyInstance) {
       schema: {
         body: ProcessRefundSchema
       }
-    }, async (request: FastifyRequest<{
-      Params: { id: string };
-      Body: z.infer<typeof ProcessRefundSchema>;
-    }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Params: { id: string }; Body: ProcessRefundBody }>, reply: FastifyReply) => {
       try {
         const { id } = request.params;
         const { amount, reason } = request.body;
@@ -396,15 +466,12 @@ export async function paymentRoutes(fastify: FastifyInstance) {
       schema: {
         body: UpdatePaymentStatusSchema
       }
-    }, async (request: FastifyRequest<{
-      Params: { id: string };
-      Body: z.infer<typeof UpdatePaymentStatusSchema>;
-    }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Params: { id: string }; Body: UpdatePaymentStatusBody }>, reply: FastifyReply) => {
       try {
         const { id } = request.params;
         const { status, metadata } = request.body;
 
-        const payment = await paymentService.updatePaymentStatus(id, status, metadata);
+        const payment = await paymentService.updatePaymentStatus(id, status as PaymentStatus, metadata as any);
         
         return reply.send({ success: true, data: payment });
       } catch (error) {
@@ -451,15 +518,12 @@ export async function paymentRoutes(fastify: FastifyInstance) {
       schema: {
         body: UpdateRefundStatusSchema
       }
-    }, async (request: FastifyRequest<{
-      Params: { id: string };
-      Body: z.infer<typeof UpdateRefundStatusSchema>;
-    }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Params: { id: string }; Body: UpdateRefundStatusBody }>, reply: FastifyReply) => {
       try {
         const { id } = request.params;
         const { status, transactionId } = request.body;
 
-        const refund = await paymentService.updateRefundStatus(id, status, transactionId);
+        const refund = await paymentService.updateRefundStatus(id, status as RefundStatus, transactionId);
         
         return reply.send({ success: true, data: refund });
       } catch (error) {
